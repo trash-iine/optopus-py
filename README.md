@@ -1,7 +1,6 @@
 # optopus
 
 [![CI](https://github.com/trash-iine/optopus-py/actions/workflows/ci.yml/badge.svg)](https://github.com/trash-iine/optopus-py/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/optopus.svg)](https://pypi.org/project/optopus/)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 Python bindings for [optopus](https://github.com/trash-iine/optopus), a metaheuristic
@@ -36,12 +35,22 @@ statistics.
 
 ## Installation
 
+Install directly from this repository:
+
 ```bash
-pip install optopus
+pip install git+https://github.com/trash-iine/optopus-py.git
 ```
 
-Prebuilt wheels use the stable ABI (abi3) and work on CPython 3.9+. Building from source
-requires a Rust toolchain (rustc >= 1.88).
+To pin a specific tag or commit:
+
+```bash
+pip install git+https://github.com/trash-iine/optopus-py.git@v0.1.0
+```
+
+The package is built from source, so a [Rust toolchain](https://rustup.rs) (rustc >= 1.88)
+is required in addition to Python >= 3.9. pip fetches the vendored `optopus` submodule
+automatically — no extra steps needed. The extension targets the stable ABI (abi3), so the
+same build works on CPython 3.9+.
 
 ## Quickstart
 

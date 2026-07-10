@@ -4,6 +4,26 @@
 [maturin](https://www.maturin.rs)). Building it from source therefore needs a Rust toolchain in
 addition to Python.
 
+## Install with pip
+
+Install directly from the GitHub repository:
+
+```bash
+$ pip install git+https://github.com/trash-iine/optopus-py.git
+```
+
+To pin a specific tag or commit:
+
+```bash
+$ pip install git+https://github.com/trash-iine/optopus-py.git@v0.1.0
+```
+
+Requirements: [Python](https://www.python.org) ≥ 3.9 and a [Rust toolchain](https://rustup.rs)
+(rustc ≥ 1.88). pip clones the repository, fetches the vendored `optopus` submodule
+automatically, and builds the extension via maturin — no extra steps needed.
+
+The rest of this page covers setting up a development environment from a clone.
+
 ## Prerequisites
 
 - [Python](https://www.python.org) ≥ 3.9
