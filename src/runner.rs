@@ -141,7 +141,10 @@ where
             best_objective,
             solution,
             best_iteration: state.best_iteration,
-            time_to_best_secs: state.best_time.saturating_duration_since(start).as_secs_f64(),
+            time_to_best_secs: state
+                .best_time
+                .saturating_duration_since(start)
+                .as_secs_f64(),
             total_time_secs: total_time.as_secs_f64(),
             initial_objective,
             improvement,

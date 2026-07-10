@@ -1,16 +1,48 @@
 [build-system]
-requires = ["maturin>=1.7,<2.0"]
+# PEP 639 metadata (SPDX `license` + `license-files`) requires maturin >= 1.9.3.
+requires = ["maturin>=1.9.3,<2.0"]
 build-backend = "maturin"
 
 [project]
 name = "optopus"
 description = "Python bindings for the optopus combinatorial optimization library"
+readme = "README.md"
 requires-python = ">=3.9"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+authors = [{ name = "Trash-iine" }]
+keywords = [
+    "optimization",
+    "metaheuristics",
+    "simulated-annealing",
+    "tabu-search",
+    "maxcut",
+    "qubo",
+    "tsp",
+    "sat",
+]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Mathematics",
 ]
 dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/trash-iine/optopus-py"
+Repository = "https://github.com/trash-iine/optopus-py"
+Issues = "https://github.com/trash-iine/optopus-py/issues"
 
 [tool.maturin]
 module-name = "optopus"
@@ -24,6 +56,10 @@ environments = ["python_version >= '3.11'"]
 
 [dependency-groups]
 dev = [
+    # build
+    "maturin>=1.9.3,<2.0",
+    # tests
+    "pytest>=8",
     # docs
     "sphinx==8.2.3",      # docs generator (myst-parser v4 is not yet supported on sphinx v9+)
     "furo>=2025.12.19",   # docs theme

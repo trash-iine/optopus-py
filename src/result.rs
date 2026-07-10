@@ -113,7 +113,11 @@ impl RunReport {
     fn __repr__(&self) -> String {
         format!(
             "RunReport(num_runs={}, best_objective={}, avg_objective={}, worst_objective={}, std_objective={})",
-            self.num_runs, self.best_objective, self.avg_objective, self.worst_objective, self.std_objective
+            self.num_runs,
+            self.best_objective,
+            self.avg_objective,
+            self.worst_objective,
+            self.std_objective
         )
     }
 }
