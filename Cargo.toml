@@ -1,0 +1,12 @@
+[package]
+name = "optopus-py"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "optopus"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+optopus = { path = "vendor/optopus" }
+pyo3 = { version = "0.28.3", features = ["extension-module", "abi3-py39"] }

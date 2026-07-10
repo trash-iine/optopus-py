@@ -1,0 +1,33 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "optopus"
+description = "Python bindings for the optopus combinatorial optimization library"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+dynamic = ["version"]
+
+[tool.maturin]
+module-name = "optopus"
+features = ["pyo3/extension-module"]
+
+# The runtime wheel targets Python >=3.9 (abi3), but the docs toolchain
+# (sphinx 8.x) requires >=3.11. Development happens on a modern interpreter, so
+# resolve the dev environment for >=3.11 only.
+[tool.uv]
+environments = ["python_version >= '3.11'"]
+
+[dependency-groups]
+dev = [
+    # docs
+    "sphinx==8.2.3",      # docs generator (myst-parser v4 is not yet supported on sphinx v9+)
+    "furo>=2025.12.19",   # docs theme
+    "myst-parser>=4.0.1", # author docs in Markdown (MyST)
+    # task runner
+    "invoke>=2.2.1",
+]
