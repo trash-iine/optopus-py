@@ -1,0 +1,105 @@
+name: Release
+
+# Builds prebuilt wheels so users can install without a Rust toolchain, and
+# attaches them to the GitHub release for the pushed tag.
+on:
+  push:
+    tags: ["v*"]
+  # Dry run: builds and uploads artifacts, but publishes no release.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # pyproject.toml takes the version from Cargo.toml, so a tag that disagrees
+  # with it would produce assets whose filenames do not match the release.
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag matches Cargo.toml version
+        if: github.ref_type == 'tag'
+        run: |
+          crate_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          if [ "${GITHUB_REF_NAME}" != "v${crate_version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} != v${crate_version} (Cargo.toml)" >&2
+            exit 1
+          fi
+
+  linux:
+    needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      # The binding crate depends on vendor/optopus through a path dependency.
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64
+          manylinux: auto
+          args: --release --out dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-linux-x86_64
+          path: dist
+
+  macos:
+    needs: check-version
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+    # Pin the deployment target so the wheel's platform tag stays predictable
+    # (the install URLs in README.md spell the filename out in full).
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-macos-${{ matrix.target }}
+          path: dist
+
+  # Source fallback for platforms without a prebuilt wheel (Windows, aarch64
+  # Linux, musl). Building it still requires a Rust toolchain.
+  sdist:
+    needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-sdist
+          path: dist
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [linux, macos, sdist]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
