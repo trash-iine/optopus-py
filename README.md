@@ -138,8 +138,8 @@ print(report.best_objective)    # -1.0
 print(report.runs[0].solution)  # [True, False] — value of each variable
 ```
 
-See the Sphinx documentation under [`docs/`](docs/source/index.md) for the full API
-reference and more examples.
+See the [documentation](https://trash-iine.github.io/optopus-py/) for the full API reference
+and more examples. Its sources live under [`docs/`](docs/source/index.md).
 
 ## Development
 

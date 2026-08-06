@@ -18,6 +18,9 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
+    # Emits `.nojekyll` so GitHub Pages serves `_static/` instead of treating
+    # the underscore prefix as a Jekyll internal.
+    "sphinx.ext.githubpages",
 ]
 
 templates_path = ["_templates"]

@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `neighbor` argument and raise `ValueError` when run on a different problem type.
 - `Graph`, with the Erdős-Rényi, Barabási-Albert and Watts-Strogatz random graph generators plus
   `with_random_weights`, and `MaxCut.from_graph` / `VertexCover.from_graph` to build problems from it.
+- The Sphinx documentation is now published to GitHub Pages at
+  <https://trash-iine.github.io/optopus-py/>, rebuilt from `main` on every push.
 
 ### Changed
 
