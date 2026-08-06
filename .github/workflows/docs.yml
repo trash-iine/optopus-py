@@ -1,0 +1,66 @@
+name: Docs
+
+# Builds the Sphinx documentation and publishes it to GitHub Pages. The build
+# job also runs on pull requests so a broken doc build is caught before merge;
+# only pushes to main deploy.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let an in-flight deployment finish rather than cancelling it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # The binding crate depends on vendor/optopus through a path dependency.
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      # Pinned to a full version: setup-uv publishes no moving `v9` tag (its
+      # latest is `v7`, two majors behind the v9.0.0 release).
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+          # The wheel targets Python >=3.9 (abi3), but the docs toolchain needs
+          # >=3.11 -- see `[tool.uv] environments` in pyproject.toml.
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install dev dependencies
+        run: uv sync --dev
+      # autodoc documents the compiled extension's docstrings, so the module has
+      # to be built before sphinx runs.
+      - name: Build the extension
+        run: uv run maturin develop
+      # --no-sync keeps uv from reinstalling a cached `optopus` wheel over the
+      # build `maturin develop` just installed (same reason as docs/Makefile).
+      - name: Build the docs
+        run: uv run --no-sync sphinx-build -M html docs/source docs/build
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/build/html
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

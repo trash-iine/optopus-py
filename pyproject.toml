@@ -41,6 +41,7 @@ dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/trash-iine/optopus-py"
+Documentation = "https://trash-iine.github.io/optopus-py/"
 Repository = "https://github.com/trash-iine/optopus-py"
 Issues = "https://github.com/trash-iine/optopus-py/issues"
 
