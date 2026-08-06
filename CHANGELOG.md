@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated the vendored optopus to `01b88fb`, which brings faster TSP distance lookups, allocation-free
   LKH, cheaper Job Shop neighbor evaluation, and O(1) random neighbor sampling.
+- `pyo3/extension-module` is now an opt-in `extension-module` cargo feature rather than being always
+  on, so plain `cargo build` and `cargo test` link against libpython and succeed on macOS. maturin
+  still enables it for wheels via `features` in `pyproject.toml`, so built wheels are unchanged.
+- Disabled the doctest pass (`doctest = false`); the `///` comments are Python docstrings rather than
+  Rust doc examples, and rustdoc otherwise fails on the lib sharing its name with the `optopus`
+  dependency.
 
 ## 0.1.0 (2026-08-06)
 
