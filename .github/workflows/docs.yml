@@ -30,7 +30,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: astral-sh/setup-uv@v9
+      # Pinned to a full version: setup-uv publishes no moving `v9` tag (its
+      # latest is `v7`, two majors behind the v9.0.0 release).
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
           # The wheel targets Python >=3.9 (abi3), but the docs toolchain needs
