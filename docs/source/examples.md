@@ -55,6 +55,45 @@ for name, h in heuristics.items():
     print(f"{name:28} best={report.best_objective} avg={report.avg_objective:.2f}")
 ```
 
+## Benchmarking specialized heuristics on a random instance
+
+Problem-specific heuristics and `VariableNeighborhoodSearch` share the same `run` interface, so they
+drop into the same comparison loop. Generating the instance from a `Graph` keeps the benchmark
+reproducible end to end.
+
+```python
+import optopus
+
+mc = optopus.MaxCut.from_graph(
+    optopus.Graph.erdos_renyi(500, 0.02, seed=42).with_random_weights((1, 10), seed=42)
+)
+stop = optopus.StopCondition(max_duration_secs=1.0)
+
+heuristics = {
+    "LocalSearch": optopus.LocalSearch(neighbor="Flip", stop=stop),
+    "TabuSearch": optopus.TabuSearch(neighbor="Flip", tabu_tenure=(3, 50), stop=stop),
+    "VariableNeighborhoodSearch": optopus.VariableNeighborhoodSearch(
+        search=optopus.LocalSearch("Flip", stop=optopus.StopCondition(max_iteration=200)),
+        shakes=[
+            optopus.RandomWalk("Flip", stop=optopus.StopCondition(max_iteration=5)),
+            optopus.RandomWalk("Flip", stop=optopus.StopCondition(max_iteration=20)),
+        ],
+        stop=stop,
+    ),
+    "BreakoutLocalSearch": optopus.BreakoutLocalSearch(
+        tabu_tenure=(3, 50), t=1_000, l0=20, p0=0.8, q=0.5, stop=stop
+    ),
+    "RlBreakoutLocalSearch": optopus.RlBreakoutLocalSearch(
+        tabu_tenure=(3, 50), t=1_000, l0=20, stop=stop
+    ),
+    "PopulationAnnealing": optopus.PopulationAnnealing(population_size=20, stop=stop),
+}
+
+for name, h in heuristics.items():
+    report = h.run(mc, runs=3, seed=1)
+    print(f"{name:28} best={report.best_objective:.0f} avg={report.avg_objective:.1f}")
+```
+
 ## Reading the improvement metric
 
 `improvement` is sign-corrected so that **positive always means better**, regardless of whether the

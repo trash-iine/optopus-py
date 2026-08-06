@@ -32,10 +32,25 @@ factory method, then handed to a heuristic.
    :members:
 ```
 
+## Graph
+
+`MaxCut` and `VertexCover` are defined over an undirected weighted graph. Build one explicitly from
+an edge list, or draw one from a random graph model and hand it to `MaxCut.from_graph` /
+`VertexCover.from_graph`.
+
+```{eval-rst}
+.. autoclass:: optopus.Graph
+   :members:
+```
+
 ## Heuristics
 
-A *heuristic* describes **how** to search. Every heuristic works with every problem type and exposes
-the same `run(problem, runs=1, seed=None)` method returning a `RunReport` (see [Results](#results) below).
+A *heuristic* describes **how** to search. Every heuristic exposes the same
+`run(problem, runs=1, seed=None)` method returning a `RunReport` (see [Results](#results) below).
+
+### Generic
+
+These work with every problem type; the neighborhood is selected with the `neighbor` argument.
 
 ```{eval-rst}
 .. autoclass:: optopus.LocalSearch
@@ -57,6 +72,31 @@ the same `run(problem, runs=1, seed=None)` method returning a `RunReport` (see [
    :members:
 
 .. autoclass:: optopus.BeamSearch
+   :members:
+
+.. autoclass:: optopus.VariableNeighborhoodSearch
+   :members:
+```
+
+### Problem-specific
+
+These exploit the structure of one problem type and take no `neighbor` argument. Running one on a
+different problem raises `ValueError`.
+
+```{eval-rst}
+.. autoclass:: optopus.WalkSat
+   :members:
+
+.. autoclass:: optopus.PopulationAnnealing
+   :members:
+
+.. autoclass:: optopus.BreakoutLocalSearch
+   :members:
+
+.. autoclass:: optopus.RlBreakoutLocalSearch
+   :members:
+
+.. autoclass:: optopus.LinKernighanHelsgaun
    :members:
 ```
 

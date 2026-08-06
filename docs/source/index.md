@@ -7,9 +7,15 @@ executing in native Rust.
 
 ## What you get
 
-- **Problems** built directly from Python data: `MaxCut` (maximization) and `Qubo` (minimization).
-- **Heuristics**: `LocalSearch`, `SimulatedAnnealing`, `TabuSearch`, and
-  `LateAcceptanceHillClimbing`.
+- **Problems** built directly from Python data: `MaxCut`, `Qubo`, `Sat`, `VertexCover`,
+  `TspWithCoordinates`, `JobShopScheduling`, and `Formula` — plus a `Graph` type with random
+  graph generators to feed the graph-based ones.
+- **Generic heuristics** that work with any problem: `LocalSearch`, `SimulatedAnnealing`,
+  `BangBangSimulatedAnnealing`, `TabuSearch`, `LateAcceptanceHillClimbing`, `RandomWalk`,
+  `BeamSearch`, and `VariableNeighborhoodSearch`.
+- **Problem-specific heuristics** that exploit one problem's structure: `WalkSat`,
+  `PopulationAnnealing`, `BreakoutLocalSearch`, `RlBreakoutLocalSearch`, and
+  `LinKernighanHelsgaun`.
 - **Full result statistics**: every `run` returns a `RunReport` aggregating per-run objectives,
   timings, and acceptance counts across one or more runs.
 
