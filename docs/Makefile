@@ -4,7 +4,9 @@
 # You can set these variables from the command line, and also
 # from the environment for the first two.
 SPHINXOPTS    ?=
-SPHINXBUILD   ?= uv run sphinx-build
+# --no-sync keeps uv from reinstalling a cached `optopus` wheel over the build
+# that `maturin develop` just installed; autodoc reads that build's docstrings.
+SPHINXBUILD   ?= uv run --no-sync sphinx-build
 SOURCEDIR     = source
 BUILDDIR      = build
 

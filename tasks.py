@@ -24,4 +24,8 @@ def check_env(c):
 def docs(c, output="html"):
     """Build the documentation (default: HTML)."""
     check_env(c)
+    # The API reference is generated from the compiled extension's docstrings, so
+    # it has to be rebuilt first -- a plain `uv sync` reinstalls a cached wheel
+    # and would silently document a stale build.
+    c.run("uv run maturin develop")
     c.run(f"make -C docs {output}", warn=True)

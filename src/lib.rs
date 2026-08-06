@@ -1,10 +1,14 @@
 //! Python bindings for the optopus combinatorial optimization library.
 //!
 //! Exposes problem types (MaxCut, Qubo, Sat, VertexCover, TspWithCoordinates,
-//! JobShopScheduling, Formula) and heuristics (LocalSearch, SimulatedAnnealing,
-//! TabuSearch, LateAcceptanceHillClimbing, RandomWalk, BangBangSimulatedAnnealing,
-//! BeamSearch) as Python classes.
+//! JobShopScheduling, Formula), the Graph type behind the graph-based problems,
+//! generic heuristics (LocalSearch, SimulatedAnnealing, TabuSearch,
+//! LateAcceptanceHillClimbing, RandomWalk, BangBangSimulatedAnnealing, BeamSearch,
+//! VariableNeighborhoodSearch) and problem-specific ones (WalkSat,
+//! PopulationAnnealing, BreakoutLocalSearch, RlBreakoutLocalSearch,
+//! LinKernighanHelsgaun) as Python classes.
 
+mod graph;
 mod heuristic;
 mod problem;
 mod result;
@@ -18,6 +22,7 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<stop_condition::StopCondition>()?;
     m.add_class::<result::RunResult>()?;
     m.add_class::<result::RunReport>()?;
+    m.add_class::<graph::Graph>()?;
     m.add_class::<problem::MaxCut>()?;
     m.add_class::<problem::Qubo>()?;
     m.add_class::<problem::Sat>()?;
@@ -32,5 +37,11 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::RandomWalk>()?;
     m.add_class::<heuristic::BangBangSimulatedAnnealing>()?;
     m.add_class::<heuristic::BeamSearch>()?;
+    m.add_class::<heuristic::VariableNeighborhoodSearch>()?;
+    m.add_class::<heuristic::WalkSat>()?;
+    m.add_class::<heuristic::PopulationAnnealing>()?;
+    m.add_class::<heuristic::BreakoutLocalSearch>()?;
+    m.add_class::<heuristic::RlBreakoutLocalSearch>()?;
+    m.add_class::<heuristic::LinKernighanHelsgaun>()?;
     Ok(())
 }

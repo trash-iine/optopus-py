@@ -7,6 +7,8 @@ use optopus::problem::{
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+use crate::graph::Graph as PyGraph;
+
 /// A polynomial term used by Python-side `Formula` construction:
 /// `(variable_indices, coefficient)`. An empty `variable_indices` list means a constant term.
 type PyMonomial = (Vec<usize>, f64);
@@ -89,6 +91,23 @@ impl MaxCut {
     fn from_edges(edges: Vec<(usize, usize, f32)>) -> Self {
         Self {
             inner: OptMaxCut::from_edges(edges),
+        }
+    }
+
+    /// Build a Max Cut instance from a ``Graph``.
+    ///
+    /// Useful together with the random graph generators, e.g.
+    /// ``MaxCut.from_graph(Graph.erdos_renyi(100, 0.05, seed=42))``.
+    ///
+    /// Args:
+    ///     graph (Graph): The underlying graph.
+    ///
+    /// Returns:
+    ///     MaxCut: A new problem instance.
+    #[staticmethod]
+    fn from_graph(graph: &PyGraph) -> Self {
+        Self {
+            inner: OptMaxCut::new(graph.inner.clone()),
         }
     }
 
@@ -211,6 +230,23 @@ impl VertexCover {
     fn from_edges(edges: Vec<(usize, usize, f32)>) -> Self {
         Self {
             inner: OptVc::new(Graph::from_edges(edges)),
+        }
+    }
+
+    /// Build a Vertex Cover instance from a ``Graph``.
+    ///
+    /// Useful together with the random graph generators, e.g.
+    /// ``VertexCover.from_graph(Graph.barabasi_albert(100, 3, seed=42))``.
+    ///
+    /// Args:
+    ///     graph (Graph): The underlying graph.
+    ///
+    /// Returns:
+    ///     VertexCover: A new problem instance.
+    #[staticmethod]
+    fn from_graph(graph: &PyGraph) -> Self {
+        Self {
+            inner: OptVc::new(graph.inner.clone()),
         }
     }
 

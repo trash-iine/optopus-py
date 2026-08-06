@@ -18,7 +18,10 @@ optimization library for combinatorial problems written in Rust.
 - `JobShopScheduling` — job shop scheduling
 - `Formula` — custom pseudo-Boolean objectives
 
-**Heuristics**
+Problems over a graph (`MaxCut`, `VertexCover`) can also be built from a `Graph`, which
+comes with Erdős-Rényi, Barabási-Albert and Watts-Strogatz random generators.
+
+**Generic heuristics** — work with every problem type, neighborhood chosen via `neighbor`:
 
 - `LocalSearch`
 - `SimulatedAnnealing`
@@ -27,6 +30,15 @@ optimization library for combinatorial problems written in Rust.
 - `LateAcceptanceHillClimbing`
 - `RandomWalk`
 - `BeamSearch`
+- `VariableNeighborhoodSearch` — alternates a search heuristic with increasingly disruptive shakes
+
+**Problem-specific heuristics** — exploit one problem's structure, no `neighbor` argument:
+
+- `WalkSat` — WalkSAT/SKC with optional adaptive noise (`Sat`)
+- `PopulationAnnealing` — replica population along an annealing schedule (`MaxCut`)
+- `BreakoutLocalSearch` — tabu descent with adaptive perturbations (`MaxCut`)
+- `RlBreakoutLocalSearch` — the same, with a contextual bandit picking the perturbation (`MaxCut`)
+- `LinKernighanHelsgaun` — variable-depth edge exchange (`TspWithCoordinates`)
 
 Every heuristic takes a `StopCondition` (`max_iteration`, `max_duration_secs`,
 `max_failed_update`) and supports reproducible multi-run experiments: `run(problem, runs=N,

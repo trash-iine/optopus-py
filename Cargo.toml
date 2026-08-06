@@ -10,7 +10,19 @@ repository = "https://github.com/trash-iine/optopus-py"
 [lib]
 name = "optopus"
 crate-type = ["cdylib", "rlib"]
+# The `///` comments here are Python docstrings, not Rust doc examples, so there
+# is nothing to doctest. Skipping the pass also avoids rustdoc tripping over the
+# lib sharing its name with the `optopus` dependency (E0464).
+doctest = false
 
 [dependencies]
 optopus = { path = "vendor/optopus" }
-pyo3 = { version = "0.28.3", features = ["extension-module", "abi3-py39"] }
+pyo3 = { version = "0.28.3", features = ["abi3-py39"] }
+
+[features]
+# `pyo3/extension-module` stops pyo3 from linking libpython, which is what a
+# Python extension wants but leaves every CPython symbol undefined -- a plain
+# `cargo build` then fails to link on macOS. Keeping it opt-in lets `cargo build`
+# and `cargo test` link against libpython instead; maturin turns it on for the
+# wheel via `features` in pyproject.toml.
+extension-module = ["pyo3/extension-module"]
