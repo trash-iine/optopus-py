@@ -153,7 +153,7 @@ print(walksat.run(sat, seed=42).best_objective)   # 3.0 — every clause satisfi
 # Breakout local search for Max Cut: tabu descent with adaptive perturbations.
 mc = optopus.MaxCut.from_graph(optopus.Graph.erdos_renyi(200, 0.05, seed=42))
 bls = optopus.BreakoutLocalSearch(
-    tabu_tenure=(3, 50), t=1_000, l0=20, p0=0.8, q=0.5,
+    tabu_tenure=(6, 100), t=1_000, l0=20, p0=0.8, q=0.5,
     stop=optopus.StopCondition(max_iteration=20_000),
 )
 print(bls.run(mc, runs=3, seed=42).best_objective)
@@ -166,8 +166,8 @@ lkh = optopus.LinKernighanHelsgaun(stop=optopus.StopCondition(max_iteration=1_00
 print(lkh.run(tsp, seed=42).best_objective)       # 4.0 — the square's perimeter
 ```
 
-`PopulationAnnealing` and `RlBreakoutLocalSearch` are also available for Max Cut; see the
-[API reference](api_reference.md) for their parameters.
+`AdaptiveLargeNeighborhoodSearch` and `HybridGeneticSearch` cover `Vrp` (the former also
+`TspWithCoordinates`); see the [API reference](api_reference.md) for their parameters.
 
 ## Next steps
 

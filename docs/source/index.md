@@ -12,10 +12,10 @@ executing in native Rust.
   graph generators to feed the graph-based ones.
 - **Generic heuristics** that work with any problem: `LocalSearch`, `SimulatedAnnealing`,
   `BangBangSimulatedAnnealing`, `TabuSearch`, `LateAcceptanceHillClimbing`, `RandomWalk`,
-  `BeamSearch`, and `VariableNeighborhoodSearch`.
+  `BeamSearch`, `PopulationAnnealing`, and `VariableNeighborhoodSearch`.
 - **Problem-specific heuristics** that exploit one problem's structure: `WalkSat`,
-  `PopulationAnnealing`, `BreakoutLocalSearch`, `RlBreakoutLocalSearch`, and
-  `LinKernighanHelsgaun`.
+  `BreakoutLocalSearch`, `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch`, and
+  `HybridGeneticSearch`.
 - **Full result statistics**: every `run` returns a `RunReport` aggregating per-run objectives,
   timings, and acceptance counts across one or more runs.
 

@@ -4,11 +4,10 @@
 //! JobShopScheduling, Vrp, Formula), the Graph type behind the graph-based problems,
 //! generic heuristics (LocalSearch, SimulatedAnnealing, TabuSearch,
 //! LateAcceptanceHillClimbing, RandomWalk, BangBangSimulatedAnnealing, BeamSearch,
-//! VariableNeighborhoodSearch) and problem-specific ones (WalkSat,
-//! PopulationAnnealing, BreakoutLocalSearch, RlBreakoutLocalSearch,
-//! LinKernighanHelsgaun, AdaptiveLargeNeighborhoodSearch, HybridGeneticSearch) as
-//! Python classes, plus the MaxCutKernel reduction and the PlantedMaxCut instance
-//! generators.
+//! PopulationAnnealing, VariableNeighborhoodSearch) and problem-specific ones
+//! (WalkSat, BreakoutLocalSearch, LinKernighanHelsgaun,
+//! AdaptiveLargeNeighborhoodSearch, HybridGeneticSearch) as Python classes, plus
+//! the MaxCutKernel reduction and the PlantedMaxCut instance generators.
 
 mod graph;
 mod heuristic;
@@ -46,7 +45,6 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::WalkSat>()?;
     m.add_class::<heuristic::PopulationAnnealing>()?;
     m.add_class::<heuristic::BreakoutLocalSearch>()?;
-    m.add_class::<heuristic::RlBreakoutLocalSearch>()?;
     m.add_class::<heuristic::LinKernighanHelsgaun>()?;
     m.add_class::<heuristic::AdaptiveLargeNeighborhoodSearch>()?;
     m.add_class::<heuristic::HybridGeneticSearch>()?;

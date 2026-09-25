@@ -1,4 +1,3 @@
-use optopus::heuristic::{NUM_CONTEXT_FEATURES, NUM_PERTURBATION_TYPES};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -610,11 +609,9 @@ impl WalkSat {
     }
 }
 
-/// Population annealing for MaxCut: evolves a population of replicas along an increasing
+/// Population annealing: evolves a population of replicas along an increasing
 /// inverse-temperature schedule, resampling them in proportion to their Boltzmann weight
 /// and equilibrating each with Metropolis sweeps.
-///
-/// Only applies to ``MaxCut`` problems.
 ///
 /// Args:
 ///     population_size (int): Number of replicas (``>= 2``).
@@ -626,7 +623,10 @@ impl WalkSat {
 ///         Defaults to 50.
 ///     reset_period (int): Steps between annealing-schedule resets; 0 disables resetting.
 ///         Defaults to 400.
-///     cluster_moves (bool): Enable non-local iso-site cluster moves. Defaults to True.
+///     neighbor (str): Neighborhood the Metropolis sweeps propose moves from, as for
+///         ``LocalSearch``. Defaults to ``"Flip"``.
+///     sweep_length (int | None): Proposals per sweep. Defaults to None, which counts the
+///         neighborhood once per run.
 #[pyclass(module = "optopus")]
 pub struct PopulationAnnealing {
     population_size: usize,
@@ -634,7 +634,8 @@ pub struct PopulationAnnealing {
     delta_beta: f64,
     sweeps_per_step: usize,
     reset_period: Option<usize>,
-    cluster_moves: bool,
+    neighbor: String,
+    sweep_length: Option<usize>,
     stop: StopCondition,
 }
 
@@ -647,9 +648,9 @@ impl PopulationAnnealing {
                 delta_beta: self.delta_beta,
                 sweeps_per_step: self.sweeps_per_step,
                 reset_period: self.reset_period,
-                cluster_moves: self.cluster_moves,
+                sweep_length: self.sweep_length,
             },
-            neighbor: String::new(),
+            neighbor: self.neighbor.clone(),
             stop: self.stop.clone(),
         })
     }
@@ -665,7 +666,8 @@ impl PopulationAnnealing {
         delta_beta=0.02,
         sweeps_per_step=50,
         reset_period=400,
-        cluster_moves=true,
+        neighbor="Flip".to_string(),
+        sweep_length=None,
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -675,7 +677,8 @@ impl PopulationAnnealing {
         delta_beta: f64,
         sweeps_per_step: usize,
         reset_period: usize,
-        cluster_moves: bool,
+        neighbor: String,
+        sweep_length: Option<usize>,
     ) -> PyResult<Self> {
         if population_size < 2 {
             return Err(PyValueError::new_err(
@@ -689,13 +692,17 @@ impl PopulationAnnealing {
                 "'sweeps_per_step' must be at least 1",
             ));
         }
+        if sweep_length == Some(0) {
+            return Err(PyValueError::new_err("'sweep_length' must be at least 1"));
+        }
         Ok(Self {
             population_size,
             initial_beta,
             delta_beta,
             sweeps_per_step,
             reset_period: (reset_period > 0).then_some(reset_period),
-            cluster_moves,
+            neighbor,
+            sweep_length,
             stop,
         })
     }
@@ -731,10 +738,10 @@ impl PopulationAnnealing {
 /// Only applies to ``MaxCut`` problems.
 ///
 /// Args:
-///     tabu_tenure (tuple[int, int]): Tabu tenure range ``(min, max)``. This is Benlic and
-///         Hao's :math:`\\gamma`, which the algorithm doubles internally, so the effective
-///         ban lasts twice as long as the same tuple would under :class:`TabuSearch` or
-///         :class:`RlBreakoutLocalSearch`.
+///     tabu_tenure (tuple[int, int]): Tabu tenure range ``(min, max)``, the same ban length
+///         it means under :class:`TabuSearch`. Benlic and Hao's :math:`\\gamma` counts twice
+///         (once when a vertex is recorded, once in the eligibility test), so their
+///         ``rand[3, |V|/10]`` is ``(6, |V|/5)`` here.
 ///     t (int): Stagnation threshold; beyond it the perturbation turns strongly diversifying.
 ///     l0 (int): Base perturbation strength (number of moves), ``>= 1``.
 ///     p0 (float): Floor on the probability of a directed (rather than random) perturbation.
@@ -787,154 +794,6 @@ impl BreakoutLocalSearch {
             l0,
             p0,
             q,
-            stop,
-        })
-    }
-
-    /// Run the heuristic on a problem and return an aggregated report.
-    ///
-    /// Args:
-    ///     problem (MaxCut): The problem instance to solve.
-    ///     runs (int): Number of independent runs to perform. Defaults to 1.
-    ///     seed (int | None): Master seed. When set, runs are deterministic
-    ///         (run 0 uses ``seed`` directly).
-    ///
-    /// Returns:
-    ///     RunReport: Aggregated statistics over all runs.
-    ///
-    /// Raises:
-    ///     ValueError: If ``problem`` is not a ``MaxCut`` instance, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
-    fn run(
-        &self,
-        py: Python<'_>,
-        problem: &Bound<'_, PyAny>,
-        runs: usize,
-        seed: Option<u64>,
-    ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
-    }
-}
-
-/// Breakout local search for MaxCut whose perturbation is chosen by a contextual softmax
-/// bandit instead of a fixed rule. The bandit learns online which (perturbation type,
-/// strength) pair pays off in the current search context, and keeps its weights across
-/// restarts within a single run.
-///
-/// Only applies to ``MaxCut`` problems.
-///
-/// Args:
-///     tabu_tenure (tuple[int, int]): Tabu tenure range ``(min, max)``.
-///     t (int): Stagnation threshold used to build the context features.
-///     l0 (int): Base perturbation strength (number of moves), ``>= 1``.
-///     stop (StopCondition): Stopping criterion.
-///     strength_bins (list[float]): Multipliers on ``l0`` the bandit can choose from; every
-///         entry must be positive. Defaults to ``[1.0, 2.0, 4.0]``.
-///     learning_rate (float): Policy-gradient step size (``>= 0``; 0 freezes learning).
-///         Defaults to 0.1.
-///     softmax_temperature (float): Softmax temperature over action scores (``> 0``).
-///         Defaults to 1.0.
-///     exploration (float): Probability of a uniformly random action, in ``[0, 1]``.
-///         Defaults to 0.05.
-///     policy_weights (list[float] | None): Pre-trained weights, flattened row-major with
-///         ``3 * len(strength_bins) * 7`` entries -- 3 perturbation types times the strength
-///         bins times 7 context features. Defaults to None (start from zero). Weights saved
-///         by optopus 0.1.x used a ``5 x bins x 8`` layout and are not loadable here.
-#[pyclass(module = "optopus")]
-pub struct RlBreakoutLocalSearch {
-    tabu_tenure: (u64, u64),
-    t: u64,
-    l0: u64,
-    strength_bins: Vec<f64>,
-    learning_rate: f64,
-    softmax_temperature: f64,
-    exploration: f64,
-    policy_weights: Option<Vec<f64>>,
-    stop: StopCondition,
-}
-
-impl RlBreakoutLocalSearch {
-    pub(crate) fn to_spec(&self, _py: Python<'_>) -> PyResult<HeuristicSpec> {
-        Ok(HeuristicSpec {
-            kind: HeuristicKind::RlBreakoutLocalSearch {
-                tabu_tenure: self.tabu_tenure,
-                t: self.t,
-                l0: self.l0,
-                strength_bins: self.strength_bins.clone(),
-                learning_rate: self.learning_rate,
-                softmax_temperature: self.softmax_temperature,
-                exploration: self.exploration,
-                policy_weights: self.policy_weights.clone(),
-            },
-            neighbor: String::new(),
-            stop: self.stop.clone(),
-        })
-    }
-}
-
-#[pymethods]
-impl RlBreakoutLocalSearch {
-    #[new]
-    #[pyo3(signature = (
-        tabu_tenure,
-        t,
-        l0,
-        stop,
-        strength_bins=vec![1.0, 2.0, 4.0],
-        learning_rate=0.1,
-        softmax_temperature=1.0,
-        exploration=0.05,
-        policy_weights=None,
-    ))]
-    #[allow(clippy::too_many_arguments)]
-    fn new(
-        tabu_tenure: (u64, u64),
-        t: u64,
-        l0: u64,
-        stop: StopCondition,
-        strength_bins: Vec<f64>,
-        learning_rate: f64,
-        softmax_temperature: f64,
-        exploration: f64,
-        policy_weights: Option<Vec<f64>>,
-    ) -> PyResult<Self> {
-        if l0 == 0 {
-            return Err(PyValueError::new_err("'l0' must be at least 1"));
-        }
-        if strength_bins.is_empty() {
-            return Err(PyValueError::new_err(
-                "'strength_bins' must not be empty (e.g. [1.0, 2.0, 4.0])",
-            ));
-        }
-        for bin in &strength_bins {
-            check_positive("strength_bins", *bin)?;
-        }
-        if learning_rate < 0.0 {
-            return Err(PyValueError::new_err(format!(
-                "'learning_rate' must not be negative, got {learning_rate}"
-            )));
-        }
-        check_positive("softmax_temperature", softmax_temperature)?;
-        check_unit_interval("exploration", exploration)?;
-        if let Some(weights) = &policy_weights {
-            let expected = NUM_PERTURBATION_TYPES * strength_bins.len() * NUM_CONTEXT_FEATURES;
-            if weights.len() != expected {
-                return Err(PyValueError::new_err(format!(
-                    "'policy_weights' must have {expected} entries for {} strength bins, got {}",
-                    strength_bins.len(),
-                    weights.len()
-                )));
-            }
-        }
-        Ok(Self {
-            tabu_tenure,
-            t,
-            l0,
-            strength_bins,
-            learning_rate,
-            softmax_temperature,
-            exploration,
-            policy_weights,
             stop,
         })
     }
@@ -1046,15 +905,16 @@ fn check_half_open_unit(name: &str, value: f64) -> PyResult<()> {
     Ok(())
 }
 
-/// Adaptive large neighborhood search for VRP: each iteration destroys part of the incumbent
-/// with one of three removal operators and repairs it with one of two insertion operators,
-/// reinforcing whichever pair has been paying off, under a simulated-annealing acceptance rule.
+/// Adaptive large neighborhood search: each iteration destroys part of the incumbent
+/// with a removal operator and repairs it with an insertion operator, reinforcing whichever
+/// pair has been paying off, under a simulated-annealing acceptance rule.
 ///
-/// Only applies to ``Vrp`` problems.
+/// Only applies to ``Vrp`` and ``TspWithCoordinates`` problems.
 ///
 /// Args:
 ///     stop (StopCondition): Stopping criterion.
-///     removal_fraction (float): Share of customers torn out each iteration, in ``(0, 1]``.
+///     removal_fraction (float): Share of customers (or cities) torn out each iteration, in
+///         ``(0, 1]``.
 ///         Defaults to 0.15.
 ///     cooling_rate (float): Geometric cooling factor for the acceptance temperature, in
 ///         ``(0, 1]``. Defaults to 0.9995.
@@ -1095,7 +955,7 @@ impl AdaptiveLargeNeighborhoodSearch {
     /// Run the heuristic on a problem and return an aggregated report.
     ///
     /// Args:
-    ///     problem (Vrp): The problem instance to solve.
+    ///     problem (Vrp | TspWithCoordinates): The problem instance to solve.
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
@@ -1104,7 +964,8 @@ impl AdaptiveLargeNeighborhoodSearch {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
-    ///     ValueError: If ``problem`` is not a ``Vrp`` instance, or ``runs`` is 0.
+    ///     ValueError: If ``problem`` is not a ``Vrp`` or ``TspWithCoordinates`` instance, or
+    ///         ``runs`` is 0.
     #[pyo3(signature = (problem, runs=1, seed=None))]
     fn run(
         &self,

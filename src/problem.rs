@@ -3,7 +3,7 @@ use optopus::problem::{
     Constraint, ConstraintRel, Expr, FormulaProblem, JobShopScheduling as OptJobShop,
     MaxCut as OptMaxCut, MaxCutKernel as OptMaxCutKernel, OptDirection,
     PlantedMaxCut as OptPlantedMaxCut, Qubo as OptQubo, Sat as OptSat, TileProbs2d, TileProbs3d,
-    TspWithCoordinates as OptTsp, VertexCover as OptVc, Vrp as OptVrp, WishartCouplers,
+    Tsp as OptTsp, VertexCover as OptVc, Vrp as OptVrp, WishartCouplers,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -196,7 +196,7 @@ impl MaxCutKernel {
     #[staticmethod]
     fn reduce(problem: &MaxCut) -> Self {
         Self {
-            inner: OptMaxCutKernel::reduce(&problem.inner),
+            inner: OptMaxCutKernel::new(&problem.inner),
             original_len: problem.inner.graph.num_vertices(),
         }
     }
@@ -625,7 +625,7 @@ impl TspWithCoordinates {
         format!(
             "TspWithCoordinates(name={:?}, n_cities={})",
             self.inner.name,
-            self.inner.coordinates.len()
+            self.inner.get_n()
         )
     }
 }

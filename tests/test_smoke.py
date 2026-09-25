@@ -158,7 +158,7 @@ def test_variable_neighborhood_search():
 def test_variable_neighborhood_search_with_problem_specific_step():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
     vns = optopus.VariableNeighborhoodSearch(
-        search=optopus.BreakoutLocalSearch((3, 50), 100, 5, 0.8, 0.5, stop(100)),
+        search=optopus.BreakoutLocalSearch((6, 100), 100, 5, 0.8, 0.5, stop(100)),
         shakes=[optopus.RandomWalk("Flip", stop=stop(3))],
         stop=stop(500),
     )
@@ -184,26 +184,21 @@ def test_population_annealing():
     assert pa.run(mc, runs=2, seed=42).best_objective == TRIANGLE_OPTIMUM
 
 
+def test_population_annealing_is_generic():
+    q = optopus.Qubo.from_entries([(0, 0, -1), (0, 1, 2), (1, 1, -1)])
+    pa = optopus.PopulationAnnealing(population_size=10, stop=stop(50), sweeps_per_step=5)
+    assert pa.run(q, runs=2, seed=42).best_objective == -1.0
+    tsp = optopus.TspWithCoordinates.from_coordinates(UNIT_SQUARE)
+    pa = optopus.PopulationAnnealing(
+        population_size=10, stop=stop(50), sweeps_per_step=5, neighbor="TwoOpt", sweep_length=4
+    )
+    assert abs(pa.run(tsp, seed=42).best_objective - 4.0) < 1e-9
+
+
 def test_breakout_local_search():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
-    bls = optopus.BreakoutLocalSearch((3, 50), 1_000, 20, 0.8, 0.5, stop(1_000))
+    bls = optopus.BreakoutLocalSearch((6, 100), 1_000, 20, 0.8, 0.5, stop(1_000))
     assert bls.run(mc, runs=2, seed=42).best_objective == TRIANGLE_OPTIMUM
-
-
-def test_rl_breakout_local_search():
-    mc = optopus.MaxCut.from_edges(TRIANGLE)
-    rl = optopus.RlBreakoutLocalSearch((3, 50), 1_000, 20, stop(1_000))
-    assert rl.run(mc, runs=2, seed=42).best_objective == TRIANGLE_OPTIMUM
-
-
-def test_rl_breakout_local_search_accepts_policy_weights():
-    mc = optopus.MaxCut.from_edges(TRIANGLE)
-    bins = [1.0, 2.0]
-    # 3 perturbation types x len(bins) strengths x 7 context features.
-    rl = optopus.RlBreakoutLocalSearch(
-        (3, 50), 1_000, 20, stop(500), strength_bins=bins, policy_weights=[0.0] * (3 * 2 * 7)
-    )
-    assert rl.run(mc, seed=42).best_objective == TRIANGLE_OPTIMUM
 
 
 def test_lin_kernighan_helsgaun():
@@ -244,6 +239,12 @@ def test_vrp_adaptive_large_neighborhood_search():
     vrp = clustered_vrp()
     alns = optopus.AdaptiveLargeNeighborhoodSearch(stop(2_000))
     assert abs(alns.run(vrp, runs=4, seed=42).best_objective - VRP_OPTIMUM) < 1e-9
+
+
+def test_tsp_adaptive_large_neighborhood_search():
+    tsp = optopus.TspWithCoordinates.from_coordinates(UNIT_SQUARE)
+    alns = optopus.AdaptiveLargeNeighborhoodSearch(stop(200))
+    assert abs(alns.run(tsp, runs=2, seed=42).best_objective - 4.0) < 1e-9
 
 
 def test_vrp_hybrid_genetic_search():
@@ -372,7 +373,7 @@ def test_planted_maxcut_tile_planting_2d_is_exact():
     assert len(planted.planted()) == 36
     assert planted.problem().__repr__() == "MaxCut(num_vertices=36, num_edges=72)"
 
-    bls = optopus.BreakoutLocalSearch((3, 20), 1_000, 10, 0.8, 0.5, stop(20_000))
+    bls = optopus.BreakoutLocalSearch((6, 40), 1_000, 10, 0.8, 0.5, stop(20_000))
     assert bls.run(planted.problem(), runs=3, seed=5).best_objective == planted.optimum()
 
 
@@ -422,7 +423,7 @@ def test_grid_torus_accepts_random_weights():
 
 def test_same_seed_reproduces_report():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
-    bls = optopus.BreakoutLocalSearch((3, 50), 1_000, 20, 0.8, 0.5, stop(1_000))
+    bls = optopus.BreakoutLocalSearch((6, 100), 1_000, 20, 0.8, 0.5, stop(1_000))
     first = bls.run(mc, runs=3, seed=123)
     second = bls.run(mc, runs=3, seed=123)
     assert [r.best_objective for r in first.runs] == [r.best_objective for r in second.runs]
@@ -445,12 +446,8 @@ def test_same_seed_reproduces_report():
             id="delta-beta-not-positive",
         ),
         pytest.param(
-            lambda: optopus.RlBreakoutLocalSearch((3, 50), 100, 5, stop(10), strength_bins=[]),
-            id="empty-strength-bins",
-        ),
-        pytest.param(
-            lambda: optopus.RlBreakoutLocalSearch((3, 50), 100, 5, stop(10), policy_weights=[0.0]),
-            id="policy-weights-wrong-length",
+            lambda: optopus.PopulationAnnealing(population_size=5, stop=stop(10), sweep_length=0),
+            id="sweep-length-zero",
         ),
         pytest.param(
             lambda: optopus.AdaptiveLargeNeighborhoodSearch(stop(10), removal_fraction=0.0),
@@ -514,12 +511,6 @@ def test_invalid_parameters_raise_value_error(make):
     ("make_heuristic", "make_problem", "expected"),
     [
         pytest.param(
-            lambda: optopus.PopulationAnnealing(population_size=5, stop=stop(10)),
-            lambda: optopus.Qubo.from_entries([(0, 0, -1)]),
-            "PopulationAnnealing is only available for MaxCut",
-            id="population-annealing-on-qubo",
-        ),
-        pytest.param(
             lambda: optopus.WalkSat(stop=stop(10)),
             lambda: optopus.MaxCut.from_edges(TRIANGLE),
             "WalkSat is only available for Sat",
@@ -534,7 +525,7 @@ def test_invalid_parameters_raise_value_error(make):
         pytest.param(
             lambda: optopus.AdaptiveLargeNeighborhoodSearch(stop(10)),
             lambda: optopus.MaxCut.from_edges(TRIANGLE),
-            "AdaptiveLargeNeighborhoodSearch is only available for Vrp",
+            "AdaptiveLargeNeighborhoodSearch is only available for Vrp or TspWithCoordinates",
             id="alns-on-maxcut",
         ),
         pytest.param(
@@ -545,7 +536,7 @@ def test_invalid_parameters_raise_value_error(make):
         ),
         pytest.param(
             lambda: optopus.VariableNeighborhoodSearch(
-                optopus.BreakoutLocalSearch((3, 50), 100, 5, 0.8, 0.5, stop(10)),
+                optopus.BreakoutLocalSearch((6, 100), 100, 5, 0.8, 0.5, stop(10)),
                 [optopus.RandomWalk("Flip", stop(3))],
                 stop(10),
             ),

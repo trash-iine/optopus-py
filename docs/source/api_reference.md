@@ -76,6 +76,9 @@ These work with every problem type; the neighborhood is selected with the `neigh
 
 .. autoclass:: optopus.VariableNeighborhoodSearch
    :members:
+
+.. autoclass:: optopus.PopulationAnnealing
+   :members:
 ```
 
 ### Problem-specific
@@ -87,13 +90,7 @@ different problem raises `ValueError`.
 .. autoclass:: optopus.WalkSat
    :members:
 
-.. autoclass:: optopus.PopulationAnnealing
-   :members:
-
 .. autoclass:: optopus.BreakoutLocalSearch
-   :members:
-
-.. autoclass:: optopus.RlBreakoutLocalSearch
    :members:
 
 .. autoclass:: optopus.LinKernighanHelsgaun
