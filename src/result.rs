@@ -16,6 +16,9 @@ pub struct RunResult {
     ///   ``list[bool]`` of length *number of variables/vertices*.
     /// - ``TspWithCoordinates`` → ``list[int]`` permutation of city indices.
     /// - ``JobShopScheduling`` → ``list[int]`` operation sequence.
+    /// - ``Vrp`` → ``list[list[int]]``, one route of customer indices per vehicle. The list
+    ///   has ``Vrp.num_vehicles()`` entries, the depot is implicit at both ends of each
+    ///   route, and empty routes may appear.
     #[pyo3(get)]
     pub solution: Py<PyAny>,
     /// Iteration at which the best solution was found.

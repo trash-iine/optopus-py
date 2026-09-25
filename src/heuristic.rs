@@ -731,14 +731,15 @@ impl PopulationAnnealing {
 /// Only applies to ``MaxCut`` problems.
 ///
 /// Args:
-///     tabu_tenure (tuple[int, int]): Tabu tenure range ``(min, max)``.
+///     tabu_tenure (tuple[int, int]): Tabu tenure range ``(min, max)``. This is Benlic and
+///         Hao's :math:`\\gamma`, which the algorithm doubles internally, so the effective
+///         ban lasts twice as long as the same tuple would under :class:`TabuSearch` or
+///         :class:`RlBreakoutLocalSearch`.
 ///     t (int): Stagnation threshold; beyond it the perturbation turns strongly diversifying.
 ///     l0 (int): Base perturbation strength (number of moves), ``>= 1``.
 ///     p0 (float): Floor on the probability of a directed (rather than random) perturbation.
 ///     q (float): Decay rate of that probability as stagnation grows.
 ///     stop (StopCondition): Stopping criterion.
-///     plateau_prob (float): Probability of taking a zero-gain plateau move, in ``[0, 1]``.
-///         Defaults to 0.0, which reproduces the original algorithm.
 #[pyclass(module = "optopus")]
 pub struct BreakoutLocalSearch {
     tabu_tenure: (u64, u64),
@@ -746,7 +747,6 @@ pub struct BreakoutLocalSearch {
     l0: u64,
     p0: f64,
     q: f64,
-    plateau_prob: f64,
     stop: StopCondition,
 }
 
@@ -759,7 +759,6 @@ impl BreakoutLocalSearch {
                 l0: self.l0,
                 p0: self.p0,
                 q: self.q,
-                plateau_prob: self.plateau_prob,
             },
             neighbor: String::new(),
             stop: self.stop.clone(),
@@ -770,8 +769,7 @@ impl BreakoutLocalSearch {
 #[pymethods]
 impl BreakoutLocalSearch {
     #[new]
-    #[pyo3(signature = (tabu_tenure, t, l0, p0, q, stop, plateau_prob=0.0))]
-    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (tabu_tenure, t, l0, p0, q, stop))]
     fn new(
         tabu_tenure: (u64, u64),
         t: u64,
@@ -779,19 +777,16 @@ impl BreakoutLocalSearch {
         p0: f64,
         q: f64,
         stop: StopCondition,
-        plateau_prob: f64,
     ) -> PyResult<Self> {
         if l0 == 0 {
             return Err(PyValueError::new_err("'l0' must be at least 1"));
         }
-        check_unit_interval("plateau_prob", plateau_prob)?;
         Ok(Self {
             tabu_tenure,
             t,
             l0,
             p0,
             q,
-            plateau_prob,
             stop,
         })
     }
@@ -842,7 +837,9 @@ impl BreakoutLocalSearch {
 ///     exploration (float): Probability of a uniformly random action, in ``[0, 1]``.
 ///         Defaults to 0.05.
 ///     policy_weights (list[float] | None): Pre-trained weights, flattened row-major with
-///         ``5 * len(strength_bins) * 8`` entries. Defaults to None (start from zero).
+///         ``3 * len(strength_bins) * 7`` entries -- 3 perturbation types times the strength
+///         bins times 7 context features. Defaults to None (start from zero). Weights saved
+///         by optopus 0.1.x used a ``5 x bins x 8`` layout and are not loadable here.
 #[pyclass(module = "optopus")]
 pub struct RlBreakoutLocalSearch {
     tabu_tenure: (u64, u64),
@@ -1027,6 +1024,206 @@ impl LinKernighanHelsgaun {
     ///
     /// Raises:
     ///     ValueError: If ``problem`` is not a ``TspWithCoordinates`` instance, or ``runs`` is 0.
+    #[pyo3(signature = (problem, runs=1, seed=None))]
+    fn run(
+        &self,
+        py: Python<'_>,
+        problem: &Bound<'_, PyAny>,
+        runs: usize,
+        seed: Option<u64>,
+    ) -> PyResult<RunReport> {
+        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+    }
+}
+
+/// Rejects a parameter that must lie within the half-open interval ``(0, 1]``.
+fn check_half_open_unit(name: &str, value: f64) -> PyResult<()> {
+    if !(value > 0.0 && value <= 1.0) {
+        return Err(PyValueError::new_err(format!(
+            "'{name}' must be within (0.0, 1.0], got {value}"
+        )));
+    }
+    Ok(())
+}
+
+/// Adaptive large neighborhood search for VRP: each iteration destroys part of the incumbent
+/// with one of three removal operators and repairs it with one of two insertion operators,
+/// reinforcing whichever pair has been paying off, under a simulated-annealing acceptance rule.
+///
+/// Only applies to ``Vrp`` problems.
+///
+/// Args:
+///     stop (StopCondition): Stopping criterion.
+///     removal_fraction (float): Share of customers torn out each iteration, in ``(0, 1]``.
+///         Defaults to 0.15.
+///     cooling_rate (float): Geometric cooling factor for the acceptance temperature, in
+///         ``(0, 1]``. Defaults to 0.9995.
+#[pyclass(module = "optopus")]
+pub struct AdaptiveLargeNeighborhoodSearch {
+    removal_fraction: f64,
+    cooling_rate: f64,
+    stop: StopCondition,
+}
+
+impl AdaptiveLargeNeighborhoodSearch {
+    pub(crate) fn to_spec(&self, _py: Python<'_>) -> PyResult<HeuristicSpec> {
+        Ok(HeuristicSpec {
+            kind: HeuristicKind::AdaptiveLargeNeighborhoodSearch {
+                removal_fraction: self.removal_fraction,
+                cooling_rate: self.cooling_rate,
+            },
+            neighbor: String::new(),
+            stop: self.stop.clone(),
+        })
+    }
+}
+
+#[pymethods]
+impl AdaptiveLargeNeighborhoodSearch {
+    #[new]
+    #[pyo3(signature = (stop, removal_fraction=0.15, cooling_rate=0.9995))]
+    fn new(stop: StopCondition, removal_fraction: f64, cooling_rate: f64) -> PyResult<Self> {
+        check_half_open_unit("removal_fraction", removal_fraction)?;
+        check_half_open_unit("cooling_rate", cooling_rate)?;
+        Ok(Self {
+            removal_fraction,
+            cooling_rate,
+            stop,
+        })
+    }
+
+    /// Run the heuristic on a problem and return an aggregated report.
+    ///
+    /// Args:
+    ///     problem (Vrp): The problem instance to solve.
+    ///     runs (int): Number of independent runs to perform. Defaults to 1.
+    ///     seed (int | None): Master seed. When set, runs are deterministic
+    ///         (run 0 uses ``seed`` directly).
+    ///
+    /// Returns:
+    ///     RunReport: Aggregated statistics over all runs.
+    ///
+    /// Raises:
+    ///     ValueError: If ``problem`` is not a ``Vrp`` instance, or ``runs`` is 0.
+    #[pyo3(signature = (problem, runs=1, seed=None))]
+    fn run(
+        &self,
+        py: Python<'_>,
+        problem: &Bound<'_, PyAny>,
+        runs: usize,
+        seed: Option<u64>,
+    ) -> PyResult<RunReport> {
+        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+    }
+}
+
+/// Hybrid genetic search for VRP (Vidal): a genetic algorithm over giant-tour chromosomes,
+/// each offspring split into routes by dynamic programming and improved by local search, with
+/// a population that keeps infeasible individuals alive under an adaptive capacity penalty.
+///
+/// Only applies to ``Vrp`` problems.
+///
+/// One iteration in ``stop`` counts a single offspring, not a whole generation, so
+/// ``StopCondition(max_iteration=n)`` produces ``n`` children.
+///
+/// Args:
+///     stop (StopCondition): Stopping criterion.
+///     min_population_size (int): Population floor :math:`\mu` before survivor selection
+///         culls back to it (``>= 4``). Defaults to 25.
+///     generation_size (int): Number of offspring :math:`\lambda` generated between culls
+///         (``>= 1``). Defaults to 40.
+///     granularity (int): Number of nearest neighbors each local-search move considers
+///         (``>= 1``). Defaults to 20.
+///     target_feasible (float): Share of offspring the penalty adapts towards being feasible,
+///         in ``(0, 1)`` exclusive. Defaults to 0.2.
+///     restart_generations (int | None): Restart the population after this many generations
+///         without improvement. Defaults to 20000; None never restarts.
+#[pyclass(module = "optopus")]
+pub struct HybridGeneticSearch {
+    min_population_size: usize,
+    generation_size: usize,
+    granularity: usize,
+    target_feasible: f64,
+    restart_generations: Option<u64>,
+    stop: StopCondition,
+}
+
+impl HybridGeneticSearch {
+    pub(crate) fn to_spec(&self, _py: Python<'_>) -> PyResult<HeuristicSpec> {
+        Ok(HeuristicSpec {
+            kind: HeuristicKind::HybridGeneticSearch {
+                min_population_size: self.min_population_size,
+                generation_size: self.generation_size,
+                granularity: self.granularity,
+                target_feasible: self.target_feasible,
+                restart_generations: self.restart_generations,
+            },
+            neighbor: String::new(),
+            stop: self.stop.clone(),
+        })
+    }
+}
+
+#[pymethods]
+impl HybridGeneticSearch {
+    #[new]
+    #[pyo3(signature = (
+        stop,
+        min_population_size=25,
+        generation_size=40,
+        granularity=20,
+        target_feasible=0.2,
+        restart_generations=Some(20_000),
+    ))]
+    fn new(
+        stop: StopCondition,
+        min_population_size: usize,
+        generation_size: usize,
+        granularity: usize,
+        target_feasible: f64,
+        restart_generations: Option<u64>,
+    ) -> PyResult<Self> {
+        if min_population_size < 4 {
+            return Err(PyValueError::new_err(
+                "'min_population_size' must be at least 4",
+            ));
+        }
+        if generation_size == 0 {
+            return Err(PyValueError::new_err(
+                "'generation_size' must be at least 1",
+            ));
+        }
+        if granularity == 0 {
+            return Err(PyValueError::new_err("'granularity' must be at least 1"));
+        }
+        if !(target_feasible > 0.0 && target_feasible < 1.0) {
+            return Err(PyValueError::new_err(format!(
+                "'target_feasible' must be within (0.0, 1.0), got {target_feasible}"
+            )));
+        }
+        Ok(Self {
+            min_population_size,
+            generation_size,
+            granularity,
+            target_feasible,
+            restart_generations,
+            stop,
+        })
+    }
+
+    /// Run the heuristic on a problem and return an aggregated report.
+    ///
+    /// Args:
+    ///     problem (Vrp): The problem instance to solve.
+    ///     runs (int): Number of independent runs to perform. Defaults to 1.
+    ///     seed (int | None): Master seed. When set, runs are deterministic
+    ///         (run 0 uses ``seed`` directly).
+    ///
+    /// Returns:
+    ///     RunReport: Aggregated statistics over all runs.
+    ///
+    /// Raises:
+    ///     ValueError: If ``problem`` is not a ``Vrp`` instance, or ``runs`` is 0.
     #[pyo3(signature = (problem, runs=1, seed=None))]
     fn run(
         &self,

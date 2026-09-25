@@ -14,9 +14,33 @@ TRIANGLE_OPTIMUM = 5.0
 
 UNIT_SQUARE = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
 
+# Two customer clusters far apart on either side of the depot. Capacity leaves enough slack
+# for a 3/1 split, so Relocate can travel between partitions rather than being walled in by
+# the overload penalty. The optimum serves each cluster with its own vehicle.
+VRP_CLUSTERS = [(0.0, 0.0), (10.0, 0.0), (11.0, 0.0), (-10.0, 0.0), (-11.0, 0.0)]
+VRP_DEMANDS = [0, 5, 5, 5, 5]
+VRP_OPTIMUM = 44.0
+
+# One vehicle over three corners of the unit square: a plain TSP, which is what the
+# intra-route TwoOpt neighborhood can actually solve on its own.
+VRP_SINGLE_ROUTE = [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
+VRP_SINGLE_ROUTE_OPTIMUM = 4.0
+
 
 def stop(iterations):
     return optopus.StopCondition(max_iteration=iterations)
+
+
+def clustered_vrp():
+    return optopus.Vrp.from_coordinates(
+        VRP_CLUSTERS, VRP_DEMANDS, capacity=15, num_vehicles=2
+    )
+
+
+def single_route_vrp():
+    return optopus.Vrp.from_coordinates(
+        VRP_SINGLE_ROUTE, [0, 1, 1, 1], capacity=10, num_vehicles=1
+    )
 
 
 def test_maxcut_simulated_annealing():
@@ -166,14 +190,6 @@ def test_breakout_local_search():
     assert bls.run(mc, runs=2, seed=42).best_objective == TRIANGLE_OPTIMUM
 
 
-def test_breakout_local_search_with_plateau_moves():
-    mc = optopus.MaxCut.from_edges(TRIANGLE)
-    bls = optopus.BreakoutLocalSearch(
-        (3, 50), 1_000, 20, 0.8, 0.5, stop(1_000), plateau_prob=0.5
-    )
-    assert bls.run(mc, seed=42).best_objective == TRIANGLE_OPTIMUM
-
-
 def test_rl_breakout_local_search():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
     rl = optopus.RlBreakoutLocalSearch((3, 50), 1_000, 20, stop(1_000))
@@ -183,9 +199,9 @@ def test_rl_breakout_local_search():
 def test_rl_breakout_local_search_accepts_policy_weights():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
     bins = [1.0, 2.0]
-    # 5 perturbation types x len(bins) strengths x 8 context features.
+    # 3 perturbation types x len(bins) strengths x 7 context features.
     rl = optopus.RlBreakoutLocalSearch(
-        (3, 50), 1_000, 20, stop(500), strength_bins=bins, policy_weights=[0.0] * (5 * 2 * 8)
+        (3, 50), 1_000, 20, stop(500), strength_bins=bins, policy_weights=[0.0] * (3 * 2 * 7)
     )
     assert rl.run(mc, seed=42).best_objective == TRIANGLE_OPTIMUM
 
@@ -195,6 +211,210 @@ def test_lin_kernighan_helsgaun():
     report = optopus.LinKernighanHelsgaun(stop=stop(200)).run(tsp, runs=2, seed=42)
     assert abs(report.best_objective - 4.0) < 1e-9
     assert sorted(report.runs[0].solution) == [0, 1, 2, 3]
+
+
+# --- VRP -------------------------------------------------------------------
+
+# The objective accumulates incremental move gains in f64, so it lands within rounding
+# distance of the recomputed value rather than exactly on it -- compare with a tolerance,
+# as the TSP tests do.
+
+
+@pytest.mark.parametrize("neighbor", ["Relocate", "Swap"])
+def test_vrp_local_search(neighbor):
+    vrp = clustered_vrp()
+    report = optopus.LocalSearch(neighbor, stop(2_000)).run(vrp, runs=4, seed=42)
+    assert abs(report.best_objective - VRP_OPTIMUM) < 1e-9
+    assert len(report.runs[0].solution) == vrp.num_vehicles()
+
+
+def test_vrp_tabu_search():
+    vrp = clustered_vrp()
+    report = optopus.TabuSearch("Swap", (3, 10), stop(2_000)).run(vrp, runs=4, seed=42)
+    assert abs(report.best_objective - VRP_OPTIMUM) < 1e-9
+
+
+def test_vrp_two_opt_reorders_a_single_route():
+    vrp = single_route_vrp()
+    report = optopus.LocalSearch("TwoOpt", stop(2_000)).run(vrp, runs=4, seed=42)
+    assert abs(report.best_objective - VRP_SINGLE_ROUTE_OPTIMUM) < 1e-9
+
+
+def test_vrp_adaptive_large_neighborhood_search():
+    vrp = clustered_vrp()
+    alns = optopus.AdaptiveLargeNeighborhoodSearch(stop(2_000))
+    assert abs(alns.run(vrp, runs=4, seed=42).best_objective - VRP_OPTIMUM) < 1e-9
+
+
+def test_vrp_hybrid_genetic_search():
+    vrp = clustered_vrp()
+    hgs = optopus.HybridGeneticSearch(stop(2_000), min_population_size=8, generation_size=8)
+    assert abs(hgs.run(vrp, runs=4, seed=42).best_objective - VRP_OPTIMUM) < 1e-9
+
+
+def test_vrp_rejects_unknown_neighbor():
+    with pytest.raises(ValueError, match="invalid neighbor 'Flip' for Vrp"):
+        optopus.LocalSearch("Flip", stop(10)).run(clustered_vrp())
+
+
+def test_vrp_evaluate_routes_separates_distance_from_penalty():
+    vrp = clustered_vrp()
+
+    feasible = vrp.evaluate_routes([[1, 2], [3, 4]])
+    assert feasible["overload"] == 0
+    assert feasible["objective"] == feasible["distance"] == VRP_OPTIMUM
+    assert feasible["route_loads"] == [10, 10]
+
+    overloaded = vrp.evaluate_routes([[1, 2, 3, 4], []])
+    assert overloaded["overload"] == 5
+    assert overloaded["objective"] > overloaded["distance"]
+
+
+def test_vrp_evaluate_routes_rejects_an_invalid_partition():
+    with pytest.raises(ValueError):
+        clustered_vrp().evaluate_routes([[1, 2], [3]])
+
+
+def test_vrp_picks_a_fleet_size_when_asked():
+    vrp = optopus.Vrp.from_coordinates(VRP_CLUSTERS, VRP_DEMANDS, capacity=10)
+    # 20 units of demand over capacity 10 needs at least 2 vehicles; the margin adds more.
+    assert vrp.num_vehicles() >= 2
+    assert vrp.num_customers() == 4
+    assert vrp.capacity() == 10
+
+
+def test_vrp_load_file(tmp_path):
+    instance = tmp_path / "demo.vrp"
+    instance.write_text(
+        "NAME : demo\n"
+        "TYPE : CVRP\n"
+        "DIMENSION : 5\n"
+        "EDGE_WEIGHT_TYPE : EUC_2D\n"
+        "CAPACITY : 15\n"
+        "NODE_COORD_SECTION\n"
+        "1 0 0\n"
+        "2 10 0\n"
+        "3 11 0\n"
+        "4 -10 0\n"
+        "5 -11 0\n"
+        "DEMAND_SECTION\n"
+        "1 0\n"
+        "2 5\n"
+        "3 5\n"
+        "4 5\n"
+        "5 5\n"
+        "DEPOT_SECTION\n"
+        "1\n"
+        "-1\n"
+        "EOF\n"
+    )
+    vrp = optopus.Vrp.load_file(str(instance))
+    assert vrp.num_customers() == 4
+    assert vrp.capacity() == 15
+    # EUC_2D rounds to the nearest integer, and these coordinates are already integral.
+    assert vrp.evaluate_routes([[1, 2], [3, 4]])["distance"] == VRP_OPTIMUM
+
+
+def test_vrp_load_file_reports_a_missing_file():
+    with pytest.raises(ValueError):
+        optopus.Vrp.load_file("no-such-instance.vrp")
+
+
+# --- MaxCut kernelization ---------------------------------------------------
+
+# A path has pendant and degree-2 vertices at every step, so the rules reduce it away
+# entirely; a torus is 4-regular, so none of them fire.
+PATH = [(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 4, 1.0), (4, 5, 1.0)]
+
+
+def cut_weight(edges, assignment):
+    return sum(w for u, v, w in edges if assignment[u] != assignment[v])
+
+
+def test_maxcut_kernel_preserves_the_objective():
+    kernel = optopus.MaxCutKernel.reduce(optopus.MaxCut.from_edges(PATH))
+    assert not kernel.is_trivial()
+    assert kernel.removed_vertices() == 6
+
+    report = optopus.LocalSearch("Flip", stop(500)).run(kernel.kernel(), runs=4, seed=7)
+    lifted = kernel.lift(report.runs[0].solution)
+    assert len(lifted) == 6
+    assert cut_weight(PATH, lifted) == report.runs[0].best_objective + kernel.offset()
+
+
+def test_maxcut_kernel_project_inverts_lift():
+    kernel = optopus.MaxCutKernel.reduce(optopus.MaxCut.from_edges(PATH))
+    assignment = [False] * 6
+    assert kernel.project(kernel.lift(kernel.project(assignment))) == kernel.project(assignment)
+
+
+def test_maxcut_kernel_is_trivial_on_a_regular_graph():
+    torus = optopus.MaxCut.from_graph(optopus.Graph.grid_torus_2d(4))
+    kernel = optopus.MaxCutKernel.reduce(torus)
+    assert kernel.is_trivial()
+    assert kernel.removed_vertices() == 0
+    assert kernel.offset() == 0.0
+
+
+def test_maxcut_kernel_rejects_a_short_assignment():
+    kernel = optopus.MaxCutKernel.reduce(optopus.MaxCut.from_edges(TRIANGLE))
+    with pytest.raises(ValueError, match="original vertex count"):
+        kernel.project([True])
+
+
+# --- Planted MaxCut instances -----------------------------------------------
+
+
+def test_planted_maxcut_tile_planting_2d_is_exact():
+    planted = optopus.PlantedMaxCut.tile_planting_2d(6, 0.5, 0.0, 0.5, seed=3)
+    planted.verify()
+    assert planted.has_exact_optimum()
+    assert len(planted.planted()) == 36
+    assert planted.problem().__repr__() == "MaxCut(num_vertices=36, num_edges=72)"
+
+    bls = optopus.BreakoutLocalSearch((3, 20), 1_000, 10, 0.8, 0.5, stop(20_000))
+    assert bls.run(planted.problem(), runs=3, seed=5).best_objective == planted.optimum()
+
+
+def test_planted_maxcut_tile_planting_3d_is_exact():
+    planted = optopus.PlantedMaxCut.tile_planting_3d(4, 0.5, 0.3, seed=3)
+    planted.verify()
+    assert len(planted.planted()) == 64
+
+
+def test_planted_maxcut_wishart_couplers_control_exactness():
+    discrete = optopus.PlantedMaxCut.wishart(24, 0.75, couplers="Discrete", seed=1)
+    discrete.verify()
+    assert discrete.has_exact_optimum()
+
+    gaussian = optopus.PlantedMaxCut.wishart(24, 0.75, seed=1)
+    gaussian.verify()
+    assert not gaussian.has_exact_optimum()
+
+
+def test_planted_maxcut_rejects_unknown_couplers():
+    with pytest.raises(ValueError, match="invalid couplers 'Uniform'"):
+        optopus.PlantedMaxCut.wishart(8, 0.5, couplers="Uniform")
+
+
+# --- Torus lattices ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("l", [3, 4, 5])
+def test_graph_grid_torus_2d(l):
+    g = optopus.Graph.grid_torus_2d(l)
+    assert (g.num_vertices(), g.num_edges()) == (l * l, 2 * l * l)
+
+
+@pytest.mark.parametrize("l", [3, 4])
+def test_graph_grid_torus_3d(l):
+    g = optopus.Graph.grid_torus_3d(l)
+    assert (g.num_vertices(), g.num_edges()) == (l**3, 3 * l**3)
+
+
+def test_grid_torus_accepts_random_weights():
+    g = optopus.Graph.grid_torus_2d(4).with_random_weights((1, 10), seed=1)
+    assert all(1.0 <= w <= 10.0 for _, _, w in g.edges())
 
 
 # --- Determinism ------------------------------------------------------------
@@ -225,18 +445,49 @@ def test_same_seed_reproduces_report():
             id="delta-beta-not-positive",
         ),
         pytest.param(
-            lambda: optopus.BreakoutLocalSearch(
-                (3, 50), 100, 5, 0.8, 0.5, stop(10), plateau_prob=2.0
-            ),
-            id="plateau-prob-out-of-range",
-        ),
-        pytest.param(
             lambda: optopus.RlBreakoutLocalSearch((3, 50), 100, 5, stop(10), strength_bins=[]),
             id="empty-strength-bins",
         ),
         pytest.param(
             lambda: optopus.RlBreakoutLocalSearch((3, 50), 100, 5, stop(10), policy_weights=[0.0]),
             id="policy-weights-wrong-length",
+        ),
+        pytest.param(
+            lambda: optopus.AdaptiveLargeNeighborhoodSearch(stop(10), removal_fraction=0.0),
+            id="removal-fraction-not-positive",
+        ),
+        pytest.param(
+            lambda: optopus.AdaptiveLargeNeighborhoodSearch(stop(10), cooling_rate=1.5),
+            id="cooling-rate-out-of-range",
+        ),
+        pytest.param(
+            lambda: optopus.HybridGeneticSearch(stop(10), min_population_size=3),
+            id="population-below-floor",
+        ),
+        pytest.param(
+            lambda: optopus.HybridGeneticSearch(stop(10), target_feasible=1.0),
+            id="target-feasible-not-exclusive",
+        ),
+        pytest.param(lambda: optopus.Graph.grid_torus_2d(2), id="torus-side-too-small"),
+        pytest.param(
+            lambda: optopus.PlantedMaxCut.tile_planting_2d(5, 0.5, 0.0, 0.5),
+            id="tile-side-odd",
+        ),
+        pytest.param(
+            lambda: optopus.PlantedMaxCut.tile_planting_2d(6, 0.6, 0.6, 0.0),
+            id="tile-probs-sum-past-one",
+        ),
+        pytest.param(
+            lambda: optopus.PlantedMaxCut.wishart(8, 1.0),
+            id="wishart-alpha-not-exclusive",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.from_coordinates([(0.0, 0.0)], [0, 1], capacity=5),
+            id="vrp-demands-length-mismatch",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.from_coordinates([(0.0, 0.0), (1.0, 0.0)], [0, 1], capacity=0),
+            id="vrp-capacity-not-positive",
         ),
         pytest.param(
             lambda: optopus.VariableNeighborhoodSearch(
@@ -279,6 +530,18 @@ def test_invalid_parameters_raise_value_error(make):
             lambda: optopus.Sat.from_clauses(2, [[1, 2]]),
             "LinKernighanHelsgaun is only available for TspWithCoordinates",
             id="lkh-on-sat",
+        ),
+        pytest.param(
+            lambda: optopus.AdaptiveLargeNeighborhoodSearch(stop(10)),
+            lambda: optopus.MaxCut.from_edges(TRIANGLE),
+            "AdaptiveLargeNeighborhoodSearch is only available for Vrp",
+            id="alns-on-maxcut",
+        ),
+        pytest.param(
+            lambda: optopus.HybridGeneticSearch(stop(10)),
+            lambda: optopus.MaxCut.from_edges(TRIANGLE),
+            "HybridGeneticSearch is only available for Vrp",
+            id="hgs-on-maxcut",
         ),
         pytest.param(
             lambda: optopus.VariableNeighborhoodSearch(
