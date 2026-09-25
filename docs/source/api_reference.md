@@ -58,6 +58,8 @@ makes "did the heuristic reach the optimum" answerable.
    :members:
 ```
 
+Problems written in Python are plain objects, see [Problems written in Python](python_problems.md).
+
 ## Graph
 
 `MaxCut`, `VertexCover` and `GraphColoring` are defined over an undirected weighted graph. Build
@@ -77,7 +79,8 @@ A *heuristic* describes **how** to search. Every heuristic exposes the same
 
 ### Generic
 
-These work with every problem type; the neighborhood is selected with the `neighbor` argument.
+These work with every problem type, Python problems included. The neighborhood is selected with
+the `neighbor` argument.
 
 ```{eval-rst}
 .. autoclass:: optopus.LocalSearch
@@ -104,14 +107,41 @@ These work with every problem type; the neighborhood is selected with the `neigh
 .. autoclass:: optopus.PopulationAnnealing
    :members:
 
-.. autoclass:: optopus.VariableNeighborhoodSearch
+.. autoclass:: optopus.ReinforcementLearningSearch
    :members:
 ```
+
+### Composed
+
+These take other heuristic instances as their steps and run on every problem the steps fit.
+`GeneticAlgorithm` also needs a crossover, which each built-in problem has and a Python problem
+provides as a method.
+
+```{eval-rst}
+.. autoclass:: optopus.VariableNeighborhoodSearch
+   :members:
+
+.. autoclass:: optopus.Sequential
+   :members:
+
+.. autoclass:: optopus.Iterated
+   :members:
+
+.. autoclass:: optopus.Restart
+   :members:
+
+.. autoclass:: optopus.GeneticAlgorithm
+   :members:
+```
+
+`BreakoutLocalSearch.from_parts` builds breakout local search from other heuristics the same way,
+see `BreakoutLocalSearch` below.
 
 ### Problem-specific
 
 These exploit the structure of one problem type and take no `neighbor` argument. Running one on a
-different problem raises `ValueError`.
+different problem raises `ValueError`. `AdaptiveLargeNeighborhoodSearch` also runs on a Python
+problem that defines the ruin methods.
 
 ```{eval-rst}
 .. autoclass:: optopus.WalkSat

@@ -1,6 +1,11 @@
 use std::time::Instant;
 
-use optopus::heuristic::PopulationAnnealing as OptPopulationAnnealing;
+use optopus::heuristic::reinforcement_learning::feature::NUM_FEATURES;
+use optopus::heuristic::{
+    AdaptiveLargeNeighborhoodSearch, AdaptivePerturbation, BreakoutLocalSearch, GeneticAlgorithm,
+    Iterated, ParentSelection, PopulationAnnealing as OptPopulationAnnealing,
+    ReinforcementLearningSearch, Restart, RewardShaping, Sequential, SubProblemBasedCrossover,
+};
 use optopus::prelude::{
     BangBangSimulatedAnnealing, BeamSearch, EnabledTabu, Evaluate, Heuristic,
     HybridGeneticSearchForVrp, LateAcceptanceHillClimbing, LinKernighanHelsgaunForTsp, LocalSearch,
@@ -10,14 +15,17 @@ use optopus::prelude::{
 };
 use optopus::problem::{
     FormulaProblem, GraphColoring as OptGraphColoring, GraphColoringRecolorNeighbor,
-    GraphColoringSwapNeighbor, IntChangeNeighbor, IntReverseNeighbor, IntSwapNeighbor,
-    JobShopRelocateNeighbor, JobShopScheduling as OptJobShop, JobShopSwapNeighbor,
-    MaxCut as OptMaxCut, MaxCutFlipNeighbor, MaxCutSwapNeighbor, Qubo as OptQubo, QuboFlipNeighbor,
-    QuboSwapNeighbor, Sat as OptSat, SatFlipNeighbor, SatSwapNeighbor, Tsp as OptTsp,
-    TspRelocateNeighbor, TspTwoOptNeighbor, VertexCover as OptVc, VertexCoverFlipNeighbor,
-    VertexCoverSwapNeighbor, Vrp as OptVrp, VrpRelocateNeighbor, VrpSwapNeighbor,
-    VrpTwoOptNeighbor,
+    GraphColoringSwapNeighbor, GraphColoringUniformCrossover, IntChangeNeighbor, IntCrossover,
+    IntReverseNeighbor, IntSwapNeighbor, JobShopPpxCrossover, JobShopRelocateNeighbor,
+    JobShopScheduling as OptJobShop, JobShopSwapNeighbor, MaxCut as OptMaxCut, MaxCutFlipNeighbor,
+    MaxCutSwapNeighbor, MaxCutUniformCrossover, Qubo as OptQubo, QuboFlipNeighbor,
+    QuboSwapNeighbor, QuboUniformCrossover, Sat as OptSat, SatFlipNeighbor, SatSwapNeighbor,
+    SatUniformCrossover, Tsp as OptTsp, TspOrderCrossover, TspRelocateNeighbor, TspTwoOptNeighbor,
+    VertexCover as OptVc, VertexCoverFlipNeighbor, VertexCoverSwapNeighbor,
+    VertexCoverUniformCrossover, Vrp as OptVrp, VrpOrderCrossover, VrpRelocateNeighbor,
+    VrpSwapNeighbor, VrpTwoOptNeighbor,
 };
+use optopus::trait_defs::{Crossover, Distance, SubProblemExtractable};
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
@@ -26,16 +34,16 @@ use crate::heuristic as py_heuristic;
 use crate::problem::{
     Formula, GraphColoring, JobShopScheduling, MaxCut, Qubo, Sat, Tsp, VertexCover, Vrp,
 };
-use crate::python_problem::{Guarded, MAX_NEIGHBORHOODS, PyMove, PyProblem};
+use crate::python_problem::{Guarded, MAX_NEIGHBORHOODS, PyCrossover, PyMove, PyProblem, PyRepair};
 use crate::result::{RunReport, RunResult};
 use crate::stop_condition::StopCondition;
 
 /// Algorithm selection plus algorithm-specific parameters.
 ///
 /// Variants split into three groups: generic heuristics that work on any
-/// problem through a neighborhood, the metaheuristic
-/// [`HeuristicKind::VariableNeighborhoodSearch`] that nests other specs, and
-/// problem-specific algorithms that only one `build_*` function can construct.
+/// problem through a neighborhood, metaheuristics that nest other specs
+/// ([`build_nested`] builds those once for every problem), and problem-specific
+/// algorithms that only one `build_*` function can construct.
 pub enum HeuristicKind {
     LocalSearch,
     SimulatedAnnealing {
@@ -61,6 +69,42 @@ pub enum HeuristicKind {
     VariableNeighborhoodSearch {
         search: Box<HeuristicSpec>,
         shakes: Vec<HeuristicSpec>,
+    },
+    Sequential {
+        steps: Vec<HeuristicSpec>,
+    },
+    Iterated {
+        search: Box<HeuristicSpec>,
+        perturbation: Box<HeuristicSpec>,
+    },
+    Restart {
+        inner: Box<HeuristicSpec>,
+        restart: StopCondition,
+    },
+    GeneticAlgorithm {
+        population_size: usize,
+        mutation: Box<HeuristicSpec>,
+        init_improvement: Option<Box<HeuristicSpec>>,
+        crossover: Option<String>,
+        sub_heuristic: Option<Box<HeuristicSpec>>,
+        parent_selection: ParentSelection,
+    },
+    ReinforcementLearningSearch {
+        learning_rate: f64,
+        softmax_temperature: f64,
+        reward_shaping: RewardShaping,
+        policy_weights: Option<[f64; NUM_FEATURES]>,
+        max_candidates: Option<usize>,
+    },
+    /// Breakout local search assembled from other specs, for any problem.
+    ComposedBreakoutLocalSearch {
+        tabu_tenure: (u64, u64),
+        t: u64,
+        l0: u64,
+        p0: f64,
+        descent: Box<HeuristicSpec>,
+        random: Box<HeuristicSpec>,
+        directed: Vec<(HeuristicSpec, f64)>,
     },
     WalkSat {
         noise: f64,
@@ -110,6 +154,12 @@ impl HeuristicKind {
             Self::BangBangSimulatedAnnealing { .. } => "BangBangSimulatedAnnealing",
             Self::BeamSearch { .. } => "BeamSearch",
             Self::VariableNeighborhoodSearch { .. } => "VariableNeighborhoodSearch",
+            Self::Sequential { .. } => "Sequential",
+            Self::Iterated { .. } => "Iterated",
+            Self::Restart { .. } => "Restart",
+            Self::GeneticAlgorithm { .. } => "GeneticAlgorithm",
+            Self::ReinforcementLearningSearch { .. } => "ReinforcementLearningSearch",
+            Self::ComposedBreakoutLocalSearch { .. } => "BreakoutLocalSearch",
             Self::WalkSat { .. } => "WalkSat",
             Self::PopulationAnnealing { .. } => "PopulationAnnealing",
             Self::BreakoutLocalSearch { .. } => "BreakoutLocalSearch",
@@ -125,7 +175,9 @@ impl HeuristicKind {
             Self::WalkSat { .. } => Some("Sat"),
             Self::BreakoutLocalSearch { .. } => Some("MaxCut"),
             Self::LinKernighanHelsgaun { .. } => Some("Tsp"),
-            Self::AdaptiveLargeNeighborhoodSearch { .. } => Some("Vrp or Tsp"),
+            Self::AdaptiveLargeNeighborhoodSearch { .. } => {
+                Some("Vrp, Tsp and Python problems with the ruin methods")
+            }
             Self::HybridGeneticSearch { .. } => Some("Vrp"),
             _ => None,
         }
@@ -144,6 +196,14 @@ pub struct HeuristicSpec {
 /// rather than a `fn` so a Python problem can resolve neighbor names against
 /// its own neighborhoods.
 type BuildFn<'b, P> = &'b dyn Fn(&HeuristicSpec) -> Result<Box<dyn Heuristic<P>>, String>;
+
+/// Makes a problem's GA crossover from its name (`None` picks the problem's
+/// default), handing a `SubProblem` crossover the heuristic that solves each
+/// sub-problem.
+type CrossoverFn<'b, P> = &'b dyn Fn(
+    Option<&str>,
+    Option<Box<dyn Heuristic<P>>>,
+) -> Result<Box<dyn Crossover<P>>, String>;
 
 /// Builds the heuristics that work on any problem `P` through neighbor type `N`.
 fn build_generic<P, N>(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<P>>, String>
@@ -185,6 +245,25 @@ where
         HeuristicKind::BeamSearch { beam_width } => {
             Ok(Box::new(BeamSearch::<P, N>::new(cond, *beam_width)))
         }
+        HeuristicKind::ReinforcementLearningSearch {
+            learning_rate,
+            softmax_temperature,
+            reward_shaping,
+            policy_weights,
+            max_candidates,
+        } => {
+            let rl = ReinforcementLearningSearch::<N>::new(
+                cond,
+                *learning_rate,
+                *softmax_temperature,
+                reward_shaping.clone(),
+                *max_candidates,
+            );
+            Ok(Box::new(match policy_weights {
+                Some(w) => rl.with_policy_weights(*w),
+                None => rl,
+            }))
+        }
         HeuristicKind::PopulationAnnealing {
             population_size,
             initial_beta,
@@ -216,38 +295,125 @@ where
 fn build_nested<P>(
     spec: &HeuristicSpec,
     recur: BuildFn<'_, P>,
+    crossover: CrossoverFn<'_, P>,
 ) -> Option<Result<Box<dyn Heuristic<P>>, String>>
 where
     P: ProblemTrait + 'static,
+    P::Solution: Distance + Evaluate + 'static,
 {
-    match &spec.kind {
+    let cond = spec.stop.to_opt();
+    let built: Result<Box<dyn Heuristic<P>>, String> = (|| match &spec.kind {
         HeuristicKind::VariableNeighborhoodSearch { search, shakes } => {
-            Some(build_vns(spec.stop.to_opt(), search, shakes, recur))
+            if shakes.is_empty() {
+                return Err("'shakes' must contain at least one heuristic".to_string());
+            }
+            let search = recur(search)?;
+            let shakes = shakes.iter().map(recur).collect::<Result<Vec<_>, _>>()?;
+            Ok(Box::new(VariableNeighborhoodSearch::new(cond, search, shakes)) as Box<_>)
         }
-        _ => None,
+        HeuristicKind::Sequential { steps } => {
+            let steps = steps.iter().map(recur).collect::<Result<Vec<_>, _>>()?;
+            Ok(Box::new(Sequential::new(cond, steps)) as Box<_>)
+        }
+        HeuristicKind::Iterated {
+            search,
+            perturbation,
+        } => Ok(Box::new(Iterated::new(cond, recur(search)?, recur(perturbation)?)) as Box<_>),
+        HeuristicKind::Restart { inner, restart } => {
+            Ok(Box::new(Restart::new(cond, recur(inner)?, restart.to_opt())) as Box<_>)
+        }
+        HeuristicKind::GeneticAlgorithm {
+            population_size,
+            mutation,
+            init_improvement,
+            crossover: kind,
+            sub_heuristic,
+            parent_selection,
+        } => {
+            let sub = sub_heuristic.as_deref().map(recur).transpose()?;
+            let crossover = crossover(kind.as_deref(), sub)?;
+            let ga = GeneticAlgorithm::new(
+                cond,
+                *population_size,
+                crossover,
+                recur(mutation)?,
+                *parent_selection,
+            );
+            Ok(Box::new(match init_improvement {
+                Some(op) => ga.with_init_improvement(recur(op)?),
+                None => ga,
+            }) as Box<_>)
+        }
+        HeuristicKind::ComposedBreakoutLocalSearch {
+            tabu_tenure,
+            t,
+            l0,
+            p0,
+            descent,
+            random,
+            directed,
+        } => {
+            let directed = directed
+                .iter()
+                .map(|(h, share)| Ok((recur(h)?, *share)))
+                .collect::<Result<Vec<_>, String>>()?;
+            let schedule = AdaptivePerturbation::new(*t, *l0, *p0, recur(random)?, directed);
+            Ok(Box::new(BreakoutLocalSearch::new(
+                cond,
+                *tabu_tenure,
+                recur(descent)?,
+                schedule,
+            )) as Box<_>)
+        }
+        _ => Err(String::new()),
+    })();
+    match built {
+        Err(e) if e.is_empty() => None,
+        other => Some(other),
     }
 }
 
-fn build_vns<P>(
-    cond: optopus::prelude::StopCondition,
-    search: &HeuristicSpec,
-    shakes: &[HeuristicSpec],
-    recur: BuildFn<'_, P>,
-) -> Result<Box<dyn Heuristic<P>>, String>
-where
-    P: ProblemTrait + 'static,
-{
-    if shakes.is_empty() {
-        return Err("'shakes' must contain at least one heuristic".to_string());
+/// Makes one crossover, or one around the heuristic that solves its sub-problem.
+type MakeCrossover<P> = fn() -> Box<dyn Crossover<P>>;
+type MakeSubProblemCrossover<P> = fn(Box<dyn Heuristic<P>>) -> Box<dyn Crossover<P>>;
+
+/// Picks a GA crossover by name. The first of `named` is the default, and
+/// `sub_problem` is set on the problems that can solve the sub-problem the two
+/// parents disagree on.
+fn pick_crossover<P: ProblemTrait>(
+    problem: &str,
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<P>>>,
+    named: &[(&str, MakeCrossover<P>)],
+    sub_problem: Option<MakeSubProblemCrossover<P>>,
+) -> Result<Box<dyn Crossover<P>>, String> {
+    let kind = kind.unwrap_or(named[0].0);
+    if let (Some(make), "SubProblem") = (sub_problem, kind) {
+        let sub = sub.ok_or("crossover 'SubProblem' needs a 'sub_heuristic'")?;
+        return Ok(make(sub));
     }
-    let search = recur(search)?;
-    let shakes = shakes
-        .iter()
-        .map(recur)
-        .collect::<Result<Vec<_>, String>>()?;
-    Ok(Box::new(VariableNeighborhoodSearch::new(
-        cond, search, shakes,
-    )))
+    if sub.is_some() {
+        return Err("'sub_heuristic' only applies to crossover 'SubProblem'".to_string());
+    }
+    match named.iter().find(|(name, _)| *name == kind) {
+        Some((_, make)) => Ok(make()),
+        None => {
+            let mut valid: Vec<_> = named.iter().map(|(name, _)| format!("'{name}'")).collect();
+            if sub_problem.is_some() {
+                valid.push("'SubProblem'".to_string());
+            }
+            Err(format!(
+                "invalid crossover '{kind}' for {problem} (use {})",
+                valid.join(" or ")
+            ))
+        }
+    }
+}
+
+fn sub_problem_crossover<P: SubProblemExtractable + 'static>(
+    sub_heuristic: Box<dyn Heuristic<P>>,
+) -> Box<dyn Crossover<P>> {
+    Box::new(SubProblemBasedCrossover { sub_heuristic })
 }
 
 /// Error text for a problem-specific heuristic applied to the wrong problem.
@@ -271,8 +437,21 @@ fn neighbor_error(spec: &HeuristicSpec, problem: &str, valid: &str) -> String {
     format!("invalid neighbor '{given}' for {problem} (use {valid})")
 }
 
+fn crossover_max_cut(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptMaxCut>>>,
+) -> Result<Box<dyn Crossover<OptMaxCut>>, String> {
+    pick_crossover(
+        "MaxCut",
+        kind,
+        sub,
+        &[("Uniform", || Box::new(MaxCutUniformCrossover))],
+        Some(sub_problem_crossover::<OptMaxCut>),
+    )
+}
+
 fn build_max_cut(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptMaxCut>>, String> {
-    if let Some(result) = build_nested(spec, &build_max_cut) {
+    if let Some(result) = build_nested(spec, &build_max_cut, &crossover_max_cut) {
         return result;
     }
     match &spec.kind {
@@ -298,8 +477,21 @@ fn build_max_cut(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptMaxCut>>, 
     }
 }
 
+fn crossover_qubo(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptQubo>>>,
+) -> Result<Box<dyn Crossover<OptQubo>>, String> {
+    pick_crossover(
+        "Qubo",
+        kind,
+        sub,
+        &[("Uniform", || Box::new(QuboUniformCrossover))],
+        Some(sub_problem_crossover::<OptQubo>),
+    )
+}
+
 fn build_qubo(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptQubo>>, String> {
-    if let Some(result) = build_nested(spec, &build_qubo) {
+    if let Some(result) = build_nested(spec, &build_qubo, &crossover_qubo) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -309,8 +501,21 @@ fn build_qubo(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptQubo>>, Strin
     }
 }
 
+fn crossover_sat(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptSat>>>,
+) -> Result<Box<dyn Crossover<OptSat>>, String> {
+    pick_crossover(
+        "Sat",
+        kind,
+        sub,
+        &[("Uniform", || Box::new(SatUniformCrossover))],
+        Some(sub_problem_crossover::<OptSat>),
+    )
+}
+
 fn build_sat(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptSat>>, String> {
-    if let Some(result) = build_nested(spec, &build_sat) {
+    if let Some(result) = build_nested(spec, &build_sat, &crossover_sat) {
         return result;
     }
     match &spec.kind {
@@ -327,8 +532,21 @@ fn build_sat(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptSat>>, String>
     }
 }
 
+fn crossover_vertex_cover(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptVc>>>,
+) -> Result<Box<dyn Crossover<OptVc>>, String> {
+    pick_crossover(
+        "VertexCover",
+        kind,
+        sub,
+        &[("Uniform", || Box::new(VertexCoverUniformCrossover))],
+        Some(sub_problem_crossover::<OptVc>),
+    )
+}
+
 fn build_vertex_cover(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVc>>, String> {
-    if let Some(result) = build_nested(spec, &build_vertex_cover) {
+    if let Some(result) = build_nested(spec, &build_vertex_cover, &crossover_vertex_cover) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -338,8 +556,21 @@ fn build_vertex_cover(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVc>>,
     }
 }
 
+fn crossover_tsp(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptTsp>>>,
+) -> Result<Box<dyn Crossover<OptTsp>>, String> {
+    pick_crossover(
+        "Tsp",
+        kind,
+        sub,
+        &[("Order", || Box::new(TspOrderCrossover))],
+        Some(sub_problem_crossover::<OptTsp>),
+    )
+}
+
 fn build_tsp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptTsp>>, String> {
-    if let Some(result) = build_nested(spec, &build_tsp) {
+    if let Some(result) = build_nested(spec, &build_tsp, &crossover_tsp) {
         return result;
     }
     match &spec.kind {
@@ -367,8 +598,21 @@ fn build_tsp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptTsp>>, String>
     }
 }
 
+fn crossover_job_shop(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptJobShop>>>,
+) -> Result<Box<dyn Crossover<OptJobShop>>, String> {
+    pick_crossover(
+        "JobShopScheduling",
+        kind,
+        sub,
+        &[("Ppx", || Box::new(JobShopPpxCrossover))],
+        None,
+    )
+}
+
 fn build_job_shop(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptJobShop>>, String> {
-    if let Some(result) = build_nested(spec, &build_job_shop) {
+    if let Some(result) = build_nested(spec, &build_job_shop, &crossover_job_shop) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -382,8 +626,21 @@ fn build_job_shop(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptJobShop>>
     }
 }
 
+fn crossover_vrp(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptVrp>>>,
+) -> Result<Box<dyn Crossover<OptVrp>>, String> {
+    pick_crossover(
+        "Vrp",
+        kind,
+        sub,
+        &[("Order", || Box::new(VrpOrderCrossover))],
+        None,
+    )
+}
+
 fn build_vrp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVrp>>, String> {
-    if let Some(result) = build_nested(spec, &build_vrp) {
+    if let Some(result) = build_nested(spec, &build_vrp, &crossover_vrp) {
         return result;
     }
     let cond = spec.stop.to_opt();
@@ -423,8 +680,21 @@ fn build_vrp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVrp>>, String>
     }
 }
 
+fn crossover_formula(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<FormulaProblem>>>,
+) -> Result<Box<dyn Crossover<FormulaProblem>>, String> {
+    pick_crossover(
+        "Formula",
+        kind,
+        sub,
+        &[("Uniform", || Box::new(IntCrossover))],
+        Some(sub_problem_crossover::<FormulaProblem>),
+    )
+}
+
 fn build_formula(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<FormulaProblem>>, String> {
-    if let Some(result) = build_nested(spec, &build_formula) {
+    if let Some(result) = build_nested(spec, &build_formula, &crossover_formula) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -441,10 +711,23 @@ fn build_formula(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<FormulaProble
     }
 }
 
+fn crossover_graph_coloring(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptGraphColoring>>>,
+) -> Result<Box<dyn Crossover<OptGraphColoring>>, String> {
+    pick_crossover(
+        "GraphColoring",
+        kind,
+        sub,
+        &[("Uniform", || Box::new(GraphColoringUniformCrossover))],
+        None,
+    )
+}
+
 fn build_graph_coloring(
     spec: &HeuristicSpec,
 ) -> Result<Box<dyn Heuristic<OptGraphColoring>>, String> {
-    if let Some(result) = build_nested(spec, &build_graph_coloring) {
+    if let Some(result) = build_nested(spec, &build_graph_coloring, &crossover_graph_coloring) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -462,8 +745,41 @@ fn build_python(
     spec: &HeuristicSpec,
 ) -> Result<Box<dyn Heuristic<PyProblem>>, String> {
     let recur = |s: &HeuristicSpec| build_python(prob, s);
-    let inner = match build_nested(spec, &recur) {
+    let crossover = |kind: Option<&str>, sub: Option<Box<dyn Heuristic<PyProblem>>>| {
+        if kind.is_some() || sub.is_some() {
+            return Err(
+                "a Python problem has one crossover, its 'crossover' method, so leave \
+                 'crossover' and 'sub_heuristic' unset"
+                    .to_string(),
+            );
+        }
+        Ok(Box::new(PyCrossover::new(prob)?) as Box<dyn Crossover<PyProblem>>)
+    };
+    let inner = match build_nested(spec, &recur, &crossover) {
         Some(result) => result?,
+        None if matches!(
+            spec.kind,
+            HeuristicKind::AdaptiveLargeNeighborhoodSearch { .. }
+        ) =>
+        {
+            let HeuristicKind::AdaptiveLargeNeighborhoodSearch {
+                removal_fraction,
+                cooling_rate,
+            } = spec.kind
+            else {
+                unreachable!()
+            };
+            prob.check_ruinable()?;
+            let alns = AdaptiveLargeNeighborhoodSearch::<PyProblem>::new(
+                spec.stop.to_opt(),
+                removal_fraction,
+                cooling_rate,
+            );
+            match PyRepair::new(prob) {
+                Some(repair) => Box::new(alns.with_local_repair(Box::new(repair))),
+                None => Box::new(alns),
+            }
+        }
         None => {
             if spec.kind.only_for().is_some() {
                 return Err(unsupported(&spec.kind));
@@ -589,6 +905,11 @@ pub fn spec_from_py(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Heuristi
         BangBangSimulatedAnnealing,
         BeamSearch,
         VariableNeighborhoodSearch,
+        Sequential,
+        Iterated,
+        Restart,
+        GeneticAlgorithm,
+        ReinforcementLearningSearch,
         WalkSat,
         PopulationAnnealing,
         BreakoutLocalSearch,

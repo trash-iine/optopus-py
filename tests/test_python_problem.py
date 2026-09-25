@@ -237,3 +237,151 @@ def test_an_exception_in_a_callback_propagates_and_stops_the_run():
         optopus.LocalSearch(neighbor="TwoOpt", stop=stop(10_000)).run(Faulty(POINTS), runs=5)
     # The first failure ends every run, rather than each of them failing on its own.
     assert len(calls) == 4
+
+
+# --- Heuristics that need more than moves ------------------------------------
+
+
+class RuinTsp(Tsp):
+    """The TSP with the ruin methods ALNS needs. The tour is the one container, a list the
+    methods edit in place, and a city goes between two neighbors on the cycle."""
+
+    def d(self, a, b):
+        return math.dist(self.points[a], self.points[b])
+
+    def to_partial(self, tour):
+        return list(tour)
+
+    def finish(self, partial):
+        return tuple(partial)
+
+    def elements(self, partial):
+        return partial
+
+    def remove_all(self, partial, elements):
+        gone = set(elements)
+        partial[:] = [c for c in partial if c not in gone]
+
+    def removal_gain(self, partial, city):
+        i, n = partial.index(city), len(partial)
+        prev, nxt = partial[i - 1], partial[(i + 1) % n]
+        return self.d(prev, city) + self.d(city, nxt) - self.d(prev, nxt)
+
+    def relatedness(self, a, b):
+        return self.d(a, b)
+
+    def num_buckets(self, partial):
+        return 1
+
+    def num_places(self, partial, bucket):
+        return max(len(partial), 1)
+
+    def insertion_cost(self, partial, bucket, place, city):
+        if not partial:
+            return 0.0
+        prev, nxt = partial[place - 1], partial[place % len(partial)]
+        return self.d(prev, city) + self.d(city, nxt) - self.d(prev, nxt)
+
+    def insert(self, partial, bucket, place, city):
+        partial.insert(place, city)
+
+    def crossover(self, a, b, rng):
+        # Order crossover: a slice of `a`, the rest in `b`'s order.
+        i, j = sorted(rng.sample(range(len(a)), 2))
+        kept = a[i:j]
+        rest = [c for c in b if c not in kept]
+        return tuple(rest[:i] + list(kept) + rest[i:])
+
+
+def test_alns_runs_on_a_python_problem_with_the_ruin_methods():
+    alns = optopus.AdaptiveLargeNeighborhoodSearch(stop(300))
+    report = alns.run(RuinTsp(POINTS), runs=2, seed=1)
+    assert report.best_objective == pytest.approx(TSP_OPTIMUM)
+    assert sorted(report.runs[0].solution) == list(range(6))
+
+
+def test_alns_uses_partial_objective_and_repair_around():
+    calls = {"partial_objective": 0, "repair_around": 0}
+
+    class Repaired(RuinTsp):
+        def partial_objective(self, partial):
+            calls["partial_objective"] += 1
+            return tour_length(self.points, partial)
+
+        def repair_around(self, partial, anchors, rng):
+            calls["repair_around"] += 1
+            assert all(c in partial for c in anchors)
+
+    report = optopus.AdaptiveLargeNeighborhoodSearch(stop(100)).run(Repaired(POINTS), seed=2)
+    assert report.best_objective == pytest.approx(TSP_OPTIMUM)
+    assert calls["partial_objective"] > 0
+    assert calls["repair_around"] > 0
+
+
+def test_alns_names_the_missing_ruin_methods():
+    with pytest.raises(ValueError, match="'to_partial', 'finish'.*'insert'"):
+        optopus.AdaptiveLargeNeighborhoodSearch(stop(10)).run(Tsp(POINTS))
+
+
+def test_ga_uses_the_problems_crossover():
+    ga = optopus.GeneticAlgorithm(
+        population_size=6, mutation=optopus.LocalSearch("TwoOpt", stop(50)), stop=stop(20)
+    )
+    report = ga.run(RuinTsp(POINTS), runs=2, seed=3)
+    assert report.best_objective == pytest.approx(TSP_OPTIMUM)
+
+
+def test_ga_needs_a_crossover_method():
+    ga = optopus.GeneticAlgorithm(6, optopus.LocalSearch("TwoOpt", stop(5)), stop(5))
+    with pytest.raises(ValueError, match="needs a 'crossover' method"):
+        ga.run(Tsp(POINTS))
+
+
+def test_ga_rejects_a_named_crossover_on_a_python_problem():
+    ga = optopus.GeneticAlgorithm(
+        6, optopus.LocalSearch("TwoOpt", stop(5)), stop(5), crossover="Order"
+    )
+    with pytest.raises(ValueError, match="one crossover"):
+        ga.run(RuinTsp(POINTS))
+
+
+@pytest.mark.parametrize("with_distance", [False, True], ids=["eq", "distance"])
+def test_bls_from_parts_runs_on_a_python_problem(with_distance):
+    distances = []
+
+    class Measured(OneMax):
+        if with_distance:
+
+            def distance(self, a, b):
+                distances.append(1)
+                return sum(x != y for x, y in zip(a, b))
+
+    bls = optopus.BreakoutLocalSearch.from_parts(
+        descent=optopus.LocalSearch("Flip", stop(100)),
+        random=optopus.RandomWalk("Flip", stop(1)),
+        directed=[(optopus.TabuSearch("Flip", (2, 4), stop(1)), 1.0)],
+        tabu_tenure=(2, 4),
+        t=20,
+        l0=2,
+        p0=0.5,
+        stop=stop(30),
+    )
+    assert bls.run(Measured(16), seed=4).best_objective == 16.0
+    assert bool(distances) == with_distance
+
+
+def test_composed_heuristics_run_on_a_python_problem():
+    composed = [
+        optopus.Iterated(
+            optopus.LocalSearch("TwoOpt", stop(100)), optopus.RandomWalk("Swap", stop(2)), stop(10)
+        ),
+        optopus.Restart(optopus.LocalSearch("TwoOpt", stop(100)), stop(20), stop(60)),
+        optopus.Sequential(
+            [optopus.RandomWalk("Swap", stop(2)), optopus.LocalSearch("TwoOpt", stop(100))],
+            stop(10),
+        ),
+        optopus.ReinforcementLearningSearch("TwoOpt", stop(500)),
+    ]
+    for h in composed:
+        report = h.run(Tsp(POINTS), runs=2, seed=6)
+        assert report.best_objective == pytest.approx(TSP_OPTIMUM), type(h).__name__

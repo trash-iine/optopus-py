@@ -3,7 +3,10 @@
 The generic heuristics also run on a problem you define in Python. `LocalSearch`,
 `SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `TabuSearch`,
 `LateAcceptanceHillClimbing`, `RandomWalk`, `BeamSearch`, `PopulationAnnealing` and
-`VariableNeighborhoodSearch` all accept one. The search loop stays in Rust and calls back into your objects for everything that
+`ReinforcementLearningSearch` accept one, and so do the composed heuristics
+(`VariableNeighborhoodSearch`, `Sequential`, `Iterated`, `Restart`, `GeneticAlgorithm`,
+`BreakoutLocalSearch.from_parts`). With the ruin methods below, so does
+`AdaptiveLargeNeighborhoodSearch`. The search loop stays in Rust and calls back into your objects for everything that
 depends on the problem.
 
 ## The protocol
@@ -37,6 +40,42 @@ module, and a run with a `seed` reproduces exactly.
 
 `tabu_keys` returns an int, a tuple of ints, or a list of those. A move is tabu while any of its
 keys is.
+
+## What some heuristics need besides
+
+| Heuristic | Problem member |
+|---|---|
+| `GeneticAlgorithm` | `crossover(a, b, rng)`, the child of two solutions |
+| `GeneticAlgorithm`, `BreakoutLocalSearch.from_parts` | optional `distance(a, b)`, a non-negative int. Without it, `a == b` counts as 0 and anything else as 1 |
+| `AdaptiveLargeNeighborhoodSearch` | the ruin methods |
+
+A Python problem has exactly one crossover, so `GeneticAlgorithm` leaves `crossover` and
+`sub_heuristic` unset.
+
+### Ruin methods
+
+Ruin and recreate takes elements out of a solution and puts them back one by one. The elements are
+ints, and they sit in containers (a route, a bin, the one tour) at numbered places. The working copy
+it edits, the partial, is any Python object your methods agree on, typically lists.
+
+| Problem member | Meaning |
+|---|---|
+| `to_partial(solution)` | a fresh mutable copy of the solution, which the others edit in place |
+| `finish(partial)` | the solution the partial describes |
+| `elements(partial)` | the placed elements |
+| `remove_all(partial, elements)` | take these out |
+| `removal_gain(partial, element)` | what taking it out saves |
+| `relatedness(a, b)` | how alike two elements are, smaller is more alike |
+| `num_buckets(partial)` | how many containers an element may go into |
+| `num_places(partial, bucket)` | how many positions that container offers |
+| `insertion_cost(partial, bucket, place, element)` | what putting it there costs |
+| `insert(partial, bucket, place, element)` | put it there |
+| `partial_objective(partial)` | optional, the objective without calling `finish` |
+| `repair_around(partial, anchors, rng)` | optional, a local search around the elements just put back |
+
+`to_partial` must copy. A partial that shares its lists with the solution would change the
+solution behind the search's back. Fold capacity violations into `insertion_cost` with a penalty,
+so that some place is always available.
 
 ## Example
 
@@ -120,5 +159,7 @@ raises `ValueError`.
 An exception raised inside one of your methods stops the search at the next step, and `run`
 raises that same exception. The remaining runs are skipped. Ctrl-C interrupts a run the same way.
 
-Problem-specific heuristics such as `WalkSat` or `BreakoutLocalSearch` only work on their own
-problem type and raise `ValueError` on a Python problem.
+Problem-specific heuristics such as `WalkSat` or the MaxCut form of `BreakoutLocalSearch` only
+work on their own problem type and raise `ValueError` on a Python problem. So does a heuristic
+whose member is missing, for example `GeneticAlgorithm` without `crossover` or
+`AdaptiveLargeNeighborhoodSearch` without the ruin methods, which names what is missing.

@@ -12,7 +12,9 @@ executing in native Rust.
   graph generators and periodic lattices to feed the graph-based ones.
 - **Generic heuristics** that work with any problem: `LocalSearch`, `SimulatedAnnealing`,
   `BangBangSimulatedAnnealing`, `TabuSearch`, `LateAcceptanceHillClimbing`, `RandomWalk`,
-  `BeamSearch`, `PopulationAnnealing`, and `VariableNeighborhoodSearch`.
+  `BeamSearch`, `PopulationAnnealing`, and `ReinforcementLearningSearch`.
+- **Composed heuristics** built from other heuristic instances: `VariableNeighborhoodSearch`,
+  `Sequential`, `Iterated`, `Restart`, `GeneticAlgorithm`, and `BreakoutLocalSearch.from_parts`.
 - **Problem-specific heuristics** that exploit one problem's structure: `WalkSat`,
   `BreakoutLocalSearch`, `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch`, and
   `HybridGeneticSearch`.
@@ -20,7 +22,8 @@ executing in native Rust.
   "did the heuristic reach the optimum" is answerable; `MaxCutKernel` reduces an instance
   exactly and lifts the answer back.
 - **Your own problems**: any Python object that provides a starting solution, an objective and
-  its neighborhoods runs under the generic heuristics. See [](python_problems.md).
+  its neighborhoods runs under the generic and composed heuristics, and under ALNS once it
+  defines the ruin methods. See [](python_problems.md).
 - **Full result statistics**: every `run` returns a `RunReport` aggregating per-run objectives,
   timings, and acceptance counts across one or more runs.
 
