@@ -19,6 +19,8 @@ executing in native Rust.
 - **Instances with a known optimum**: `PlantedMaxCut` plants an optimal cut by construction, so
   "did the heuristic reach the optimum" is answerable; `MaxCutKernel` reduces an instance
   exactly and lifts the answer back.
+- **Your own problems**: any Python object that provides a starting solution, an objective and
+  its neighborhoods runs under the generic heuristics. See [](python_problems.md).
 - **Full result statistics**: every `run` returns a `RunReport` aggregating per-run objectives,
   timings, and acceptance counts across one or more runs.
 
@@ -43,6 +45,7 @@ caption: Contents:
 
 installation
 quickstart
+python_problems
 api_reference
 examples
 ```

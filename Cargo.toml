@@ -17,6 +17,7 @@ doctest = false
 
 [dependencies]
 optopus = { path = "vendor/optopus" }
+rand = "0.9.2" # matches the vendored optopus, whose trait signatures take its Rng types
 pyo3 = { version = "0.28.3", features = ["abi3-py39"] }
 
 [features]

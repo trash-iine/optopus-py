@@ -49,6 +49,9 @@ so any heuristic runs on it and `lift` maps the answer back.
   (`Vrp`, `Tsp`)
 - `HybridGeneticSearch` — Vidal's genetic search over giant tours (`Vrp`)
 
+The generic heuristics also accept problems written in Python, see
+[Problems written in Python](docs/source/python_problems.md).
+
 Every heuristic takes a `StopCondition` (`max_iteration`, `max_duration_secs`,
 `max_failed_update`) and supports reproducible multi-run experiments: `run(problem, runs=N,
 seed=...)` returns a `RunReport` with the best objective, per-run `RunResult`s, and timing

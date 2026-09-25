@@ -26,6 +26,7 @@ use crate::heuristic as py_heuristic;
 use crate::problem::{
     Formula, GraphColoring, JobShopScheduling, MaxCut, Qubo, Sat, Tsp, VertexCover, Vrp,
 };
+use crate::python_problem::{Guarded, MAX_NEIGHBORHOODS, PyMove, PyProblem};
 use crate::result::{RunReport, RunResult};
 use crate::stop_condition::StopCondition;
 
@@ -139,8 +140,10 @@ pub struct HeuristicSpec {
 }
 
 /// Builds a boxed heuristic for a single problem type. Each problem has exactly
-/// one of these; it is also the recursion step for nested specs.
-type BuildFn<P> = fn(&HeuristicSpec) -> Result<Box<dyn Heuristic<P>>, String>;
+/// one of these; it is also the recursion step for nested specs. A closure
+/// rather than a `fn` so a Python problem can resolve neighbor names against
+/// its own neighborhoods.
+type BuildFn<'b, P> = &'b dyn Fn(&HeuristicSpec) -> Result<Box<dyn Heuristic<P>>, String>;
 
 /// Builds the heuristics that work on any problem `P` through neighbor type `N`.
 fn build_generic<P, N>(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<P>>, String>
@@ -212,7 +215,7 @@ where
 /// when `spec` has to go through that neighbor match instead.
 fn build_nested<P>(
     spec: &HeuristicSpec,
-    recur: BuildFn<P>,
+    recur: BuildFn<'_, P>,
 ) -> Option<Result<Box<dyn Heuristic<P>>, String>>
 where
     P: ProblemTrait + 'static,
@@ -229,7 +232,7 @@ fn build_vns<P>(
     cond: optopus::prelude::StopCondition,
     search: &HeuristicSpec,
     shakes: &[HeuristicSpec],
-    recur: BuildFn<P>,
+    recur: BuildFn<'_, P>,
 ) -> Result<Box<dyn Heuristic<P>>, String>
 where
     P: ProblemTrait + 'static,
@@ -269,7 +272,7 @@ fn neighbor_error(spec: &HeuristicSpec, problem: &str, valid: &str) -> String {
 }
 
 fn build_max_cut(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptMaxCut>>, String> {
-    if let Some(result) = build_nested(spec, build_max_cut) {
+    if let Some(result) = build_nested(spec, &build_max_cut) {
         return result;
     }
     match &spec.kind {
@@ -296,7 +299,7 @@ fn build_max_cut(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptMaxCut>>, 
 }
 
 fn build_qubo(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptQubo>>, String> {
-    if let Some(result) = build_nested(spec, build_qubo) {
+    if let Some(result) = build_nested(spec, &build_qubo) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -307,7 +310,7 @@ fn build_qubo(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptQubo>>, Strin
 }
 
 fn build_sat(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptSat>>, String> {
-    if let Some(result) = build_nested(spec, build_sat) {
+    if let Some(result) = build_nested(spec, &build_sat) {
         return result;
     }
     match &spec.kind {
@@ -325,7 +328,7 @@ fn build_sat(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptSat>>, String>
 }
 
 fn build_vertex_cover(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVc>>, String> {
-    if let Some(result) = build_nested(spec, build_vertex_cover) {
+    if let Some(result) = build_nested(spec, &build_vertex_cover) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -336,7 +339,7 @@ fn build_vertex_cover(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVc>>,
 }
 
 fn build_tsp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptTsp>>, String> {
-    if let Some(result) = build_nested(spec, build_tsp) {
+    if let Some(result) = build_nested(spec, &build_tsp) {
         return result;
     }
     match &spec.kind {
@@ -365,7 +368,7 @@ fn build_tsp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptTsp>>, String>
 }
 
 fn build_job_shop(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptJobShop>>, String> {
-    if let Some(result) = build_nested(spec, build_job_shop) {
+    if let Some(result) = build_nested(spec, &build_job_shop) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -380,7 +383,7 @@ fn build_job_shop(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptJobShop>>
 }
 
 fn build_vrp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVrp>>, String> {
-    if let Some(result) = build_nested(spec, build_vrp) {
+    if let Some(result) = build_nested(spec, &build_vrp) {
         return result;
     }
     let cond = spec.stop.to_opt();
@@ -421,7 +424,7 @@ fn build_vrp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVrp>>, String>
 }
 
 fn build_formula(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<FormulaProblem>>, String> {
-    if let Some(result) = build_nested(spec, build_formula) {
+    if let Some(result) = build_nested(spec, &build_formula) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -441,7 +444,7 @@ fn build_formula(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<FormulaProble
 fn build_graph_coloring(
     spec: &HeuristicSpec,
 ) -> Result<Box<dyn Heuristic<OptGraphColoring>>, String> {
-    if let Some(result) = build_nested(spec, build_graph_coloring) {
+    if let Some(result) = build_nested(spec, &build_graph_coloring) {
         return result;
     }
     match spec.neighbor.as_str() {
@@ -449,6 +452,39 @@ fn build_graph_coloring(
         "Swap" => build_generic::<OptGraphColoring, GraphColoringSwapNeighbor>(spec),
         _ => Err(neighbor_error(spec, "GraphColoring", "'Recolor' or 'Swap'")),
     }
+}
+
+/// Builds a heuristic for a Python problem, with the neighbor name resolved
+/// against the problem's own neighborhoods. The result is always [`Guarded`],
+/// so a Python exception stops nested heuristics too.
+fn build_python(
+    prob: &PyProblem,
+    spec: &HeuristicSpec,
+) -> Result<Box<dyn Heuristic<PyProblem>>, String> {
+    let recur = |s: &HeuristicSpec| build_python(prob, s);
+    let inner = match build_nested(spec, &recur) {
+        Some(result) => result?,
+        None => {
+            if spec.kind.only_for().is_some() {
+                return Err(unsupported(&spec.kind));
+            }
+            let k = prob.neighborhood_index(&spec.neighbor)?;
+            if matches!(spec.kind, HeuristicKind::TabuSearch { .. }) {
+                prob.enable_tabu(k)?;
+            }
+            macro_rules! by_index {
+                ($($k:literal),+) => {
+                    match k {
+                        $($k => build_generic::<PyProblem, PyMove<$k>>(spec)?,)+
+                        _ => unreachable!("PyProblem caps its neighborhoods at MAX_NEIGHBORHOODS"),
+                    }
+                };
+            }
+            const _: () = assert!(MAX_NEIGHBORHOODS == 8);
+            by_index!(0, 1, 2, 3, 4, 5, 6, 7)
+        }
+    };
+    Ok(Box::new(Guarded { inner }))
 }
 
 /// Derives a deterministic per-run seed from a master seed. Run index 0 maps to
@@ -672,10 +708,26 @@ pub fn solve(
             |s| 0.0 - s.evaluate().minimized(),
             |s, py| decode_i64s(s.values(), py),
         )
-    } else {
+    } else if !problem.hasattr("neighborhoods")? {
         return Err(PyTypeError::new_err(
-            "problem must be a MaxCut, Qubo, Sat, VertexCover, Tsp, JobShopScheduling, Vrp, GraphColoring, or Formula instance",
+            "problem must be a MaxCut, Qubo, Sat, VertexCover, Tsp, JobShopScheduling, Vrp, \
+             GraphColoring, or Formula instance, or a Python problem with 'neighborhoods'",
         ));
+    } else {
+        let prob = PyProblem::from_py(problem)?;
+        let report = run_all(
+            &prob,
+            || build_python(&prob, spec),
+            prob.minimize(),
+            runs,
+            seed,
+            |s| s.objective,
+            |s, py| s.value.clone_ref(py),
+        );
+        if let Some(err) = prob.take_error() {
+            return Err(err);
+        }
+        report
     };
 
     report.map_err(PyValueError::new_err)
