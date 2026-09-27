@@ -69,7 +69,7 @@ def test_qubo_local_search():
 
 
 def test_tsp_local_search():
-    tsp = optopus.TspWithCoordinates.from_coordinates(
+    tsp = optopus.Tsp.from_coordinates(
         [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)],
         name="unit-square",
     )
@@ -158,7 +158,7 @@ def test_variable_neighborhood_search():
 def test_variable_neighborhood_search_with_problem_specific_step():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
     vns = optopus.VariableNeighborhoodSearch(
-        search=optopus.BreakoutLocalSearch((3, 50), 100, 5, 0.8, 0.5, stop(100)),
+        search=optopus.BreakoutLocalSearch((6, 100), 100, 5, 0.8, 0.5, stop(100)),
         shakes=[optopus.RandomWalk("Flip", stop=stop(3))],
         stop=stop(500),
     )
@@ -180,25 +180,32 @@ def test_walksat_adaptive_noise():
 
 def test_population_annealing():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
-    pa = optopus.PopulationAnnealing("Flip", population_size=10, stop=stop(50), sweeps_per_step=5)
+    pa = optopus.PopulationAnnealing(population_size=10, stop=stop(50), sweeps_per_step=5)
     assert pa.run(mc, runs=2, seed=42).best_objective == TRIANGLE_OPTIMUM
 
 
 def test_population_annealing_is_no_longer_maxcut_only():
     # optopus generalized it off MaxCut, so it runs wherever a neighborhood does.
     qubo = optopus.Qubo.from_entries([(0, 0, -1), (1, 1, -1), (0, 1, 2)])
-    pa = optopus.PopulationAnnealing("Flip", population_size=6, stop=stop(50), sweeps_per_step=5)
+    pa = optopus.PopulationAnnealing(population_size=6, stop=stop(50), sweeps_per_step=5)
     assert pa.run(qubo, runs=2, seed=42).best_objective == -1.0
+
+    # A pairwise move makes counting the neighborhood O(n^2), so pin the sweep length.
+    tsp = optopus.Tsp.from_coordinates(UNIT_SQUARE)
+    pa = optopus.PopulationAnnealing(
+        population_size=10, stop=stop(50), sweeps_per_step=5, neighbor="TwoOpt", sweep_length=4
+    )
+    assert abs(pa.run(tsp, seed=42).best_objective - 4.0) < 1e-9
 
 
 def test_breakout_local_search():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
-    bls = optopus.BreakoutLocalSearch((3, 50), 1_000, 20, 0.8, 0.5, stop(1_000))
+    bls = optopus.BreakoutLocalSearch((6, 100), 1_000, 20, 0.8, 0.5, stop(1_000))
     assert bls.run(mc, runs=2, seed=42).best_objective == TRIANGLE_OPTIMUM
 
 
 def test_lin_kernighan_helsgaun():
-    tsp = optopus.TspWithCoordinates.from_coordinates(UNIT_SQUARE, name="unit-square")
+    tsp = optopus.Tsp.from_coordinates(UNIT_SQUARE, name="unit-square")
     report = optopus.LinKernighanHelsgaun(stop=stop(200)).run(tsp, runs=2, seed=42)
     assert abs(report.best_objective - 4.0) < 1e-9
     assert sorted(report.runs[0].solution) == [0, 1, 2, 3]
@@ -363,7 +370,7 @@ def test_planted_maxcut_tile_planting_2d_is_exact():
     assert len(planted.planted()) == 36
     assert planted.problem().__repr__() == "MaxCut(num_vertices=36, num_edges=72)"
 
-    bls = optopus.BreakoutLocalSearch((3, 20), 1_000, 10, 0.8, 0.5, stop(20_000))
+    bls = optopus.BreakoutLocalSearch((6, 40), 1_000, 10, 0.8, 0.5, stop(20_000))
     assert bls.run(planted.problem(), runs=3, seed=5).best_objective == planted.optimum()
 
 
@@ -408,10 +415,7 @@ def test_grid_torus_accepts_random_weights():
     assert all(1.0 <= w <= 10.0 for _, _, w in g.edges())
 
 
-# --- TSP distances and the rename ----------------------------------------------
-
-# optopus renamed `TspWithCoordinates` to `Tsp` when the problem gained non-Euclidean
-# distances. The old name is bound to the same class.
+# --- TSP distances ----------------------------------------------------------
 
 # A 4-city ring: each city is 1 from its neighbors and 2 from the opposite one, so the
 # optimal tour costs 4 whichever way it is written.
@@ -423,8 +427,10 @@ RING_MATRIX = [
 ]
 
 
-def test_tsp_with_coordinates_is_an_alias_of_tsp():
-    assert optopus.TspWithCoordinates is optopus.Tsp
+def test_tsp_replaces_tsp_with_coordinates():
+    # optopus renamed the problem when it gained non-Euclidean distances, and the binding
+    # follows without keeping an alias.
+    assert not hasattr(optopus, "TspWithCoordinates")
 
 
 def test_tsp_from_distance_matrix():
@@ -562,7 +568,7 @@ def test_formula_rejects_unknown_neighbor():
 
 def test_same_seed_reproduces_report():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
-    bls = optopus.BreakoutLocalSearch((3, 50), 1_000, 20, 0.8, 0.5, stop(1_000))
+    bls = optopus.BreakoutLocalSearch((6, 100), 1_000, 20, 0.8, 0.5, stop(1_000))
     first = bls.run(mc, runs=3, seed=123)
     second = bls.run(mc, runs=3, seed=123)
     assert [r.best_objective for r in first.runs] == [r.best_objective for r in second.runs]
@@ -577,14 +583,16 @@ def test_same_seed_reproduces_report():
     [
         pytest.param(lambda: optopus.WalkSat(stop=stop(10), noise=1.5), id="noise-out-of-range"),
         pytest.param(
-            lambda: optopus.PopulationAnnealing("Flip", population_size=1, stop=stop(10)),
+            lambda: optopus.PopulationAnnealing(population_size=1, stop=stop(10)),
             id="population-too-small",
         ),
         pytest.param(
-            lambda: optopus.PopulationAnnealing(
-                "Flip", population_size=5, stop=stop(10), delta_beta=0.0
-            ),
+            lambda: optopus.PopulationAnnealing(population_size=5, stop=stop(10), delta_beta=0.0),
             id="delta-beta-not-positive",
+        ),
+        pytest.param(
+            lambda: optopus.PopulationAnnealing(population_size=5, stop=stop(10), sweep_length=0),
+            id="sweep-length-zero",
         ),
         pytest.param(
             lambda: optopus.Formula(n_vars=0, objective=[]),
@@ -697,7 +705,7 @@ def test_invalid_parameters_raise_value_error(make):
         ),
         pytest.param(
             lambda: optopus.VariableNeighborhoodSearch(
-                optopus.BreakoutLocalSearch((3, 50), 100, 5, 0.8, 0.5, stop(10)),
+                optopus.BreakoutLocalSearch((6, 100), 100, 5, 0.8, 0.5, stop(10)),
                 [optopus.RandomWalk("Flip", stop(3))],
                 stop(10),
             ),

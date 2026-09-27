@@ -95,9 +95,8 @@ Distances need not come from coordinates: `Tsp.from_distance_matrix(matrix)` tak
 matrix, and `Tsp.load_file(path)` reads a TSPLIB instance.
 
 ```{note}
-optopus renamed this problem from `TspWithCoordinates` to `Tsp` when it gained those
-constructors. `TspWithCoordinates` is still bound to the same class, so existing code keeps
-working.
+This problem was called `TspWithCoordinates` before it gained those constructors. optopus
+renamed it to `Tsp`, and the binding follows: the old name no longer exists.
 ```
 
 ## Vehicle routing
@@ -228,7 +227,7 @@ print(walksat.run(sat, seed=42).best_objective)   # 3.0 — every clause satisfi
 # Breakout local search for Max Cut: tabu descent with adaptive perturbations.
 mc = optopus.MaxCut.from_graph(optopus.Graph.erdos_renyi(200, 0.05, seed=42))
 bls = optopus.BreakoutLocalSearch(
-    tabu_tenure=(3, 50), t=1_000, l0=20, p0=0.8, q=0.5,
+    tabu_tenure=(6, 100), t=1_000, l0=20, p0=0.8, q=0.5,
     stop=optopus.StopCondition(max_iteration=20_000),
 )
 print(bls.run(mc, runs=3, seed=42).best_objective)

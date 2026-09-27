@@ -49,9 +49,5 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::LinKernighanHelsgaun>()?;
     m.add_class::<heuristic::AdaptiveLargeNeighborhoodSearch>()?;
     m.add_class::<heuristic::HybridGeneticSearch>()?;
-    // optopus renamed `TspWithCoordinates` to `Tsp` when it gained the non-Euclidean
-    // constructors. Binding the same class under both names keeps existing code working, and
-    // `TspWithCoordinates is Tsp` holds.
-    m.add("TspWithCoordinates", m.getattr("Tsp")?)?;
     Ok(())
 }

@@ -81,9 +81,9 @@ heuristics = {
         stop=stop,
     ),
     "BreakoutLocalSearch": optopus.BreakoutLocalSearch(
-        tabu_tenure=(3, 50), t=1_000, l0=20, p0=0.8, q=0.5, stop=stop
+        tabu_tenure=(6, 100), t=1_000, l0=20, p0=0.8, q=0.5, stop=stop
     ),
-    "PopulationAnnealing": optopus.PopulationAnnealing("Flip", population_size=20, stop=stop),
+    "PopulationAnnealing": optopus.PopulationAnnealing(population_size=20, stop=stop),
 }
 
 for name, h in heuristics.items():

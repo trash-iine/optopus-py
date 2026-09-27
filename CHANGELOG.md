@@ -40,6 +40,9 @@ entries below are breaking; see **Changed** and **Removed**.
   `MaxCut.from_graph`, `VertexCover.from_graph` and `GraphColoring.from_graph`.
 - `Tsp.from_distance_matrix` and `Tsp.load_file`, so a tour no longer has to come from 2D
   coordinates.
+- `PopulationAnnealing` accepts `sweep_length`, pinning the proposals per sweep. Counting the
+  neighborhood is O(n) for a single-variable move but O(n²) for a pairwise one such as
+  `"TwoOpt"`, where pinning a length is worth it.
 - `Formula` accepts a `bounds` argument giving each variable an integer range, and the `Reverse`
   neighborhood alongside `Change` and `Swap`. `eval_objective` and `eval_penalty` score an
   assignment without running a search.
@@ -49,12 +52,10 @@ entries below are breaking; see **Changed** and **Removed**.
 ### Changed
 
 - Updated the vendored optopus to `8de6180`.
-- **`TspWithCoordinates` is now named `Tsp`**, following the rename upstream made when the
-  problem gained non-Euclidean distances. `TspWithCoordinates` stays bound to the same class, so
-  existing code keeps working, but error messages name `Tsp`.
 - **`PopulationAnnealing` is now a generic heuristic**: optopus generalized it off Max Cut, so it
-  runs on every problem type and takes a required `neighbor` argument as its first parameter. Its
-  `cluster_moves` argument is gone, the operator having been dropped upstream.
+  runs on every problem type and takes a `neighbor` argument. It defaults to `"Flip"` and comes
+  after the existing parameters, so calls that did not name it keep working. Its `cluster_moves`
+  argument is gone, the operator having been dropped upstream.
 - **`BreakoutLocalSearch` lost its `plateau_prob` argument**, which upstream removed.
 - **`BreakoutLocalSearch`'s `tabu_tenure` now means the same prohibition length it does under
   `TabuSearch`.** Benlic and Hao's γ is counted twice inside the algorithm, so reproducing their
@@ -76,6 +77,9 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Removed
 
+- **`TspWithCoordinates`, renamed to `Tsp`.** optopus renamed the problem when it gained
+  non-Euclidean distances, and the binding follows without keeping an alias. Rename the call;
+  nothing else about the class changed.
 - **`RlBreakoutLocalSearch`.** Upstream moved the contextual-bandit perturbation controller out of
   the library and into `examples/rl_bls.rs`, so there is no longer a type to bind. The generic
   `BreakoutLocalSearch` covers the same algorithm with a fixed schedule.

@@ -38,8 +38,6 @@ factory method, then handed to a heuristic.
    :members:
 ```
 
-`TspWithCoordinates` remains bound to the same class as `Tsp`, so existing code keeps working.
-
 ### Instances with a known optimum
 
 `PlantedMaxCut` generates Max Cut instances whose optimum is exact by construction, which is what

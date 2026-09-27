@@ -71,6 +71,7 @@ pub enum HeuristicKind {
         delta_beta: f64,
         sweeps_per_step: usize,
         reset_period: Option<usize>,
+        sweep_length: Option<usize>,
     },
     BreakoutLocalSearch {
         tabu_tenure: (u64, u64),
@@ -187,14 +188,21 @@ where
             delta_beta,
             sweeps_per_step,
             reset_period,
-        } => Ok(Box::new(OptPopulationAnnealing::<P, N>::new(
-            cond,
-            *population_size,
-            *initial_beta,
-            *delta_beta,
-            *sweeps_per_step,
-            *reset_period,
-        ))),
+            sweep_length,
+        } => {
+            let pa = OptPopulationAnnealing::<P, N>::new(
+                cond,
+                *population_size,
+                *initial_beta,
+                *delta_beta,
+                *sweeps_per_step,
+                *reset_period,
+            );
+            Ok(Box::new(match sweep_length {
+                Some(length) => pa.with_sweep_length(*length),
+                None => pa,
+            }))
+        }
         other => Err(unsupported(other)),
     }
 }

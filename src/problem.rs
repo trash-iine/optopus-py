@@ -600,9 +600,6 @@ impl VertexCover {
 /// come either from 2D coordinates or from an explicit matrix.
 ///
 /// A solution is encoded as a ``list[int]`` permutation of city indices ``[0, n)``.
-///
-/// ``TspWithCoordinates`` is kept as an alias for this class, which optopus renamed to ``Tsp``
-/// when it gained the non-Euclidean constructors.
 #[pyclass(module = "optopus")]
 pub struct Tsp {
     pub inner: OptTsp,

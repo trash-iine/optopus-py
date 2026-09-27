@@ -617,7 +617,6 @@ impl WalkSat {
 /// drives the Metropolis sweeps.
 ///
 /// Args:
-///     neighbor (str): Neighborhood move used for the Metropolis sweeps.
 ///     population_size (int): Number of replicas (``>= 2``).
 ///     stop (StopCondition): Stopping criterion. One iteration advances the whole
 ///         population by ``sweeps_per_step`` sweeps.
@@ -627,14 +626,20 @@ impl WalkSat {
 ///         Defaults to 50.
 ///     reset_period (int): Steps between annealing-schedule resets; 0 disables resetting.
 ///         Defaults to 400.
+///     neighbor (str): Neighborhood move driving the Metropolis sweeps. Defaults to
+///         ``"Flip"``, the binary problems' move.
+///     sweep_length (int | None): Proposals per sweep. Defaults to None, which counts the
+///         neighborhood once per run -- O(n) for a single-variable move, but O(n²) for a
+///         pairwise one such as ``"TwoOpt"``, where pinning a length is worth it.
 #[pyclass(module = "optopus")]
 pub struct PopulationAnnealing {
-    neighbor: String,
     population_size: usize,
     initial_beta: f64,
     delta_beta: f64,
     sweeps_per_step: usize,
     reset_period: Option<usize>,
+    neighbor: String,
+    sweep_length: Option<usize>,
     stop: StopCondition,
 }
 
@@ -647,6 +652,7 @@ impl PopulationAnnealing {
                 delta_beta: self.delta_beta,
                 sweeps_per_step: self.sweeps_per_step,
                 reset_period: self.reset_period,
+                sweep_length: self.sweep_length,
             },
             neighbor: self.neighbor.clone(),
             stop: self.stop.clone(),
@@ -658,23 +664,25 @@ impl PopulationAnnealing {
 impl PopulationAnnealing {
     #[new]
     #[pyo3(signature = (
-        neighbor,
         population_size,
         stop,
         initial_beta=0.1,
         delta_beta=0.02,
         sweeps_per_step=50,
         reset_period=400,
+        neighbor="Flip".to_string(),
+        sweep_length=None,
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
-        neighbor: String,
         population_size: usize,
         stop: StopCondition,
         initial_beta: f64,
         delta_beta: f64,
         sweeps_per_step: usize,
         reset_period: usize,
+        neighbor: String,
+        sweep_length: Option<usize>,
     ) -> PyResult<Self> {
         if population_size < 2 {
             return Err(PyValueError::new_err(
@@ -688,13 +696,17 @@ impl PopulationAnnealing {
                 "'sweeps_per_step' must be at least 1",
             ));
         }
+        if sweep_length == Some(0) {
+            return Err(PyValueError::new_err("'sweep_length' must be at least 1"));
+        }
         Ok(Self {
-            neighbor,
             population_size,
             initial_beta,
             delta_beta,
             sweeps_per_step,
             reset_period: (reset_period > 0).then_some(reset_period),
+            neighbor,
+            sweep_length,
             stop,
         })
     }
@@ -819,7 +831,7 @@ impl BreakoutLocalSearch {
 /// Lin-Kernighan-Helsgaun for the Euclidean TSP: variable-depth edge exchange restricted to
 /// each city's ``num_neighbors`` nearest candidates.
 ///
-/// Only applies to ``TspWithCoordinates`` problems.
+/// Only applies to ``Tsp`` problems.
 ///
 /// Args:
 ///     stop (StopCondition): Stopping criterion.
@@ -866,7 +878,7 @@ impl LinKernighanHelsgaun {
     /// Run the heuristic on a problem and return an aggregated report.
     ///
     /// Args:
-    ///     problem (TspWithCoordinates): The problem instance to solve.
+    ///     problem (Tsp): The problem instance to solve.
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
@@ -875,7 +887,7 @@ impl LinKernighanHelsgaun {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
-    ///     ValueError: If ``problem`` is not a ``TspWithCoordinates`` instance, or ``runs`` is 0.
+    ///     ValueError: If ``problem`` is not a ``Tsp`` instance, or ``runs`` is 0.
     #[pyo3(signature = (problem, runs=1, seed=None))]
     fn run(
         &self,
