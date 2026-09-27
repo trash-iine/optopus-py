@@ -64,7 +64,7 @@ print(report.runs[0].solution)  # [True, False] — value of each variable
 
 ## TSP
 
-`TspWithCoordinates` is a **minimization** problem: find the shortest tour visiting every city
+`Tsp` is a **minimization** problem: find the shortest tour visiting every city
 exactly once. The solution is a `list[int]` permutation of city indices rather than the
 `list[bool]` used by the binary problems above.
 
@@ -72,7 +72,7 @@ exactly once. The solution is a `list[int]` permutation of city indices rather t
 import optopus
 
 # Five cities at the corners and center of a unit square.
-tsp = optopus.TspWithCoordinates.from_coordinates(
+tsp = optopus.Tsp.from_coordinates(
     [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0), (0.5, 0.5)],
     name="square",
 )
@@ -91,11 +91,86 @@ print(report.runs[0].solution)  # e.g. [0, 4, 2, 1, 3] — order of city visits
 The available neighborhoods for TSP are `"TwoOpt"` (reverse a tour segment) and `"Relocate"`
 (remove a city and reinsert it elsewhere).
 
+Distances need not come from coordinates: `Tsp.from_distance_matrix(matrix)` takes an explicit
+matrix, and `Tsp.load_file(path)` reads a TSPLIB instance.
+
+```{note}
+optopus renamed this problem from `TspWithCoordinates` to `Tsp` when it gained those
+constructors. `TspWithCoordinates` is still bound to the same class, so existing code keeps
+working.
+```
+
+## Vehicle routing
+
+`Vrp` is the capacitated vehicle routing problem: serve every customer exactly once from a depot
+without exceeding the vehicle capacity, minimizing total distance. Index `0` is the depot, and a
+solution is a `list[list[int]]` — one route of customer indices per vehicle, with the depot
+implicit at both ends.
+
+```python
+import optopus
+
+vrp = optopus.Vrp.from_coordinates(
+    coordinates=[(0.0, 0.0), (10.0, 0.0), (11.0, 0.0), (-10.0, 0.0), (-11.0, 0.0)],
+    demands=[0, 5, 5, 5, 5],   # entry 0 is the depot
+    capacity=15,
+    num_vehicles=2,            # 0 lets optopus pick a fleet size
+)
+
+hgs = optopus.HybridGeneticSearch(stop=optopus.StopCondition(max_iteration=20_000))
+report = hgs.run(vrp, runs=3, seed=42)
+
+print(report.best_objective)               # 44.0 — one vehicle per cluster
+print(report.runs[0].solution)             # e.g. [[1, 2], [3, 4]]
+print(vrp.evaluate_routes([[1, 2], [3, 4]]))
+# {'objective': 44.0, 'distance': 44.0, 'overload': 0, 'route_loads': [10, 10]}
+```
+
+The objective a heuristic minimizes is `distance + penalty_weight * overload`, so an
+over-capacity solution scores worse than any feasible one without being rejected outright. Use
+`evaluate_routes` to read the raw distance and the overload separately.
+
+Besides the generic heuristics (`"Relocate"`, `"Swap"`, `"TwoOpt"`), `Vrp` has two specialized
+ones: `HybridGeneticSearch` and `AdaptiveLargeNeighborhoodSearch`. `Vrp.load_file(path)` reads a
+CVRPLIB instance, and `Vrp.from_distance_matrix(...)` takes an explicit matrix.
+
+## Graph coloring
+
+`GraphColoring` assigns each vertex a color so that no edge joins two vertices of the same
+color, using as few colors as possible. Conflicts are penalized rather than forbidden, at a
+weight high enough (`num_vertices + 1`) that removing any conflict beats saving a color.
+
+```python
+import optopus
+
+# A 5-cycle: the smallest graph that needs three colors.
+gc = optopus.GraphColoring.from_edges(
+    [(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 4, 1.0), (4, 0, 1.0)]
+)
+
+print(gc.num_colors())   # 3 — the palette defaults to max_degree + 1
+
+ts = optopus.TabuSearch(
+    neighbor="Recolor", tabu_tenure=(3, 10),
+    stop=optopus.StopCondition(max_iteration=10_000),
+)
+report = ts.run(gc, runs=4, seed=1)
+
+print(report.best_objective)               # 3.0 — a proper 3-coloring
+print(gc.evaluate_colors([0, 1, 0, 1, 2]))
+# {'objective': 3, 'colors_used': 3, 'conflicts': 0}
+```
+
+A `best_objective` below `penalty_weight()` means the coloring is proper, and the value is the
+number of colors it used. The neighborhoods are `"Recolor"` (give one vertex another color) and
+`"Swap"` (exchange two vertices' colors).
+
 ## Generating a random graph
 
-`MaxCut` and `VertexCover` are defined over a graph, so instead of writing an edge list by hand you
-can draw one from a random graph model. The generators produce unweighted graphs; chain
-`with_random_weights` to draw integer weights.
+`MaxCut`, `VertexCover` and `GraphColoring` are defined over a graph, so instead of writing an
+edge list by hand you can draw one from a random graph model. The generators produce unweighted
+graphs; chain `with_random_weights` to draw integer weights. `Graph.grid_torus_2d(l)` and
+`Graph.grid_torus_3d(l)` give periodic lattices, the topology of the G-set's toroidal group.
 
 ```python
 import optopus
@@ -159,15 +234,21 @@ bls = optopus.BreakoutLocalSearch(
 print(bls.run(mc, runs=3, seed=42).best_objective)
 
 # Lin-Kernighan-Helsgaun for the Euclidean TSP.
-tsp = optopus.TspWithCoordinates.from_coordinates(
+tsp = optopus.Tsp.from_coordinates(
     [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)], name="unit-square",
 )
 lkh = optopus.LinKernighanHelsgaun(stop=optopus.StopCondition(max_iteration=1_000))
 print(lkh.run(tsp, seed=42).best_objective)       # 4.0 — the square's perimeter
 ```
 
-`PopulationAnnealing` and `RlBreakoutLocalSearch` are also available for Max Cut; see the
-[API reference](api_reference.md) for their parameters.
+`AdaptiveLargeNeighborhoodSearch` also runs on `Tsp` and `Vrp`, and `HybridGeneticSearch` on
+`Vrp`; see the [API reference](api_reference.md) for their parameters.
+
+```{note}
+`BreakoutLocalSearch`'s `tabu_tenure` means the same prohibition length it does under
+`TabuSearch`. Benlic and Hao's γ is counted twice inside the algorithm, so to reproduce their
+`rand[3, |V|/10]` on the G-set you pass `(6, len(vertices) // 5)`.
+```
 
 ## Next steps
 

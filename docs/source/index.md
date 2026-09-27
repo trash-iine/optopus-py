@@ -7,15 +7,18 @@ executing in native Rust.
 
 ## What you get
 
-- **Problems** built directly from Python data: `MaxCut`, `Qubo`, `Sat`, `VertexCover`,
-  `TspWithCoordinates`, `JobShopScheduling`, and `Formula` — plus a `Graph` type with random
-  graph generators to feed the graph-based ones.
+- **Problems** built directly from Python data: `MaxCut`, `Qubo`, `Sat`, `VertexCover`, `Tsp`,
+  `JobShopScheduling`, `Vrp`, `GraphColoring`, and `Formula` — plus a `Graph` type with random
+  graph generators and periodic lattices to feed the graph-based ones.
 - **Generic heuristics** that work with any problem: `LocalSearch`, `SimulatedAnnealing`,
   `BangBangSimulatedAnnealing`, `TabuSearch`, `LateAcceptanceHillClimbing`, `RandomWalk`,
-  `BeamSearch`, and `VariableNeighborhoodSearch`.
+  `BeamSearch`, `PopulationAnnealing`, and `VariableNeighborhoodSearch`.
 - **Problem-specific heuristics** that exploit one problem's structure: `WalkSat`,
-  `PopulationAnnealing`, `BreakoutLocalSearch`, `RlBreakoutLocalSearch`, and
-  `LinKernighanHelsgaun`.
+  `BreakoutLocalSearch`, `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch`, and
+  `HybridGeneticSearch`.
+- **Instances with a known optimum**: `PlantedMaxCut` plants an optimal cut by construction, so
+  "did the heuristic reach the optimum" is answerable; `MaxCutKernel` reduces an instance
+  exactly and lifts the answer back.
 - **Full result statistics**: every `run` returns a `RunReport` aggregating per-run objectives,
   timings, and acceptance counts across one or more runs.
 
