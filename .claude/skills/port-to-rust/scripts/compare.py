@@ -138,13 +138,20 @@ def compare_exact(py: dict, rs: dict, rel_tol: float) -> bool:
 
 
 def compare_stat(py: dict, rs: dict, tolerance: float) -> bool:
-    """The Rust mean must not be worse than the Python mean by more than the spread allows."""
+    """The Rust mean must not be worse than the Python mean by more than the spread allows.
+
+    The slack is twice the larger spread of the two plus ``tolerance`` times the mean
+    improvement the Python runs made over their initial solutions. It is measured against
+    the improvement rather than the objective itself, so that an objective with a large
+    constant part does not hide a port that searches worse.
+    """
     minimize = py["minimize"]
     p_obj = [r["best_objective"] for r in py["runs"]]
     r_obj = [r["best_objective"] for r in rs["runs"]]
     p_avg, r_avg = statistics.fmean(p_obj), statistics.fmean(r_obj)
     spread = max(statistics.pstdev(p_obj), statistics.pstdev(r_obj))
-    slack = 2 * spread + tolerance * max(abs(p_avg), 1.0)
+    p_improvement = statistics.fmean(abs(r["improvement"]) for r in py["runs"])
+    slack = 2 * spread + tolerance * p_improvement
     worse_by = (r_avg - p_avg) if minimize else (p_avg - r_avg)
     ok = worse_by <= slack
 
@@ -171,7 +178,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", choices=("exact", "stat"), required=True)
     parser.add_argument("--rel-tol", type=float, default=1e-9, help="exact: float tolerance")
     parser.add_argument(
-        "--tolerance", type=float, default=0.01, help="stat: relative slack on the mean"
+        "--tolerance",
+        type=float,
+        default=0.05,
+        help="stat: slack as a fraction of the mean Python improvement",
     )
     args = parser.parse_args(argv)
 
@@ -188,7 +198,8 @@ def main(argv: list[str] | None = None) -> int:
     p_time, r_time = py["avg_total_time_secs"], rs["avg_total_time_secs"]
     if p_time > 0 and r_time > 0:
         print(
-            f"time/run: python {p_time:.4g}s, rust {r_time:.4g}s ({p_time / r_time:.2f}x speedup)"
+            f"time/run: python {p_time:.4g}s, rust {r_time:.4g}s ({p_time / r_time:.2f}x speedup; "
+            "meaningful only with a release build of the Python extension)"
         )
     print("PASS" if ok else "FAIL")
     return 0 if ok else 1

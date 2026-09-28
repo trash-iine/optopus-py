@@ -16,11 +16,12 @@ time, so the port follows whatever optopus the binding builds against today.
 | a heuristic's parameters and their defaults | its `#[pyo3(signature = ...)]` in `src/heuristic.rs` |
 | the Rust move type behind a `neighbor` name, a problem-specific heuristic, a GA crossover | `build_<problem>` and `crossover_<problem>` in `src/runner.rs` |
 | the upstream constructor call and argument order for each heuristic | `build_generic` and `build_nested` in `src/runner.rs` |
+| how a string argument becomes an enum (e.g. `parent_selection`) | the body of its `#[new]` in `src/heuristic.rs` |
+| where a type is imported from (crossovers, for one, are not in `optopus::prelude`) | the `use` block at the top of `src/runner.rs` |
 | `minimize`, the reported objective and the solution's Python form, per problem | the `run_all(...)` call for that problem in `solve`, `src/runner.rs` |
-| how a Python problem's members reach the traits | `src/python_problem.rs` |
+| what the binding makes of each member of a problem written in Python | `src/python_problem.rs`, and `build_python` in `src/runner.rs` |
 
-Read only the parts the Python code uses. A problem written in Python also needs
-`references/python-problems.md`, which says how to model it in Rust.
+Read only the parts the Python code uses.
 
 ## 1. Take stock
 
@@ -38,10 +39,12 @@ Ask the user whether to port it, keep it in Python, or drop it, unless they alre
 
 ## 2. Model the problems
 
-- Built-in problems map one to one onto the upstream type their `#[pyclass]` wraps.
-- A Python problem: follow `python-problems.md`, section 1, and take the first modeling that
-  fits (built-in type → `IntegerProblem` → `FormulaProblem` → hand-written traits). Tell the
-  user which one you took and why, and whether the neighborhoods differ from the Python ones.
+A problem written in Python keeps its own neighborhoods: the same moves, deltas and
+`tabu_keys`. Write its traits (upstream `docs/guide/custom_problem.md` and
+`examples/custom_problem.rs`), unless a ready-made type (a built-in problem, `IntegerProblem`,
+`FormulaProblem`; upstream `docs/problems/`) has exactly the same moves and tabu keys. Read that
+type's move code to check before choosing it. Tell the user what you chose and every difference
+from the Python neighborhoods.
 
 ## 3. Generate the crate
 
@@ -65,9 +68,12 @@ Write `src/main.rs` (and modules for a hand-written problem), reading the bindin
 table above.
 
 - Each `heuristic.run(problem, runs=r, seed=s)` becomes one `harness::run_all(...)` call,
-  followed by `report.emit("<label>")`. Copy `minimize`, `obj` and `encode` from the
-  problem's `run_all(...)` call in `solve` (`encode` is its `decode` written as `json!`); a
-  wrong `obj` makes every comparison fail.
+  followed by `report.emit("<label>")`. A wrong `obj` makes every comparison fail:
+  - built-in problem: copy `minimize`, `obj` and `encode` from its `run_all(...)` call in
+    `solve` (`encode` is its `decode` written as `json!`);
+  - problem written in Python: `minimize` is its `minimize`, `obj` returns what its
+    `objective` returns, and `encode` gives what `objective` takes. On an `IntegerProblem` or
+    `FormulaProblem` solution, `obj` is `s.evaluate().minimized()`, negated when maximizing.
 - Nested heuristics are `Box<dyn Heuristic<P>>`; build the tree inside the closure passed to
   `run_all`, since each run needs a fresh one.
 - Keep parameter values, `runs` and `seed` exactly as in Python. Argument orders often differ
@@ -75,7 +81,6 @@ table above.
   makes, not the Python order.
 - Several `run` calls in one script: emit each with its own label and run with
   `--json 'out/{label}.json'`, which writes one report per label.
-- Comments and identifiers in English, as everything in this repository.
 
 ## 5. Build
 
@@ -87,47 +92,48 @@ cargo clippy --all-targets -- -D warnings
 cargo build --release
 ```
 
-Fix the code, not the lints. A trait-bound error on a heuristic usually means the move lacks
-something that heuristic needs (upstream `docs/guide/custom_problem.md`, "Which heuristic
-needs what").
+Fix the code, not the lints. On a trait-bound error, check what the binding passes there:
+crossovers and nested heuristics go in as `Box<dyn …>`, not as a boxed concrete type. For a
+hand-written move, the heuristic may need a trait it lacks (upstream
+`docs/guide/custom_problem.md`, "Which heuristic needs what").
 
 ## 6. Compare with the Python original
 
-Make the Python side run this repository's core, built in release mode so the timings mean
-something, then run both:
+Build the Python side from this repository in release mode, right before comparing: `uv run
+invoke ci` and a plain `maturin develop` leave a debug build, which makes every speed ratio
+meaningless. Then run Rust first, since the driver reads its reports:
 
 ```bash
 uv run maturin develop --release
+(cd <crate> && cargo run --release -- --json 'out/{label}.json')
 PYTHONPATH=.claude/skills/port-to-rust/scripts uv run --no-sync python <driver.py>
-(cd <crate> && cargo run --release -- --json rs.json)
-uv run --no-sync python .claude/skills/port-to-rust/scripts/compare.py py.json <crate>/rs.json --mode <mode>
+uv run --no-sync python .claude/skills/port-to-rust/scripts/compare.py py-<label>.json <crate>/out/<label>.json --mode <mode>
 ```
 
-`<driver.py>` is a short script in the scratchpad, not in the user's code. It builds the
-problem and heuristic as the original does (import the original module when it is
-importable, copy the lines otherwise), runs it, and writes the report with
-`compare.dump_report(report, "py.json", minimize=...)`.
+`<driver.py>` is a short script in the scratchpad, not in the user's code. It gets each
+report the way the original does and writes it with
+`compare.dump_report(report, "py-<label>.json", minimize=...)`. Importing the original module
+often runs its searches already and leaves the reports on the module; otherwise copy the lines
+that build and run them.
 
 Pick the mode:
 
 | Case | Mode | Pass means |
 |---|---|---|
 | built-in problem, `stop` without `max_duration_secs`, fixed `seed` | `exact` | every run has the same seed, objectives, iteration counts and solution |
-| a Python problem, any time limit, or `seed=None` | `stat` | the Rust mean is no worse than the Python mean beyond twice the spread plus 1% |
+| a Python problem, any time limit, or `seed=None` | `stat` | the Rust mean is no worse than the Python mean beyond twice the spread plus 5% of the Python mean improvement |
 
-For a Python problem also check the ported objective: in the driver, after the Rust run,
-call `compare.check_objective("<crate>/rs.json", problem.objective, decode=...)` (`decode`
+For a Python problem also check the ported objective: in the driver, call
+`compare.check_objective("<crate>/out/<label>.json", problem.objective, decode=...)` (`decode`
 turns the JSON solution back into what `objective` takes, e.g. `tuple`). Every run must
 match. If `stat` fails with the direction reversed or far off, check `minimize` and the
-`Evaluate` impls first (`python-problems.md`, section 4).
+`Evaluate` impls first.
 
 On an `exact` mismatch, the first differing field points at the cause:
 `initial_objective` → the problem or `obj` differs; `seed` → `runs`/`seed` differ;
 `n_accepted`/`best_iteration` → the heuristic, its parameters or the neighbor differ.
 Fix and go back to step 4. Do not loosen the mode to make a port pass; if a mismatch cannot
 be explained, report it.
-
-Use time-limited runs only for the speed comparison, after the port has passed.
 
 ## 7. Report
 

@@ -141,4 +141,5 @@ skills and AGENTS.md in the same PR, and the other way around.
 port, so the binding stays the only place it is written. Two things there follow the binding and
 move with it in the same PR: `templates/src/harness.rs`, a copy of `run_all` and `derive_seed` in
 `src/runner.rs` and of the report arithmetic in `src/result.rs`, and the table in its `SKILL.md`
-that names the functions to read (`solve`, `build_<problem>`, `build_generic`, `build_nested`).
+that names the functions to read (`solve`, `build_<problem>`, `build_generic`, `build_nested`,
+`build_python`).
