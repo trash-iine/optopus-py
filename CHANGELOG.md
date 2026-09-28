@@ -24,6 +24,10 @@ entries below are breaking; see **Changed** and **Removed**.
   `LinKernighanHelsgaun` (TSP), `AdaptiveLargeNeighborhoodSearch` (VRP and TSP) and
   `HybridGeneticSearch` (VRP). These take no `neighbor` argument and raise `ValueError` when run
   on a problem they do not apply to.
+- Problems written in Python. Any object with `minimize`, `new_solution`, `objective` and a
+  `neighborhoods` mapping can be passed to the generic heuristics, `PopulationAnnealing` and
+  `VariableNeighborhoodSearch`. Exceptions raised in its methods, and Ctrl-C, stop the run and
+  propagate from `run`.
 - `VariableNeighborhoodSearch`, which alternates an intensifying search heuristic with a list of
   increasingly disruptive shakes. Steps are ordinary heuristic instances, so each may use its own
   neighborhood and stopping criterion.

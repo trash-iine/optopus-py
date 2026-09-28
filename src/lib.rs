@@ -7,11 +7,13 @@
 //! PopulationAnnealing, VariableNeighborhoodSearch) and problem-specific ones
 //! (WalkSat, BreakoutLocalSearch, LinKernighanHelsgaun,
 //! AdaptiveLargeNeighborhoodSearch, HybridGeneticSearch) as Python classes, plus the
-//! MaxCutKernel reduction and the PlantedMaxCut instance generators.
+//! MaxCutKernel reduction and the PlantedMaxCut instance generators. The generic
+//! heuristics also run on problems written in Python.
 
 mod graph;
 mod heuristic;
 mod problem;
+mod python_problem;
 mod result;
 mod runner;
 mod stop_condition;
