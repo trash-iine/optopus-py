@@ -55,7 +55,7 @@ def dump_report(report: Any, path: str | Path, *, minimize: bool) -> None:
     Args:
         report: The ``RunReport`` returned by ``heuristic.run``.
         path: Where to write the JSON.
-        minimize: The problem's direction, as in ``references/api-mapping.md``.
+        minimize: The problem's direction, the one the binding's ``solve`` passes for it.
     """
     runs = [
         {

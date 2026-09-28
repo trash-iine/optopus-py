@@ -7,12 +7,20 @@ allowed-tools: Bash(cargo *) Bash(uv run *) Bash(git -C vendor/optopus *) Read W
 # Port optopus-py code to Rust
 
 The binding maps every Python class and argument onto an optopus type; a port runs that map
-backwards. Two references carry the map:
+backwards. The map is the binding's source, not a copy of it: read it from `src/*.rs` each
+time, so the port follows whatever optopus the binding builds against today.
 
-- `references/api-mapping.md` — built-in problems, neighbor names, heuristics,
-  `StopCondition`, and how `run(runs, seed)` and its report are computed.
-- `references/python-problems.md` — a problem written in Python (the protocol in
-  `docs/source/python_problems.md`), and how to model it in Rust.
+| To find | Read |
+|---|---|
+| the upstream type and constructor behind a Python problem or `Graph` method | its `#[pyclass]` in `src/problem.rs` / `src/graph.rs`: what the `#[new]` or `#[staticmethod]` calls |
+| a heuristic's parameters and their defaults | its `#[pyo3(signature = ...)]` in `src/heuristic.rs` |
+| the Rust move type behind a `neighbor` name, a problem-specific heuristic, a GA crossover | `build_<problem>` and `crossover_<problem>` in `src/runner.rs` |
+| the upstream constructor call and argument order for each heuristic | `build_generic` and `build_nested` in `src/runner.rs` |
+| `minimize`, the reported objective and the solution's Python form, per problem | the `run_all(...)` call for that problem in `solve`, `src/runner.rs` |
+| how a Python problem's members reach the traits | `src/python_problem.rs` |
+
+Read only the parts the Python code uses. A problem written in Python also needs
+`references/python-problems.md`, which says how to model it in Rust.
 
 ## 1. Take stock
 
@@ -30,7 +38,7 @@ Ask the user whether to port it, keep it in Python, or drop it, unless they alre
 
 ## 2. Model the problems
 
-- Built-in problems map one to one (`api-mapping.md`, "Problems").
+- Built-in problems map one to one onto the upstream type their `#[pyclass]` wraps.
 - A Python problem: follow `python-problems.md`, section 1, and take the first modeling that
   fits (built-in type → `IntegerProblem` → `FormulaProblem` → hand-written traits). Tell the
   user which one you took and why, and whether the neighborhoods differ from the Python ones.
@@ -53,15 +61,18 @@ heuristic per run, the report arithmetic); changing it breaks the comparison.
 
 ## 4. Port
 
-Write `src/main.rs` (and modules for a hand-written problem) with the references open.
+Write `src/main.rs` (and modules for a hand-written problem), reading the binding as in the
+table above.
 
 - Each `heuristic.run(problem, runs=r, seed=s)` becomes one `harness::run_all(...)` call,
-  followed by `report.emit("<label>")`. Take `minimize`, `obj` and `encode` from
-  `api-mapping.md`, "Objective per problem"; a wrong `obj` makes every comparison fail.
+  followed by `report.emit("<label>")`. Copy `minimize`, `obj` and `encode` from the
+  problem's `run_all(...)` call in `solve` (`encode` is its `decode` written as `json!`); a
+  wrong `obj` makes every comparison fail.
 - Nested heuristics are `Box<dyn Heuristic<P>>`; build the tree inside the closure passed to
   `run_all`, since each run needs a fresh one.
-- Keep parameter values, `runs` and `seed` exactly as in Python. Mind the argument orders that
-  differ (`stop` comes first in Rust, `Tsp::new(name, coords)`).
+- Keep parameter values, `runs` and `seed` exactly as in Python. Argument orders often differ
+  between the Python signature and the upstream constructor; follow the call the binding
+  makes, not the Python order.
 - Several `run` calls in one script: emit each with its own label and run with
   `--json 'out/{label}.json'`, which writes one report per label.
 - Comments and identifiers in English, as everything in this repository.

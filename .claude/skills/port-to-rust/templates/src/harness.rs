@@ -41,9 +41,10 @@ pub struct RunReport {
 /// - `build` returns the heuristic boxed, as optopus-py builds every one, so nested
 ///   heuristics (`Box<dyn Heuristic<P>>`) and plain ones go through the same call.
 /// - `minimize` is the direction the report ranks `obj` in.
-/// - `obj` reads a solution's objective the way optopus-py reports it (see the
-///   skill's `references/api-mapping.md`, "Objective per problem").
-/// - `encode` turns a solution into JSON the way optopus-py decodes it to Python.
+/// - `obj` reads a solution's objective the way optopus-py reports it, and `encode`
+///   turns a solution into JSON the way optopus-py decodes it to Python. For a
+///   built-in problem, copy both from its `run_all(...)` call in `solve` in
+///   optopus-py's `src/runner.rs`.
 pub fn run_all<'h, P>(
     instance: &P,
     build: impl Fn() -> Box<dyn Heuristic<P> + 'h>,

@@ -22,8 +22,8 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
   `release.yml` (wheels on `v*` tags).
 - `.claude/skills/` — `/quality-check`, `/create-pr`, `/update-docs`, `/adr`, `/release`,
   `/port-to-rust`. Keep them in sync with `CONTRIBUTING.md` and this file when rules change;
-  `/port-to-rust`'s API map and run loop also follow `src/*.rs` (CONTRIBUTING.md, "Claude Code
-  skills").
+  `/port-to-rust`'s run-loop template and the functions it points at also follow `src/*.rs`
+  (CONTRIBUTING.md, "Claude Code skills").
 
 ## Commands
 - Setup: `git submodule update --init`, `uv sync --dev`, then `uv run pre-commit install` once.
