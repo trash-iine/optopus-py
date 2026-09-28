@@ -17,11 +17,11 @@ Check where you are with `git branch --show-current` and `git status`.
 - **Branch name breaks the convention**: suggest `git branch -m <new-name>`.
 - `type` is one of `feat|fix|docs|refactor|test|ci|chore|release`.
 - A version bump does not belong in a feature PR. If the changes include one, stop and point to
-  the `/release` skill.
+  the `release` skill.
 
 ## 2. Checks
 
-Follow the `/quality-check` skill (`uv run invoke ci`) and continue only once everything passes.
+Follow the `quality-check` skill (`uv run invoke ci`) and continue only once everything passes.
 
 ## 3. Commit
 
@@ -34,7 +34,7 @@ Follow the `/quality-check` skill (`uv run invoke ci`) and continue only once ev
 - Development rules changed? Make sure `CONTRIBUTING.md`, `AGENTS.md` and the affected skills are
   updated in this PR.
 - A decision about conventions, tooling, dependencies or architecture? Make sure an ADR exists in
-  `docs/adr/`; if not, create one with the `/adr` skill.
+  `docs/adr/`; if not, create one with the `adr` skill.
 
 ## 4. Push and open the PR
 

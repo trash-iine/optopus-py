@@ -106,11 +106,11 @@ meaningless. Then run Rust first, since the driver reads its reports:
 ```bash
 uv run maturin develop --release
 (cd <crate> && cargo run --release -- --json 'out/{label}.json')
-PYTHONPATH=.claude/skills/port-to-rust/scripts uv run --no-sync python <driver.py>
-uv run --no-sync python .claude/skills/port-to-rust/scripts/compare.py py-<label>.json <crate>/out/<label>.json --mode <mode>
+PYTHONPATH=.agents/skills/port-to-rust/scripts uv run --no-sync python <driver.py>
+uv run --no-sync python .agents/skills/port-to-rust/scripts/compare.py py-<label>.json <crate>/out/<label>.json --mode <mode>
 ```
 
-`<driver.py>` is a short script in the scratchpad, not in the user's code. It gets each
+`<driver.py>` is a short script in a temporary directory, not in the user's code. It gets each
 report the way the original does and writes it with
 `compare.dump_report(report, "py-<label>.json", minimize=...)`. Importing the original module
 often runs its searches already and leaves the reports on the module; otherwise copy the lines

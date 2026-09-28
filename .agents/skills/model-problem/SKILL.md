@@ -1,6 +1,6 @@
 ---
 name: model-problem
-description: Build an optimization problem interactively from a task described in words — interview the user for decisions, objective, constraints and data, choose between a built-in problem, Formula and a problem written in Python, write a runnable optopus-py script, and check it on a tiny instance against brute force. Use when the user wants to formulate or model something as an optimization problem, or to solve a task with optopus ("最適化問題を作りたい", "定式化して", "シフトを optopus で組みたい", "model this as an optimization problem"). For porting the resulting script to Rust, use /port-to-rust.
+description: Build an optimization problem interactively from a task described in words — interview the user for decisions, objective, constraints and data, choose between a built-in problem, Formula and a problem written in Python, write a runnable optopus-py script, and check it on a tiny instance against brute force. Use when the user wants to formulate or model something as an optimization problem, or to solve a task with optopus ("最適化問題を作りたい", "定式化して", "シフトを optopus で組みたい", "model this as an optimization problem"). For porting the resulting script to Rust, use the port-to-rust skill.
 allowed-tools: Bash(uv run *) Read Write Edit AskUserQuestion
 ---
 
@@ -26,8 +26,9 @@ Read only the parts the task needs.
 
 ## 1. Interview
 
-Ask with AskUserQuestion, one topic per round, and offer concrete options built from what the
-user already said rather than open questions. Skip anything they have answered.
+Ask one topic per round, with the agent's question tool if it has one (AskUserQuestion in Claude
+Code), and offer concrete options built from what the user already said rather than open
+questions. Skip anything they have answered.
 
 - **Decisions**: what is chosen — yes/no per item, a value per item, an order, a grouping.
 - **Objective**: what is measured and whether more or less is better. Several goals: ask for
@@ -108,12 +109,13 @@ uv run --no-sync python <script> --demo
 
 On the tiny instance:
 
-- Write a brute force in the scratchpad over the user's decision space (who works each night,
-  which items are chosen, how customers split into routes), not over the encoding, and find the
-  optimum from the objective the user stated. Where the problem has its own evaluator
-  (`evaluate_routes`, `eval_objective` and `eval_penalty`, a Python problem's `objective`),
-  check it agrees on every candidate. Search the whole encoded space for an infeasible solution
-  that scores better only when that space is small.
+- Write a brute force in a temporary directory, not in the user's code, over the user's
+  decision space (who works each night, which items are chosen, how customers split into
+  routes), not over the encoding, and find the optimum from the objective the user stated.
+  Where the problem has its own evaluator (`evaluate_routes`, `eval_objective` and
+  `eval_penalty`, a Python problem's `objective`), check it agrees on every candidate. Search
+  the whole encoded space for an infeasible solution that scores better only when that space is
+  small.
 - Every run should reach that optimum and pass every hard-constraint check. If only some do,
   find out why before handing the script over.
 - Show the user the decoded demo result and ask whether it is a sensible answer to their task.
@@ -134,4 +136,4 @@ not explain.
   or approximation with its weight.
 - The verification output: the brute-force optimum next to every run's result, and the
   realistic-size run's time and checks.
-- That `/port-to-rust` can port the script when it needs to run faster.
+- That the `port-to-rust` skill can port the script when it needs to run faster.

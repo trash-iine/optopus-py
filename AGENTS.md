@@ -20,11 +20,13 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
   `check-version`. Do not add single-command wrappers (ADR 0002).
 - `.github/workflows/` — `ci.yml` (rust, lint, python matrix), `docs.yml` (Pages deploy),
   `release.yml` (wheels on `v*` tags).
-- `.claude/skills/` — `/quality-check`, `/create-pr`, `/update-docs`, `/adr`, `/release`,
-  `/port-to-rust`, `/model-problem`. Keep them in sync with `CONTRIBUTING.md` and this file when
-  rules change; `/port-to-rust`'s run-loop template and the places `/port-to-rust` and
-  `/model-problem` point at also follow `src/*.rs` and the docs (CONTRIBUTING.md, "Claude Code
-  skills").
+- `.agents/skills/` — Agent Skills shared by every agent: `quality-check`, `create-pr`,
+  `update-docs`, `adr`, `release`, `port-to-rust`, `model-problem`. Without skill support, read
+  `.agents/skills/<name>/SKILL.md` when a task matches its description. `.claude/skills` is a
+  symlink to it for Claude Code (ADR 0004); edit the files under `.agents/skills/` and keep them
+  agent-neutral. Keep them in sync with `CONTRIBUTING.md` and this file when rules change;
+  `port-to-rust`'s run-loop template and the places `port-to-rust` and `model-problem` point at
+  also follow `src/*.rs` and the docs (CONTRIBUTING.md, "Agent skills").
 
 ## Commands
 - Setup: `git submodule update --init`, `uv sync --dev`, then `uv run pre-commit install` once.
@@ -39,7 +41,7 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
   `maturin develop` build; use `uv run --no-sync <cmd>` right after a build, or go through the
   Invoke tasks, which handle it.
 - New ADR: `uv run invoke adr <kebab-slug> --title "<title>"`.
-- Releases: follow `.claude/skills/release/SKILL.md`; never bump the version in a feature PR.
+- Releases: follow `.agents/skills/release/SKILL.md`; never bump the version in a feature PR.
 
 ## Conventions
 - Everything is written in English: code, comments, docstrings, docs, commits, PRs.

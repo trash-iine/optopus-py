@@ -1,7 +1,6 @@
 ---
 name: adr
 description: Record a design decision made in the conversation as an Architecture Decision Record in docs/adr — generate it with `invoke adr`, fill in context, options, decision and consequences, and handle supersession. Use when a decision about conventions, tooling, dependencies or architecture has been made, or when asked to "write an ADR" or "record this decision".
-argument-hint: "[slug]"
 allowed-tools: Bash(uv run *) Read Write Edit
 ---
 
@@ -13,8 +12,8 @@ records").
 
 ## 1. Choose the slug and title
 
-- **Slug**: kebab-case (e.g. `limit-invoke-tasks-to-composite-workflows`). Use `$ARGUMENTS` if
-  given.
+- **Slug**: kebab-case (e.g. `limit-invoke-tasks-to-composite-workflows`). Use the slug the
+  user gave, if any.
 - **Title**: one sentence stating the decision (e.g. "Limit Invoke tasks to composite workflows").
 - Check the existing records in `docs/adr/` for one this decision replaces.
 

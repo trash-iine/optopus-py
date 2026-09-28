@@ -6,5 +6,5 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 .ruff_cache/
-# Claude Code local settings (project skills in .claude/skills/ are tracked)
+# Claude Code local settings (.claude/skills is a tracked symlink to .agents/skills)
 .claude/settings.local.json
