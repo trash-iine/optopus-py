@@ -464,6 +464,7 @@ impl BeamSearch {
 /// Variable neighborhood search: alternates an intensifying ``search`` heuristic with
 /// increasingly disruptive ``shakes``. Each shake escapes the current local optimum; the
 /// shake index resets to 0 whenever the search finds an improvement and advances otherwise.
+/// A round that does not improve is undone.
 ///
 /// The steps are ordinary heuristic instances, so each may use its own neighborhood and its
 /// own stopping criterion. Problem-specific heuristics work as steps too, as long as the
@@ -474,7 +475,9 @@ impl BeamSearch {
 ///         (e.g. ``LocalSearch``).
 ///     shakes (list[object]): Perturbation heuristics, ordered from weakest to strongest
 ///         (e.g. ``RandomWalk`` instances with growing iteration counts). Must not be empty.
-///     stop (StopCondition): Stopping criterion for the outer loop.
+///     stop (StopCondition): Stopping criterion for the whole run. It counts the iterations
+///         of the steps added together and is checked only between steps, so it does not count
+///         rounds.
 #[pyclass(module = "optopus")]
 pub struct VariableNeighborhoodSearch {
     search: Py<PyAny>,
@@ -676,7 +679,10 @@ impl PopulationAnnealing {
         reset_period=400,
         neighbor="Flip".to_string(),
         sweep_length=None,
-    ))]
+    ),
+    text_signature = "(population_size, stop, initial_beta=0.1, delta_beta=0.02, \
+                      sweeps_per_step=50, reset_period=400, neighbor='Flip', sweep_length=None)"
+    )]
     #[allow(clippy::too_many_arguments)]
     fn new(
         population_size: usize,
@@ -1028,7 +1034,7 @@ fn check_half_open_unit(name: &str, value: f64) -> PyResult<()> {
     Ok(())
 }
 
-/// Adaptive large neighborhood search for VRP: each iteration destroys part of the incumbent
+/// Adaptive large neighborhood search: each iteration destroys part of the incumbent
 /// with one of three removal operators and repairs it with one of two insertion operators,
 /// reinforcing whichever pair has been paying off, under a simulated-annealing acceptance rule.
 ///
@@ -1038,10 +1044,12 @@ fn check_half_open_unit(name: &str, value: f64) -> PyResult<()> {
 ///
 /// Args:
 ///     stop (StopCondition): Stopping criterion.
-///     removal_fraction (float): Share of customers torn out each iteration, in ``(0, 1]``.
-///         Defaults to 0.15.
+///     removal_fraction (float): Share of the elements (customers, cities) torn out each
+///         iteration, in ``(0, 1]``. The count is rounded and kept between 1 and ``n - 1``, so
+///         small instances need a larger share. Defaults to 0.15.
 ///     cooling_rate (float): Geometric cooling factor for the acceptance temperature, in
-///         ``(0, 1]``. Defaults to 0.9995.
+///         ``(0, 1]``. The temperature starts where a solution 5% worse than the starting one
+///         is accepted half the time. Defaults to 0.9995.
 #[pyclass(module = "optopus")]
 pub struct AdaptiveLargeNeighborhoodSearch {
     removal_fraction: f64,
@@ -1159,7 +1167,10 @@ impl HybridGeneticSearch {
         granularity=20,
         target_feasible=0.2,
         restart_generations=Some(20_000),
-    ))]
+    ),
+    text_signature = "(stop, min_population_size=25, generation_size=40, granularity=20, \
+                      target_feasible=0.2, restart_generations=20000)"
+    )]
     fn new(
         stop: StopCondition,
         min_population_size: usize,
@@ -1226,7 +1237,9 @@ impl HybridGeneticSearch {
 ///
 /// Args:
 ///     steps (list[object]): Heuristic instances, run in order. Must not be empty.
-///     stop (StopCondition): Stopping criterion for the whole sequence.
+///     stop (StopCondition): Stopping criterion for the whole run. It counts the iterations
+///         of the steps added together and is checked after every step, so a limit reached
+///         inside the first step skips the rest of the sequence.
 #[pyclass(module = "optopus")]
 pub struct Sequential {
     steps: Vec<Py<PyAny>>,
@@ -1287,14 +1300,17 @@ impl Sequential {
     }
 }
 
-/// Iterated local search: alternates ``search`` with ``perturbation``, keeping the result of
-/// a round only when it improves on the incumbent.
+/// Iterated local search: alternates ``search`` with ``perturbation``, carrying on from the
+/// perturbed solution every round. There is no acceptance test; the best solution found is
+/// kept, but a worse round is not undone.
 ///
 /// Args:
 ///     search (object): Heuristic that intensifies (e.g. ``LocalSearch``).
 ///     perturbation (object): Heuristic that kicks the incumbent out of its local optimum
 ///         (e.g. ``RandomWalk`` with a few iterations).
-///     stop (StopCondition): Stopping criterion for the outer loop.
+///     stop (StopCondition): Stopping criterion for the whole run. It counts the iterations
+///         of the steps added together and is checked only between steps, so it does not count
+///         rounds.
 #[pyclass(module = "optopus")]
 pub struct Iterated {
     search: Py<PyAny>,
@@ -1357,9 +1373,13 @@ impl Iterated {
 ///
 /// Args:
 ///     heuristic (object): The heuristic to restart.
-///     restart (StopCondition): When one attempt ends, measured from its own start (e.g.
-///         ``max_failed_update``).
-///     stop (StopCondition): Stopping criterion for the whole run.
+///     restart (StopCondition): Checked after every call of ``heuristic`` against the whole
+///         run's counters, not from the start of the attempt: once it is met, every later call
+///         restarts too, until a new best resets ``max_failed_update``. Bound one attempt with
+///         ``heuristic``'s own stop condition.
+///     stop (StopCondition): Stopping criterion for the whole run. It counts the iterations
+///         of the steps added together and is checked only between steps, so it does not count
+///         rounds.
 #[pyclass(module = "optopus")]
 pub struct Restart {
     heuristic: Py<PyAny>,

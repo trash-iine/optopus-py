@@ -26,6 +26,7 @@ pub struct RunResult {
     /// - ``GraphColoring`` → ``list[int]``, each vertex's color in ``[0, num_colors)``.
     /// - ``Formula`` → ``list[int]``, one value per variable. Binary variables report 0 and 1,
     ///   which compare equal to ``False`` and ``True``.
+    /// - A problem written in Python → the solution object its methods produced, as it is.
     #[pyo3(get)]
     pub solution: Py<PyAny>,
     /// Iteration at which the best solution was found.

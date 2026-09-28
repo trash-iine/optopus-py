@@ -58,7 +58,7 @@ unknown name raises `ValueError` when `run` is called.
 | | `"Relocate"` | moves one city elsewhere in the tour |
 | `JobShopScheduling` | `"Swap"` | exchanges two adjacent operations in the sequence |
 | | `"Relocate"` | moves one operation elsewhere in the sequence |
-| `Vrp` | `"Relocate"` | moves one customer into another route |
+| `Vrp` | `"Relocate"` | moves one customer to a position in another route |
 | | `"Swap"` | exchanges two customers of different routes |
 | | `"TwoOpt"` | reverses a segment within one route |
 | `GraphColoring` | `"Recolor"` | gives one vertex another color |
@@ -94,6 +94,13 @@ the best for a minimizing problem. A `Formula` is always reported higher-is-bett
 `best_objective` is the maximum over the runs even when it minimizes; see
 [What the search reports](formula.md#what-the-search-reports).
 
+Objectives are floating-point numbers, and a search updates them move by move, so the value a
+run reports can differ from a fresh evaluation in the last digits. Compare objectives with a
+tolerance, `math.isclose`, unless the data is integral, and recompute the objective of the
+solution you keep with the problem's evaluator. On `Vrp` those tiny differences can also count
+as improvements, which makes `n_best_updates` and `time_to_best_secs` overstate how long the
+search kept improving and delays `max_failed_update`.
+
 The report holds no best solution of its own. Pick the run whose `best_objective` is the report's,
 and read its `solution`:
 
@@ -110,7 +117,7 @@ solution exists. Nothing needs adding for these; check the result with the probl
 | Problem | Constraint | Penalty weight | Check with |
 |---|---|---|---|
 | `VertexCover` | every edge covered | `num_vertices + 1` per uncovered edge | the solution: an edge with neither end `True` is uncovered |
-| `Vrp` | vehicle capacity | above the largest possible total distance, per unit of overload | `evaluate_routes(routes)["overload"] == 0` |
+| `Vrp` | vehicle capacity | `(num_customers + num_vehicles) · longest_edge + 1` per unit of overload | `evaluate_routes(routes)["overload"] == 0` |
 | `GraphColoring` | no edge within one color | `num_vertices + 1` per conflict, `penalty_weight()` | `evaluate_colors(colors)["conflicts"] == 0` |
 | `Formula` | the constraints you give it | the weight you give each | `eval_penalty(values) == 0` |
 
@@ -153,6 +160,10 @@ Find the shortest closed tour through every city. Build it from `(x, y)` coordin
 explicit distance matrix, or a TSPLIB file with `load_file`. The solution lists the cities in
 visiting order; the return to the first city is implied.
 
+A distance matrix must be symmetric. The moves price a reversed segment from the edges at its
+ends, which is only right when a segment is as long in both directions; an asymmetric matrix
+makes the reported length drift from the real one.
+
 ### JobShopScheduling
 
 Each job is a list of `(machine, duration)` operations that must run in order, and a machine
@@ -166,9 +177,19 @@ early as the machines allow.
 Serve every customer once from a depot with vehicles of one capacity, minimizing the total
 distance. Index `0` is the depot and customers are `1` to `n`. Build it from coordinates and
 demands, a distance matrix, or a CVRPLIB file. A solution has one route per vehicle, with the
-depot implied at both ends, and a route may be empty. `num_vehicles=0` lets optopus choose the
-fleet size; read it back with `num_vehicles()`. `evaluate_routes` reports the raw distance, the
-overload and each route's load.
+depot implied at both ends, and a route may be empty. `evaluate_routes` reports the raw
+distance, the overload and each route's load.
+
+`num_vehicles` is the size of the fleet, and every heuristic returns exactly that many routes;
+the unused vehicles are empty routes. Setting it above what the demand needs is therefore safe,
+and a spare vehicle gives the search room to move customers. `num_vehicles=0` lets optopus
+choose, packing the demands by first-fit decreasing and adding 10%; read the result back with
+`num_vehicles()`. A fleet too small for the demand, or a customer whose demand exceeds the
+capacity, is not an error: the search returns its best solution with `overload > 0`, so check
+the overload before using the routes.
+
+A distance matrix must be symmetric, for the reason given under `Tsp`; `matrix[i][j]` is the
+distance between nodes `i` and `j`. The depot's demand is ignored.
 
 ### GraphColoring
 

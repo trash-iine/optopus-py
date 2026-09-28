@@ -108,6 +108,14 @@ entries below are breaking; see **Changed** and **Removed**.
 
 - `Formula` raises `ValueError` when a constraint reads a variable index outside `[0, n_vars)`,
   as it already did for the objective. It used to fail with a `PanicException` from the core.
+- `help(optopus.Formula)` and the API reference now show the constructor's arguments, which
+  were written where Python never reads them, and the signatures of `Formula`,
+  `PopulationAnnealing` and `HybridGeneticSearch` show their real defaults instead of
+  `Ellipsis`.
+- The docstrings of `Iterated`, `Restart`, `Sequential` and `VariableNeighborhoodSearch`
+  described their stop conditions and `Iterated`'s acceptance wrongly. The outer `stop` counts
+  the steps' iterations and is checked between steps, `Restart`'s `restart` is read against the
+  whole run, and `Iterated` does not undo a worse round.
 
 ## 0.1.0 (2026-08-06)
 

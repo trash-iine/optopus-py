@@ -25,6 +25,11 @@ A variable whose range is a single value, `(v, v)`, is fixed at `v`. Fix what th
 this way rather than with a constraint: the search never visits the excluded values, and no
 penalty weight needs choosing.
 
+The repr's `binary` field says whether every variable ranges over exactly `(0, 1)`. A formula
+whose variables are all binary takes a faster path, and fixing one variable at `(0, 0)` leaves
+it, which ran about 1.5 times slower per move on a 56-variable model. When that matters on a large binary model,
+substitute the fixed value into the polynomials instead and drop the variable's terms.
+
 ## Polynomials
 
 The objective and both sides of every constraint are polynomials, written as a list of terms.
@@ -61,6 +66,10 @@ one, and it pays `penalty_weight × violation` while it does. Each constraint is
 (lhs, relation, rhs, penalty_weight)        # lhs and rhs are polynomials
 (expr, "Clamp", (lo, hi), penalty_weight)   # keeps expr within [lo, hi]
 ```
+
+Each constraint and the `Clamp` range must be tuples; a list in their place raises
+`TypeError`. The relation is one of the names below, or its symbol: `"<"`, `"<="`, `"=="` (or
+`"="`), `">="`, `">"`.
 
 With `d = lhs − rhs`, the violation is:
 
@@ -109,10 +118,21 @@ is exactly what makes it refuse. Two things help:
 - `TabuSearch`, which takes the best allowed move even when it is worse, so it walks through
   the infeasible step.
 - The `"Swap"` neighborhood, which exchanges the values of two variables and so keeps a sum
-  over them fixed, when the constrained variables are the only ones that swap meaningfully.
+  over them fixed. It never changes how many variables hold each value, so it cannot repair a
+  count the random starting solution got wrong: run it after `"Change"`, through `Sequential`
+  or `VariableNeighborhoodSearch`, not on its own.
 
 When neither fits, write the problem in Python so every move keeps the constraint by
 construction.
+
+### Several hard constraints
+
+The weight rule compares a constraint with the objective. Hard constraints that pull against
+each other, such as "exactly one nurse per shift" against "at most four shifts per nurse", need
+nothing more: once every weight passes the rule above, no move gains by breaking a constraint,
+whatever the weights are relative to each other. Their ratio only shapes how the search moves
+between infeasible solutions, so keep them in the same range rather than ranking them by
+importance.
 
 ## What the search reports
 
@@ -142,8 +162,13 @@ own terms, and not from the sign of `best_objective`.
 | `neighbor` | Move |
 |---|---|
 | `"Change"` (alias `"Flip"`) | sets one variable to another value in its range; a flip on a binary variable |
-| `"Swap"` | exchanges the values of two variables |
+| `"Swap"` | exchanges the values of two variables whose values differ and fit each other's range |
 | `"Reverse"` | reverses the values of a range of consecutive variables |
+
+`"Swap"` and `"Reverse"` only rearrange values, so they keep how many variables hold each value.
+Pair them with `"Change"` unless the counts are right by construction. They are also pairwise:
+a `LocalSearch` or `TabuSearch` step scores about n²/2 moves for n variables, against the
+n · (range) of `"Change"`.
 
 `"Change"` reads its price from a table every solution keeps, one entry per value each variable
 could take, so a solution costs memory in proportion to the sum of `upper − lower` over the
