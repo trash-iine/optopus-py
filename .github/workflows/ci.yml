@@ -24,6 +24,23 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Same pin as docs.yml: setup-uv publishes no moving `v9` tag.
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      # Ruff comes from the dev group; the extension itself is not needed to lint.
+      - name: Install dev dependencies
+        run: uv sync --dev --no-install-project
+      - name: Ruff check
+        run: uv run --no-sync ruff check .
+      - name: Ruff format
+        run: uv run --no-sync ruff format --check .
+
   python:
     runs-on: ${{ matrix.os }}
     strategy:

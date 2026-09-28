@@ -35,9 +35,7 @@ COMPOSED = {
     "GeneticAlgorithm": lambda: optopus.GeneticAlgorithm(
         population_size=6, mutation=optopus.LocalSearch("Flip", stop(20)), stop=stop(20)
     ),
-    "ReinforcementLearningSearch": lambda: optopus.ReinforcementLearningSearch(
-        "Flip", stop(200)
-    ),
+    "ReinforcementLearningSearch": lambda: optopus.ReinforcementLearningSearch("Flip", stop(200)),
     "BreakoutLocalSearch.from_parts": lambda: optopus.BreakoutLocalSearch.from_parts(
         descent=optopus.LocalSearch("Flip", stop(100)),
         random=optopus.RandomWalk("Flip", stop(1)),

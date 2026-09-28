@@ -13,14 +13,11 @@ POINTS = [(0.0, 0.0), (2.0, 0.1), (3.1, 1.9), (2.0, 3.8), (0.1, 4.0), (-1.0, 2.0
 
 def tour_length(points, tour):
     return sum(
-        math.dist(points[tour[i]], points[tour[(i + 1) % len(tour)]])
-        for i in range(len(tour))
+        math.dist(points[tour[i]], points[tour[(i + 1) % len(tour)]]) for i in range(len(tour))
     )
 
 
-TSP_OPTIMUM = min(
-    tour_length(POINTS, (0,) + rest) for rest in itertools.permutations(range(1, 6))
-)
+TSP_OPTIMUM = min(tour_length(POINTS, (0, *rest)) for rest in itertools.permutations(range(1, 6)))
 
 
 class TwoOpt:
@@ -164,7 +161,7 @@ class OneMax:
             return range(len(x))
 
         def apply(self, problem, x, i):
-            return x[:i] + (not x[i],) + x[i + 1 :]
+            return (*x[:i], not x[i], *x[i + 1 :])
 
         def delta(self, problem, x, i):
             return -1.0 if x[i] else 1.0
@@ -192,15 +189,13 @@ def test_maximization_direction():
 
 
 def test_unknown_neighbor_is_rejected():
-    with pytest.raises(ValueError, match="invalid neighbor 'Flip'.*TwoOpt, Swap"):
+    with pytest.raises(ValueError, match=r"invalid neighbor 'Flip'.*TwoOpt, Swap"):
         optopus.LocalSearch(neighbor="Flip", stop=stop(10)).run(Tsp(POINTS))
 
 
 def test_tabu_search_needs_tabu_keys():
-    with pytest.raises(ValueError, match="tabu_keys.*'Swap'"):
-        optopus.TabuSearch(neighbor="Swap", tabu_tenure=(1, 2), stop=stop(10)).run(
-            Tsp(POINTS)
-        )
+    with pytest.raises(ValueError, match=r"tabu_keys.*'Swap'"):
+        optopus.TabuSearch(neighbor="Swap", tabu_tenure=(1, 2), stop=stop(10)).run(Tsp(POINTS))
 
 
 def test_problem_specific_heuristics_are_rejected():
@@ -211,7 +206,8 @@ def test_problem_specific_heuristics_are_rejected():
 def test_missing_protocol_parts_are_reported():
     class NoObjective:
         minimize = True
-        neighborhoods = {"TwoOpt": TwoOpt()}
+        # A class-level mapping is how users write it; this object is never mutated.
+        neighborhoods = {"TwoOpt": TwoOpt()}  # noqa: RUF012
 
         def new_solution(self, rng):
             return (0, 1, 2)
@@ -319,7 +315,7 @@ def test_alns_uses_partial_objective_and_repair_around():
 
 
 def test_alns_names_the_missing_ruin_methods():
-    with pytest.raises(ValueError, match="'to_partial', 'finish'.*'insert'"):
+    with pytest.raises(ValueError, match=r"'to_partial', 'finish'.*'insert'"):
         optopus.AdaptiveLargeNeighborhoodSearch(stop(10)).run(Tsp(POINTS))
 
 

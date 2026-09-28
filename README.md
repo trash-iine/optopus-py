@@ -171,11 +171,15 @@ git clone --recurse-submodules https://github.com/trash-iine/optopus-py.git
 Then:
 
 ```bash
-uv sync --dev            # set up the dev environment
-uv run maturin develop   # build and install the extension into .venv
-uv run pytest tests -v   # run the smoke tests
-uv run invoke docs       # build the Sphinx docs
+uv sync --dev                   # set up the dev environment
+uv run pre-commit install       # format and lint on every commit
+uv run maturin develop          # build and install the extension into .venv
+uv run --no-sync pytest         # run the tests against that build
+uv run invoke ci                # run every CI check and summarize the results
+uv run invoke docs              # build the Sphinx docs
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development rules.
 
 ## License
 

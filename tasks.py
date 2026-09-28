@@ -2,12 +2,33 @@
 
 import datetime as dt
 import re
+import string
 import sys
+import webbrowser
 from pathlib import Path
 
 from invoke import task
 
 ROOT = Path(__file__).parent
+DOCS_BUILD = ROOT / "docs" / "build"
+ADR_DIR = ROOT / "docs" / "adr"
+ADR_TEMPLATE = ADR_DIR / "_template.md"
+ADR_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+ADR_GLOB = "[0-9][0-9][0-9][0-9]-*.md"
+
+# The checks .github/workflows/ci.yml runs, in the same order. Keep the two in sync.
+# `maturin develop` builds the extension from the current sources; `pytest` then
+# tests that build. Commands run bare rather than through `uv run`, because a uv
+# sync would reinstall a cached `optopus` wheel over the fresh build (see
+# docs/Makefile) -- run the tasks themselves with `uv run invoke`.
+CI_CHECKS = (
+    ("cargo fmt", "cargo fmt --check"),
+    ("clippy", "cargo clippy --all-targets -- -D warnings"),
+    ("ruff check", "ruff check ."),
+    ("ruff format", "ruff format --check ."),
+    ("build", "maturin develop"),
+    ("pytest", "pytest"),
+)
 
 # The wheel filenames release.yml produces. MACOSX_DEPLOYMENT_TARGET is pinned
 # there so these platform tags stay predictable, because README.md and the
@@ -25,21 +46,6 @@ ASSET_TEMPLATES = (
 URL_FILES = ("README.md", "docs/source/installation.md")
 
 
-def check_env(c):
-    """Ensure the development environment (.venv) exists."""
-    result = c.run("test -d ./.venv", warn=True)
-    if result.ok:
-        return
-
-    uv_check = c.run("command -v uv", warn=True)
-    if uv_check.failed:
-        print("Error: 'uv' is not installed. Please install 'uv' first.")
-        sys.exit(1)
-
-    print("Setting up the development environment: 'uv sync --dev'")
-    c.run("uv sync --dev")
-
-
 def package_version():
     """The [package] version from Cargo.toml, scoped so pyo3's version is safe."""
     text = (ROOT / "Cargo.toml").read_text()
@@ -52,19 +58,96 @@ def package_version():
     return version.group(1)
 
 
+def validate_adr_slug(slug):
+    """Reject an ADR slug that is not lowercase kebab-case."""
+    if not ADR_SLUG_PATTERN.match(slug):
+        sys.exit(f"error: ADR slug must be kebab-case (e.g. 'use-invoke-for-tasks'): {slug!r}")
+
+
+def next_adr_number(adr_dir):
+    """One past the highest existing `NNNN-<slug>.md` number, or 1 if there are none."""
+    return max((int(path.name[:4]) for path in adr_dir.glob(ADR_GLOB)), default=0) + 1
+
+
+def render_adr(template, number, title, date):
+    """Fill the `$number`, `$title` and `$date` placeholders of the ADR template."""
+    return string.Template(template).substitute(
+        number=f"{number:04d}", title=title, date=date.isoformat()
+    )
+
+
 @task
-def docs(c, output="html"):
+def ci(c):
+    """Run the CI checks to completion and summarize which failed."""
+    failed = []
+    for name, command in CI_CHECKS:
+        print(f"\n==> {command}")
+        if c.run(command, warn=True, pty=True).failed:
+            failed.append(name)
+
+    print("\n==> summary")
+    for name, _ in CI_CHECKS:
+        print(f"  {'FAIL' if name in failed else 'ok  '}  {name}")
+    if failed:
+        sys.exit(1)
+
+
+@task
+def fix(c):
+    """Apply rustfmt, Ruff's auto fixes and Ruff's formatter.
+
+    Keeps going when Ruff leaves violations it cannot fix; `invoke ci` reports them.
+    """
+    c.run("cargo fmt", pty=True)
+    c.run("ruff check --fix .", warn=True, pty=True)
+    c.run("ruff format .", pty=True)
+
+
+@task(
+    help={
+        "output": "Sphinx builder passed to `make -C docs` (default: html)",
+        "clean": "Remove previous build output first",
+        "strict": "Turn Sphinx warnings into errors",
+        "open": "Open the built index.html in a browser",
+    }
+)
+def docs(c, output="html", clean=False, strict=False, open=False):
     """Build the documentation (default: HTML)."""
-    check_env(c)
     # The API reference is generated from the compiled extension's docstrings, so
     # it has to be rebuilt first -- a plain `uv sync` reinstalls a cached wheel
     # and would silently document a stale build.
-    c.run("uv run maturin develop")
-    c.run(f"make -C docs {output}", warn=True)
+    c.run("maturin develop")
+    if clean:
+        c.run("make -C docs clean")
+    sphinxopts = ' SPHINXOPTS="-W --keep-going"' if strict else ""
+    c.run(f"make -C docs {output}{sphinxopts}", pty=True)
+    if open:
+        webbrowser.open((DOCS_BUILD / output / "index.html").resolve().as_uri())
 
 
-@task(help={"version": "The new version, e.g. 0.2.0",
-            "date": "Release date for the changelog (default: today)"})
+@task(
+    help={
+        "slug": "Kebab-case file name part, e.g. use-invoke-for-tasks",
+        "title": "Heading of the record (default: the slug)",
+    }
+)
+def adr(c, slug, title=""):
+    """Create the next Architecture Decision Record from the template."""
+    validate_adr_slug(slug)
+    number = next_adr_number(ADR_DIR)
+    path = ADR_DIR / f"{number:04d}-{slug}.md"
+    today = dt.datetime.now(tz=dt.timezone.utc).date()
+    path.write_text(render_adr(ADR_TEMPLATE.read_text(), number, title or slug, today))
+    print(f"Created {path.relative_to(ROOT)}")
+    print("Fill in the sections.")
+
+
+@task(
+    help={
+        "version": "The new version, e.g. 0.2.0",
+        "date": "Release date for the changelog (default: today)",
+    }
+)
 def set_version(c, version, date=None):
     """Move every version-pinned reference to a new version, for a release PR.
 
@@ -95,8 +178,9 @@ def set_version(c, version, date=None):
     path = ROOT / "CHANGELOG.md"
     text = path.read_text()
     if re.search(r"^## +Unreleased[ \t]*$", text, re.M):
-        path.write_text(re.sub(r"^## +Unreleased[ \t]*$", f"## {version} ({today})",
-                               text, count=1, flags=re.M))
+        path.write_text(
+            re.sub(r"^## +Unreleased[ \t]*$", f"## {version} ({today})", text, count=1, flags=re.M)
+        )
         print(f"  CHANGELOG.md      ## Unreleased -> ## {version} ({today})")
     elif re.search(rf"^## +{re.escape(version)} ", text, re.M):
         print(f"  CHANGELOG.md      already headed '## {version} (...)', left alone")
