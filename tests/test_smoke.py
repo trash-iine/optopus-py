@@ -694,7 +694,7 @@ def test_invalid_parameters_raise_value_error(make):
         pytest.param(
             lambda: optopus.AdaptiveLargeNeighborhoodSearch(stop(10)),
             lambda: optopus.MaxCut.from_edges(TRIANGLE),
-            "AdaptiveLargeNeighborhoodSearch is only available for Vrp or Tsp",
+            "AdaptiveLargeNeighborhoodSearch is only available for Vrp, Tsp and Python",
             id="alns-on-maxcut",
         ),
         pytest.param(

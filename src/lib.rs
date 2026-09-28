@@ -4,11 +4,13 @@
 //! Vrp, GraphColoring, Formula), the Graph type behind the graph-based problems,
 //! generic heuristics (LocalSearch, SimulatedAnnealing, TabuSearch,
 //! LateAcceptanceHillClimbing, RandomWalk, BangBangSimulatedAnnealing, BeamSearch,
-//! PopulationAnnealing, VariableNeighborhoodSearch) and problem-specific ones
+//! PopulationAnnealing, ReinforcementLearningSearch), composed ones built from other
+//! heuristics (VariableNeighborhoodSearch, Sequential, Iterated, Restart,
+//! GeneticAlgorithm, BreakoutLocalSearch.from_parts) and problem-specific ones
 //! (WalkSat, BreakoutLocalSearch, LinKernighanHelsgaun,
 //! AdaptiveLargeNeighborhoodSearch, HybridGeneticSearch) as Python classes, plus the
-//! MaxCutKernel reduction and the PlantedMaxCut instance generators. The generic
-//! heuristics also run on problems written in Python.
+//! MaxCutKernel reduction and the PlantedMaxCut instance generators. The generic and
+//! composed heuristics, and ALNS, also run on problems written in Python.
 
 mod graph;
 mod heuristic;
@@ -45,6 +47,11 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::BangBangSimulatedAnnealing>()?;
     m.add_class::<heuristic::BeamSearch>()?;
     m.add_class::<heuristic::VariableNeighborhoodSearch>()?;
+    m.add_class::<heuristic::Sequential>()?;
+    m.add_class::<heuristic::Iterated>()?;
+    m.add_class::<heuristic::Restart>()?;
+    m.add_class::<heuristic::GeneticAlgorithm>()?;
+    m.add_class::<heuristic::ReinforcementLearningSearch>()?;
     m.add_class::<heuristic::WalkSat>()?;
     m.add_class::<heuristic::PopulationAnnealing>()?;
     m.add_class::<heuristic::BreakoutLocalSearch>()?;

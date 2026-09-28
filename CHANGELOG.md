@@ -31,6 +31,15 @@ entries below are breaking; see **Changed** and **Removed**.
 - `VariableNeighborhoodSearch`, which alternates an intensifying search heuristic with a list of
   increasingly disruptive shakes. Steps are ordinary heuristic instances, so each may use its own
   neighborhood and stopping criterion.
+- Composed heuristics built from other heuristic instances: `Sequential`, `Iterated`, `Restart`,
+  `GeneticAlgorithm` (with each problem's crossover, including `"SubProblem"` over any
+  `sub_heuristic`, and `Tournament`, `DistantTopK` or `BiasedFitness` parent selection), and
+  `BreakoutLocalSearch.from_parts`, which assembles breakout local search from a descent and
+  perturbations for any problem.
+- `ReinforcementLearningSearch`, a generic heuristic with a softmax policy over move features.
+- Python problems run under the composed heuristics too. `GeneticAlgorithm` uses their `crossover`
+  method, solutions are compared with their optional `distance` method, and a problem with the
+  ruin methods runs under `AdaptiveLargeNeighborhoodSearch`.
 - `PlantedMaxCut`, which generates Max Cut instances whose optimum is exact by construction
   (`tile_planting_2d`, `tile_planting_3d`, `wishart`), plus `verify` and `has_exact_optimum` —
   the latter says whether "did the run reach the optimum" is an equality test or needs a

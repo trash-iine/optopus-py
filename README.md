@@ -38,7 +38,14 @@ so any heuristic runs on it and `lift` maps the answer back.
 - `RandomWalk`
 - `BeamSearch`
 - `PopulationAnnealing` — replica population along an annealing schedule
+- `ReinforcementLearningSearch` — a softmax policy over move features, learned online
+
+**Composed heuristics** — built from other heuristic instances, for every problem:
+
 - `VariableNeighborhoodSearch` — alternates a search heuristic with increasingly disruptive shakes
+- `Sequential`, `Iterated`, `Restart` — run steps in turn, iterated local search, restarts
+- `GeneticAlgorithm` — steady-state GA over the problem's crossover, with a mutation heuristic
+- `BreakoutLocalSearch.from_parts` — breakout local search from a descent and perturbations
 
 **Problem-specific heuristics** — exploit one problem's structure, no `neighbor` argument:
 
@@ -46,10 +53,10 @@ so any heuristic runs on it and `lift` maps the answer back.
 - `BreakoutLocalSearch` — tabu descent with adaptive perturbations (`MaxCut`)
 - `LinKernighanHelsgaun` — variable-depth edge exchange (`Tsp`)
 - `AdaptiveLargeNeighborhoodSearch` — ruin-and-recreate with adaptive operator weights
-  (`Vrp`, `Tsp`)
+  (`Vrp`, `Tsp`, and Python problems with the ruin methods)
 - `HybridGeneticSearch` — Vidal's genetic search over giant tours (`Vrp`)
 
-The generic heuristics also accept problems written in Python, see
+The generic and composed heuristics also accept problems written in Python, see
 [Problems written in Python](docs/source/python_problems.md).
 
 Every heuristic takes a `StopCondition` (`max_iteration`, `max_duration_secs`,
