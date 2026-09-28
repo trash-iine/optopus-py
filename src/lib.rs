@@ -1,12 +1,13 @@
 //! Python bindings for the optopus combinatorial optimization library.
 //!
-//! Exposes problem types (MaxCut, Qubo, Sat, VertexCover, TspWithCoordinates,
-//! JobShopScheduling, Formula), the Graph type behind the graph-based problems,
+//! Exposes problem types (MaxCut, Qubo, Sat, VertexCover, Tsp, JobShopScheduling,
+//! Vrp, GraphColoring, Formula), the Graph type behind the graph-based problems,
 //! generic heuristics (LocalSearch, SimulatedAnnealing, TabuSearch,
 //! LateAcceptanceHillClimbing, RandomWalk, BangBangSimulatedAnnealing, BeamSearch,
-//! VariableNeighborhoodSearch) and problem-specific ones (WalkSat,
-//! PopulationAnnealing, BreakoutLocalSearch, RlBreakoutLocalSearch,
-//! LinKernighanHelsgaun) as Python classes.
+//! PopulationAnnealing, VariableNeighborhoodSearch) and problem-specific ones
+//! (WalkSat, BreakoutLocalSearch, LinKernighanHelsgaun,
+//! AdaptiveLargeNeighborhoodSearch, HybridGeneticSearch) as Python classes, plus the
+//! MaxCutKernel reduction and the PlantedMaxCut instance generators.
 
 mod graph;
 mod heuristic;
@@ -24,11 +25,15 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<result::RunReport>()?;
     m.add_class::<graph::Graph>()?;
     m.add_class::<problem::MaxCut>()?;
+    m.add_class::<problem::MaxCutKernel>()?;
+    m.add_class::<problem::PlantedMaxCut>()?;
     m.add_class::<problem::Qubo>()?;
     m.add_class::<problem::Sat>()?;
     m.add_class::<problem::VertexCover>()?;
-    m.add_class::<problem::TspWithCoordinates>()?;
+    m.add_class::<problem::Tsp>()?;
     m.add_class::<problem::JobShopScheduling>()?;
+    m.add_class::<problem::Vrp>()?;
+    m.add_class::<problem::GraphColoring>()?;
     m.add_class::<problem::Formula>()?;
     m.add_class::<heuristic::LocalSearch>()?;
     m.add_class::<heuristic::SimulatedAnnealing>()?;
@@ -41,7 +46,8 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::WalkSat>()?;
     m.add_class::<heuristic::PopulationAnnealing>()?;
     m.add_class::<heuristic::BreakoutLocalSearch>()?;
-    m.add_class::<heuristic::RlBreakoutLocalSearch>()?;
     m.add_class::<heuristic::LinKernighanHelsgaun>()?;
+    m.add_class::<heuristic::AdaptiveLargeNeighborhoodSearch>()?;
+    m.add_class::<heuristic::HybridGeneticSearch>()?;
     Ok(())
 }

@@ -14,12 +14,19 @@ optimization library for combinatorial problems written in Rust.
 - `Qubo` — quadratic unconstrained binary optimization
 - `Sat` — boolean satisfiability (MaxSAT-style objective)
 - `VertexCover` — minimum vertex cover
-- `TspWithCoordinates` — traveling salesperson over 2D coordinates
+- `Tsp` — traveling salesperson, from 2D coordinates, a distance matrix, or a TSPLIB file
 - `JobShopScheduling` — job shop scheduling
-- `Formula` — custom pseudo-Boolean objectives
+- `Vrp` — capacitated vehicle routing, from coordinates, a distance matrix, or a CVRPLIB file
+- `GraphColoring` — minimum proper coloring
+- `Formula` — custom objectives over bounded integer variables (binary by default)
 
-Problems over a graph (`MaxCut`, `VertexCover`) can also be built from a `Graph`, which
-comes with Erdős-Rényi, Barabási-Albert and Watts-Strogatz random generators.
+Problems over a graph (`MaxCut`, `VertexCover`, `GraphColoring`) can also be built from a
+`Graph`, which comes with Erdős-Rényi, Barabási-Albert and Watts-Strogatz random generators
+plus 2D/3D periodic lattices.
+
+`PlantedMaxCut` generates Max Cut instances whose optimum is exact by construction, and
+`MaxCutKernel` shrinks an instance by exact kernelization — the kernel is an ordinary `MaxCut`,
+so any heuristic runs on it and `lift` maps the answer back.
 
 **Generic heuristics** — work with every problem type, neighborhood chosen via `neighbor`:
 
@@ -30,15 +37,17 @@ comes with Erdős-Rényi, Barabási-Albert and Watts-Strogatz random generators.
 - `LateAcceptanceHillClimbing`
 - `RandomWalk`
 - `BeamSearch`
+- `PopulationAnnealing` — replica population along an annealing schedule
 - `VariableNeighborhoodSearch` — alternates a search heuristic with increasingly disruptive shakes
 
 **Problem-specific heuristics** — exploit one problem's structure, no `neighbor` argument:
 
 - `WalkSat` — WalkSAT/SKC with optional adaptive noise (`Sat`)
-- `PopulationAnnealing` — replica population along an annealing schedule (`MaxCut`)
 - `BreakoutLocalSearch` — tabu descent with adaptive perturbations (`MaxCut`)
-- `RlBreakoutLocalSearch` — the same, with a contextual bandit picking the perturbation (`MaxCut`)
-- `LinKernighanHelsgaun` — variable-depth edge exchange (`TspWithCoordinates`)
+- `LinKernighanHelsgaun` — variable-depth edge exchange (`Tsp`)
+- `AdaptiveLargeNeighborhoodSearch` — ruin-and-recreate with adaptive operator weights
+  (`Vrp`, `Tsp`)
+- `HybridGeneticSearch` — Vidal's genetic search over giant tours (`Vrp`)
 
 Every heuristic takes a `StopCondition` (`max_iteration`, `max_duration_secs`,
 `max_failed_update`) and supports reproducible multi-run experiments: `run(problem, runs=N,

@@ -1,19 +1,22 @@
 use std::time::Instant;
 
-use optopus::heuristic::{NUM_CONTEXT_FEATURES, PopulationAnnealingForMaxCut};
+use optopus::heuristic::PopulationAnnealing as OptPopulationAnnealing;
 use optopus::prelude::{
-    BangBangSimulatedAnnealing, BeamSearch, BreakoutLocalSearchForMaxCut, EnabledTabu, Evaluate,
-    Heuristic, LateAcceptanceHillClimbing, LinKernighanHelsgaunForTsp, LocalSearch, MoveToNeighbor,
-    ProblemTrait, RandomWalk, Rankable, RlBreakoutLocalSearchForMaxCut, SearchState,
-    SimulatedAnnealing, TabuSearch, VariableNeighborhoodSearch, WalkSatForSat,
+    BangBangSimulatedAnnealing, BeamSearch, EnabledTabu, Evaluate, Heuristic,
+    HybridGeneticSearchForVrp, LateAcceptanceHillClimbing, LinKernighanHelsgaunForTsp, LocalSearch,
+    MoveToNeighbor, ProblemTrait, RandomWalk, Rankable, SearchState, SimulatedAnnealing,
+    TabuSearch, VariableNeighborhoodSearch, WalkSatForSat, alns_for_tsp, alns_for_vrp,
+    bls_for_max_cut,
 };
 use optopus::problem::{
-    FormulaFlipNeighbor, FormulaProblem, FormulaSwapNeighbor, JobShopRelocateNeighbor,
-    JobShopScheduling as OptJobShop, JobShopSwapNeighbor, MaxCut as OptMaxCut, MaxCutFlipNeighbor,
-    MaxCutSwapNeighbor, Qubo as OptQubo, QuboFlipNeighbor, QuboSwapNeighbor, Sat as OptSat,
-    SatFlipNeighbor, SatSwapNeighbor, TspRelocateNeighbor, TspTwoOptNeighbor,
-    TspWithCoordinates as OptTsp, VertexCover as OptVc, VertexCoverFlipNeighbor,
-    VertexCoverSwapNeighbor,
+    FormulaProblem, GraphColoring as OptGraphColoring, GraphColoringRecolorNeighbor,
+    GraphColoringSwapNeighbor, IntChangeNeighbor, IntReverseNeighbor, IntSwapNeighbor,
+    JobShopRelocateNeighbor, JobShopScheduling as OptJobShop, JobShopSwapNeighbor,
+    MaxCut as OptMaxCut, MaxCutFlipNeighbor, MaxCutSwapNeighbor, Qubo as OptQubo, QuboFlipNeighbor,
+    QuboSwapNeighbor, Sat as OptSat, SatFlipNeighbor, SatSwapNeighbor, Tsp as OptTsp,
+    TspRelocateNeighbor, TspTwoOptNeighbor, VertexCover as OptVc, VertexCoverFlipNeighbor,
+    VertexCoverSwapNeighbor, Vrp as OptVrp, VrpRelocateNeighbor, VrpSwapNeighbor,
+    VrpTwoOptNeighbor,
 };
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -21,7 +24,7 @@ use pyo3::types::PyList;
 
 use crate::heuristic as py_heuristic;
 use crate::problem::{
-    Formula, JobShopScheduling, MaxCut, Qubo, Sat, TspWithCoordinates, VertexCover,
+    Formula, GraphColoring, JobShopScheduling, MaxCut, Qubo, Sat, Tsp, VertexCover, Vrp,
 };
 use crate::result::{RunReport, RunResult};
 use crate::stop_condition::StopCondition;
@@ -68,17 +71,7 @@ pub enum HeuristicKind {
         delta_beta: f64,
         sweeps_per_step: usize,
         reset_period: Option<usize>,
-        cluster_moves: bool,
-    },
-    RlBreakoutLocalSearch {
-        tabu_tenure: (u64, u64),
-        t: u64,
-        l0: u64,
-        strength_bins: Vec<f64>,
-        learning_rate: f64,
-        softmax_temperature: f64,
-        exploration: f64,
-        policy_weights: Option<Vec<f64>>,
+        sweep_length: Option<usize>,
     },
     BreakoutLocalSearch {
         tabu_tenure: (u64, u64),
@@ -86,11 +79,21 @@ pub enum HeuristicKind {
         l0: u64,
         p0: f64,
         q: f64,
-        plateau_prob: f64,
     },
     LinKernighanHelsgaun {
         num_neighbors: usize,
         max_depth: usize,
+    },
+    AdaptiveLargeNeighborhoodSearch {
+        removal_fraction: f64,
+        cooling_rate: f64,
+    },
+    HybridGeneticSearch {
+        min_population_size: usize,
+        generation_size: usize,
+        granularity: usize,
+        target_feasible: f64,
+        restart_generations: Option<u64>,
     },
 }
 
@@ -108,9 +111,10 @@ impl HeuristicKind {
             Self::VariableNeighborhoodSearch { .. } => "VariableNeighborhoodSearch",
             Self::WalkSat { .. } => "WalkSat",
             Self::PopulationAnnealing { .. } => "PopulationAnnealing",
-            Self::RlBreakoutLocalSearch { .. } => "RlBreakoutLocalSearch",
             Self::BreakoutLocalSearch { .. } => "BreakoutLocalSearch",
             Self::LinKernighanHelsgaun { .. } => "LinKernighanHelsgaun",
+            Self::AdaptiveLargeNeighborhoodSearch { .. } => "AdaptiveLargeNeighborhoodSearch",
+            Self::HybridGeneticSearch { .. } => "HybridGeneticSearch",
         }
     }
 
@@ -118,10 +122,10 @@ impl HeuristicKind {
     fn only_for(&self) -> Option<&'static str> {
         match self {
             Self::WalkSat { .. } => Some("Sat"),
-            Self::PopulationAnnealing { .. }
-            | Self::RlBreakoutLocalSearch { .. }
-            | Self::BreakoutLocalSearch { .. } => Some("MaxCut"),
-            Self::LinKernighanHelsgaun { .. } => Some("TspWithCoordinates"),
+            Self::BreakoutLocalSearch { .. } => Some("MaxCut"),
+            Self::LinKernighanHelsgaun { .. } => Some("Tsp"),
+            Self::AdaptiveLargeNeighborhoodSearch { .. } => Some("Vrp or Tsp"),
+            Self::HybridGeneticSearch { .. } => Some("Vrp"),
             _ => None,
         }
     }
@@ -142,6 +146,7 @@ type BuildFn<P> = fn(&HeuristicSpec) -> Result<Box<dyn Heuristic<P>>, String>;
 fn build_generic<P, N>(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<P>>, String>
 where
     P: ProblemTrait + 'static,
+    P::Solution: Evaluate,
     N: MoveToNeighbor<P> + Rankable + Evaluate + Clone + EnabledTabu + 'static,
 {
     let cond = spec.stop.to_opt();
@@ -156,7 +161,7 @@ where
             *cooling_rate,
         ))),
         HeuristicKind::TabuSearch { tabu_tenure } => {
-            Ok(Box::new(TabuSearch::<N>::new(cond, *tabu_tenure, None)))
+            Ok(Box::new(TabuSearch::<N>::new(cond, *tabu_tenure)))
         }
         HeuristicKind::LateAcceptance { history_length } => Ok(Box::new(
             LateAcceptanceHillClimbing::<N>::new(cond, *history_length),
@@ -176,6 +181,27 @@ where
         ))),
         HeuristicKind::BeamSearch { beam_width } => {
             Ok(Box::new(BeamSearch::<P, N>::new(cond, *beam_width)))
+        }
+        HeuristicKind::PopulationAnnealing {
+            population_size,
+            initial_beta,
+            delta_beta,
+            sweeps_per_step,
+            reset_period,
+            sweep_length,
+        } => {
+            let pa = OptPopulationAnnealing::<P, N>::new(
+                cond,
+                *population_size,
+                *initial_beta,
+                *delta_beta,
+                *sweeps_per_step,
+                *reset_period,
+            );
+            Ok(Box::new(match sweep_length {
+                Some(length) => pa.with_sweep_length(*length),
+                None => pa,
+            }))
         }
         other => Err(unsupported(other)),
     }
@@ -246,7 +272,6 @@ fn build_max_cut(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptMaxCut>>, 
     if let Some(result) = build_nested(spec, build_max_cut) {
         return result;
     }
-    let cond = spec.stop.to_opt();
     match &spec.kind {
         HeuristicKind::BreakoutLocalSearch {
             tabu_tenure,
@@ -254,65 +279,14 @@ fn build_max_cut(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptMaxCut>>, 
             l0,
             p0,
             q,
-            plateau_prob,
-        } => Ok(Box::new(BreakoutLocalSearchForMaxCut::new(
-            cond,
+        } => Ok(Box::new(bls_for_max_cut(
+            spec.stop.to_opt(),
             *tabu_tenure,
             *t,
             *l0,
             *p0,
             *q,
-            *plateau_prob,
         ))),
-        HeuristicKind::PopulationAnnealing {
-            population_size,
-            initial_beta,
-            delta_beta,
-            sweeps_per_step,
-            reset_period,
-            cluster_moves,
-        } => Ok(Box::new(PopulationAnnealingForMaxCut::new(
-            cond,
-            *population_size,
-            *initial_beta,
-            *delta_beta,
-            *sweeps_per_step,
-            *reset_period,
-            *cluster_moves,
-        ))),
-        HeuristicKind::RlBreakoutLocalSearch {
-            tabu_tenure,
-            t,
-            l0,
-            strength_bins,
-            learning_rate,
-            softmax_temperature,
-            exploration,
-            policy_weights,
-        } => {
-            let mut rl = RlBreakoutLocalSearchForMaxCut::new(
-                cond,
-                *tabu_tenure,
-                *t,
-                *l0,
-                strength_bins.clone(),
-                *learning_rate,
-                *softmax_temperature,
-                *exploration,
-            );
-            if let Some(weights) = policy_weights {
-                let expected = rl.num_actions() * NUM_CONTEXT_FEATURES;
-                if weights.len() != expected {
-                    return Err(format!(
-                        "'policy_weights' must have {expected} entries for {} strength bins, got {}",
-                        strength_bins.len(),
-                        weights.len()
-                    ));
-                }
-                rl = rl.with_policy_weights(weights.clone());
-            }
-            Ok(Box::new(rl))
-        }
         _ => match spec.neighbor.as_str() {
             "Flip" => build_generic::<OptMaxCut, MaxCutFlipNeighbor>(spec),
             "Swap" => build_generic::<OptMaxCut, MaxCutSwapNeighbor>(spec),
@@ -374,14 +348,18 @@ fn build_tsp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptTsp>>, String>
             *num_neighbors,
             *max_depth,
         ))),
+        HeuristicKind::AdaptiveLargeNeighborhoodSearch {
+            removal_fraction,
+            cooling_rate,
+        } => Ok(Box::new(alns_for_tsp(
+            spec.stop.to_opt(),
+            *removal_fraction,
+            *cooling_rate,
+        ))),
         _ => match spec.neighbor.as_str() {
             "TwoOpt" => build_generic::<OptTsp, TspTwoOptNeighbor>(spec),
             "Relocate" => build_generic::<OptTsp, TspRelocateNeighbor>(spec),
-            _ => Err(neighbor_error(
-                spec,
-                "TspWithCoordinates",
-                "'TwoOpt' or 'Relocate'",
-            )),
+            _ => Err(neighbor_error(spec, "Tsp", "'TwoOpt' or 'Relocate'")),
         },
     }
 }
@@ -401,14 +379,75 @@ fn build_job_shop(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptJobShop>>
     }
 }
 
+fn build_vrp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVrp>>, String> {
+    if let Some(result) = build_nested(spec, build_vrp) {
+        return result;
+    }
+    let cond = spec.stop.to_opt();
+    match &spec.kind {
+        HeuristicKind::AdaptiveLargeNeighborhoodSearch {
+            removal_fraction,
+            cooling_rate,
+        } => Ok(Box::new(alns_for_vrp(
+            cond,
+            *removal_fraction,
+            *cooling_rate,
+        ))),
+        HeuristicKind::HybridGeneticSearch {
+            min_population_size,
+            generation_size,
+            granularity,
+            target_feasible,
+            restart_generations,
+        } => Ok(Box::new(HybridGeneticSearchForVrp::new(
+            cond,
+            *min_population_size,
+            *generation_size,
+            *granularity,
+            *target_feasible,
+            *restart_generations,
+        ))),
+        _ => match spec.neighbor.as_str() {
+            "Relocate" => build_generic::<OptVrp, VrpRelocateNeighbor>(spec),
+            "Swap" => build_generic::<OptVrp, VrpSwapNeighbor>(spec),
+            "TwoOpt" => build_generic::<OptVrp, VrpTwoOptNeighbor>(spec),
+            _ => Err(neighbor_error(
+                spec,
+                "Vrp",
+                "'Relocate', 'Swap' or 'TwoOpt'",
+            )),
+        },
+    }
+}
+
 fn build_formula(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<FormulaProblem>>, String> {
     if let Some(result) = build_nested(spec, build_formula) {
         return result;
     }
     match spec.neighbor.as_str() {
-        "Flip" => build_generic::<FormulaProblem, FormulaFlipNeighbor>(spec),
-        "Swap" => build_generic::<FormulaProblem, FormulaSwapNeighbor>(spec),
-        _ => Err(neighbor_error(spec, "Formula", "'Flip' or 'Swap'")),
+        // On a binary variable an integer change *is* a flip, which upstream says in as many
+        // words, so "Flip" stays accepted as the name it had before the integer layer.
+        "Change" | "Flip" => build_generic::<FormulaProblem, IntChangeNeighbor>(spec),
+        "Swap" => build_generic::<FormulaProblem, IntSwapNeighbor>(spec),
+        "Reverse" => build_generic::<FormulaProblem, IntReverseNeighbor>(spec),
+        _ => Err(neighbor_error(
+            spec,
+            "Formula",
+            "'Change' (or its alias 'Flip'), 'Swap' or 'Reverse'",
+        )),
+    }
+}
+
+fn build_graph_coloring(
+    spec: &HeuristicSpec,
+) -> Result<Box<dyn Heuristic<OptGraphColoring>>, String> {
+    if let Some(result) = build_nested(spec, build_graph_coloring) {
+        return result;
+    }
+    match spec.neighbor.as_str() {
+        "Recolor" => build_generic::<OptGraphColoring, GraphColoringRecolorNeighbor>(spec),
+        "Swap" => build_generic::<OptGraphColoring, GraphColoringSwapNeighbor>(spec),
+        _ => Err(neighbor_error(spec, "GraphColoring", "'Recolor' or 'Swap'")),
     }
 }
 
@@ -480,6 +519,16 @@ fn decode_usizes(x: &[usize], py: Python<'_>) -> Py<PyAny> {
     PyList::new(py, x).unwrap().into()
 }
 
+fn decode_i64s(x: &[i64], py: Python<'_>) -> Py<PyAny> {
+    PyList::new(py, x).unwrap().into()
+}
+
+/// Decodes a VRP route partition into a `list[list[int]]`.
+fn decode_routes(routes: &[Vec<usize>], py: Python<'_>) -> Py<PyAny> {
+    let rows: Vec<Py<PyAny>> = routes.iter().map(|r| decode_usizes(r, py)).collect();
+    PyList::new(py, rows).unwrap().into()
+}
+
 /// Rebuilds a `HeuristicSpec` from any heuristic instance handed in from Python.
 ///
 /// Used by `VariableNeighborhoodSearch`, whose search and shake steps are
@@ -506,9 +555,10 @@ pub fn spec_from_py(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Heuristi
         VariableNeighborhoodSearch,
         WalkSat,
         PopulationAnnealing,
-        RlBreakoutLocalSearch,
         BreakoutLocalSearch,
         LinKernighanHelsgaun,
+        AdaptiveLargeNeighborhoodSearch,
+        HybridGeneticSearch,
     );
 
     Err(PyTypeError::new_err(
@@ -567,7 +617,7 @@ pub fn solve(
             |s| s.objective as f64,
             |s, py| decode_bools(&s.x, py),
         )
-    } else if let Ok(t) = problem.extract::<PyRef<'_, TspWithCoordinates>>() {
+    } else if let Ok(t) = problem.extract::<PyRef<'_, Tsp>>() {
         run_all(
             &t.inner,
             || build_tsp(spec),
@@ -587,21 +637,44 @@ pub fn solve(
             |s| s.objective as f64,
             |s, py| decode_usizes(&s.operations, py),
         )
+    } else if let Ok(v) = problem.extract::<PyRef<'_, Vrp>>() {
+        run_all(
+            &v.inner,
+            || build_vrp(spec),
+            true,
+            runs,
+            seed,
+            |s| s.objective,
+            |s, py| decode_routes(&s.routes, py),
+        )
+    } else if let Ok(g) = problem.extract::<PyRef<'_, GraphColoring>>() {
+        run_all(
+            &g.inner,
+            || build_graph_coloring(spec),
+            true,
+            runs,
+            seed,
+            |s| s.objective as f64,
+            |s, py| decode_usizes(&s.colors, py),
+        )
     } else if let Ok(f) = problem.extract::<PyRef<'_, Formula>>() {
-        // FormulaSolution.score is direction-corrected (higher is always better);
-        // the runner-level objective is therefore tracked as maximization.
+        // A FormulaSolution reports its objective as an `Evaluable`, whose `minimized()` is the
+        // value with the direction already applied. Negating it recovers the
+        // direction-corrected score the report has always published, where higher is better --
+        // so the runner tracks it as a maximization whichever way the formula optimizes.
         run_all(
             &f.inner,
             || build_formula(spec),
             false,
             runs,
             seed,
-            |s| s.score,
-            |s, py| decode_bools(&s.x, py),
+            // Subtracting rather than negating keeps a zero objective reported as 0.0.
+            |s| 0.0 - s.evaluate().minimized(),
+            |s, py| decode_i64s(s.values(), py),
         )
     } else {
         return Err(PyTypeError::new_err(
-            "problem must be a MaxCut, Qubo, Sat, VertexCover, TspWithCoordinates, JobShopScheduling, or Formula instance",
+            "problem must be a MaxCut, Qubo, Sat, VertexCover, Tsp, JobShopScheduling, Vrp, GraphColoring, or Formula instance",
         ));
     };
 

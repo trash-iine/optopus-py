@@ -12,10 +12,16 @@ pub struct RunResult {
     ///
     /// Shape depends on the problem:
     ///
-    /// - ``MaxCut`` / ``Qubo`` / ``Sat`` / ``VertexCover`` / ``Formula`` →
-    ///   ``list[bool]`` of length *number of variables/vertices*.
-    /// - ``TspWithCoordinates`` → ``list[int]`` permutation of city indices.
+    /// - ``MaxCut`` / ``Qubo`` / ``Sat`` / ``VertexCover`` → ``list[bool]`` of length
+    ///   *number of variables/vertices*.
+    /// - ``Tsp`` → ``list[int]`` permutation of city indices.
     /// - ``JobShopScheduling`` → ``list[int]`` operation sequence.
+    /// - ``Vrp`` → ``list[list[int]]``, one route of customer indices per vehicle. The list
+    ///   has ``Vrp.num_vehicles()`` entries, the depot is implicit at both ends of each
+    ///   route, and empty routes may appear.
+    /// - ``GraphColoring`` → ``list[int]``, each vertex's color in ``[0, num_colors)``.
+    /// - ``Formula`` → ``list[int]``, one value per variable. Binary variables report 0 and 1,
+    ///   which compare equal to ``False`` and ``True``.
     #[pyo3(get)]
     pub solution: Py<PyAny>,
     /// Iteration at which the best solution was found.

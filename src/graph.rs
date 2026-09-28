@@ -8,9 +8,19 @@ use pyo3::prelude::*;
 /// the bound `Graph::with_random_weights` enforces on its weight range.
 const MAX_EXACT_F32_INT: u64 = 1 << 24;
 
+/// Rejects a torus side length that upstream would assert on.
+fn check_torus_side(l: usize) -> PyResult<()> {
+    if l < 3 {
+        return Err(PyValueError::new_err(format!(
+            "'l' must be at least 3, got {l}"
+        )));
+    }
+    Ok(())
+}
+
 /// Resolves the seed for a generator call. `None` draws a fresh one from the
 /// clock, so unseeded calls vary between runs while seeded ones reproduce.
-fn resolve_seed(seed: Option<u64>) -> u64 {
+pub(crate) fn resolve_seed(seed: Option<u64>) -> u64 {
     seed.unwrap_or_else(|| {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -150,6 +160,50 @@ impl Graph {
         let mut rng = seeded_rng(resolve_seed(seed));
         Ok(Self {
             inner: OptGraph::watts_strogatz(n, k, beta, &mut rng),
+        })
+    }
+
+    /// The 2D periodic square lattice (torus): ``l * l`` vertices, ``2 * l * l`` edges,
+    /// 4-regular, every weight 1.0.
+    ///
+    /// The same topology as the G-set's toroidal group (G11, G32, G48, G81). Chain
+    /// :meth:`with_random_weights` to draw integer weights instead.
+    ///
+    /// Args:
+    ///     l (int): Side length (``>= 3``).
+    ///
+    /// Returns:
+    ///     Graph: The lattice, with vertex ``m + l * n`` at grid position ``(m, n)``.
+    ///
+    /// Raises:
+    ///     ValueError: If ``l < 3``.
+    #[staticmethod]
+    fn grid_torus_2d(l: usize) -> PyResult<Self> {
+        check_torus_side(l)?;
+        Ok(Self {
+            inner: OptGraph::grid_torus_2d(l),
+        })
+    }
+
+    /// The 3D periodic cubic lattice (torus): ``l ** 3`` vertices, ``3 * l ** 3`` edges,
+    /// 6-regular, every weight 1.0.
+    ///
+    /// Chain :meth:`with_random_weights` to draw integer weights instead.
+    ///
+    /// Args:
+    ///     l (int): Side length (``>= 3``).
+    ///
+    /// Returns:
+    ///     Graph: The lattice, with vertex ``m + l * n + l * l * k`` at grid position
+    ///     ``(m, n, k)``.
+    ///
+    /// Raises:
+    ///     ValueError: If ``l < 3``.
+    #[staticmethod]
+    fn grid_torus_3d(l: usize) -> PyResult<Self> {
+        check_torus_side(l)?;
+        Ok(Self {
+            inner: OptGraph::grid_torus_3d(l),
         })
     }
 

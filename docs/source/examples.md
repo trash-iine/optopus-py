@@ -81,10 +81,7 @@ heuristics = {
         stop=stop,
     ),
     "BreakoutLocalSearch": optopus.BreakoutLocalSearch(
-        tabu_tenure=(3, 50), t=1_000, l0=20, p0=0.8, q=0.5, stop=stop
-    ),
-    "RlBreakoutLocalSearch": optopus.RlBreakoutLocalSearch(
-        tabu_tenure=(3, 50), t=1_000, l0=20, stop=stop
+        tabu_tenure=(6, 100), t=1_000, l0=20, p0=0.8, q=0.5, stop=stop
     ),
     "PopulationAnnealing": optopus.PopulationAnnealing(population_size=20, stop=stop),
 }
@@ -119,3 +116,65 @@ b = optopus.TabuSearch(neighbor="Flip", tabu_tenure=(3, 7), stop=stop).run(mc, r
 
 assert a.best_objective == b.best_objective  # identical with the same seed
 ```
+
+## Measuring the rate of reaching the optimum
+
+On a random instance you cannot tell a good result from an optimal one. `PlantedMaxCut` builds
+instances whose optimum it knows exactly, which turns "how often does this heuristic succeed?"
+into a countable question.
+
+```python
+import optopus
+
+# Integer couplers make the optimum survive the f32 objective exactly, so the hit test is
+# an equality rather than a judgement call about rounding.
+planted = optopus.PlantedMaxCut.wishart(64, 0.75, couplers="Discrete", seed=1)
+planted.verify()
+assert planted.has_exact_optimum()
+
+bls = optopus.BreakoutLocalSearch(
+    tabu_tenure=(6, 12), t=1_000, l0=10, p0=0.8, q=0.5,
+    stop=optopus.StopCondition(max_iteration=50_000),
+)
+report = bls.run(planted.problem(), runs=20, seed=42)
+
+hits = sum(1 for r in report.runs if r.best_objective == planted.optimum())
+print(f"reached the optimum in {hits}/{len(report.runs)} runs")
+print(f"best {report.best_objective} vs optimum {planted.optimum()}")
+```
+
+`PlantedMaxCut.tile_planting_2d(l, p1, p2, p3)` and `tile_planting_3d(l, p_2fp, p_4fp)` plant
+instances on periodic lattices instead, where the tile-class probabilities tune the hardness.
+
+## Solving through a kernel
+
+`MaxCutKernel` applies exact reduction rules — isolated and pendant vertices, degree-2 paths,
+weight domination — until none fire. The kernel is an ordinary `MaxCut`, so the heuristic does
+not change; only the instance it sees gets smaller.
+
+```python
+import optopus
+
+mc = optopus.MaxCut.from_graph(
+    optopus.Graph.barabasi_albert(2_000, 2, seed=7).with_random_weights((1, 10), seed=7)
+)
+
+kernel = optopus.MaxCutKernel.reduce(mc)
+print(f"removed {kernel.removed_vertices()} vertices, offset {kernel.offset()}")
+
+stop = optopus.StopCondition(max_iteration=100_000)
+if kernel.is_trivial():
+    # Regular and dense graphs reduce to themselves; skip the indirection.
+    report = optopus.LocalSearch("Flip", stop).run(mc, runs=4, seed=1)
+    best, assignment = report.best_objective, report.runs[0].solution
+else:
+    report = optopus.LocalSearch("Flip", stop).run(kernel.kernel(), runs=4, seed=1)
+    best = report.best_objective + kernel.offset()
+    assignment = kernel.lift(report.runs[0].solution)
+
+print(f"cut {best} over {len(assignment)} vertices")
+```
+
+The invariant is `kernel_cut(y) + offset == original_cut(lift(y))` for every kernel assignment
+`y`, so the lifted solution is exactly as good as the reported value claims. `project` goes the
+other way, restricting a full assignment to the kernel for a warm start.
