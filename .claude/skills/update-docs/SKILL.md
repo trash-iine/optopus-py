@@ -18,7 +18,7 @@ Do every item that applies:
   in the matching section of `docs/source/api_reference.md`.
 - **New page**: step 2.
 - **Editing an existing page**: go straight to step 3.
-- **Recording a design decision**: use the `/adr` skill instead.
+- **Recording a design decision**: not user documentation; use the `/adr` skill (`docs/adr/`).
 
 ## 2. Add a page
 

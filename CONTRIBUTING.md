@@ -82,10 +82,11 @@ is a digest of this document for AI agents; where the two disagree, this documen
 ## Architecture decision records (ADRs)
 
 - Decisions about conventions, tooling, dependency choices or architecture — anything someone will
-  later ask "why is it like this?" about — are recorded as ADRs in `docs/source/adr/`. This
+  later ask "why is it like this?" about — are recorded as ADRs in `docs/adr/`. This
   document holds the rules; ADRs hold the reasoning and the rejected options.
 - Create one with `uv run invoke adr <slug> --title "<title>"` (slug in kebab-case). Numbering and
-  the template are handled for you, and `docs/source/adr/index.md` picks the file up by glob.
+  the template are handled for you.
+- ADRs are for contributors and stay out of `docs/source/`, which is the user documentation.
 - Sections: Context / Options considered / Decision / Consequences. List only options that were
   actually compared.
 - Status is one of `Proposed`, `Accepted`, `Deprecated`, `Superseded by NNNN`. Do not rewrite an

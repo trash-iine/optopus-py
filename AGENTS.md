@@ -13,8 +13,9 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
 - `vendor/optopus/` — the Rust core as a git submodule and path dependency. Do not edit it here.
 - `tests/` — pytest suites run against the built extension; `tests/test_tasks.py` covers
   `tasks.py`.
-- `docs/source/` — Sphinx + MyST pages; `docs/source/adr/` holds Architecture Decision Records
-  (`NNNN-<slug>.md`). Read the ADRs before proposing changes to tooling or conventions.
+- `docs/source/` — the user documentation (Sphinx + MyST), published to GitHub Pages.
+- `docs/adr/` — Architecture Decision Records (`NNNN-<slug>.md`) for contributors, kept out of the
+  published docs. Read them before proposing changes to tooling or conventions.
 - `tasks.py` — Invoke tasks that bundle several steps: `ci`, `fix`, `docs`, `adr`, `set-version`,
   `check-version`. Do not add single-command wrappers (ADR 0002).
 - `.github/workflows/` — `ci.yml` (rust, lint, python matrix), `docs.yml` (Pages deploy),

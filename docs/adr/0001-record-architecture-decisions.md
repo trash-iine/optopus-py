@@ -17,19 +17,24 @@ may break a rule without knowing what it protects.
   history, and recording rejected options bloats it further.
 - **Keep relying on PR descriptions and commit messages**: already happens, but the reasoning is
   split per PR and hard to find later.
-- **ADRs under `docs/source/adr/`**: one file per decision, published with the Sphinx docs, and
-  scaffolded by `invoke adr`. This is what python-project-template, which this repository is
-  based on, does.
+- **ADRs inside the Sphinx site (`docs/source/adr/`)**, as python-project-template, which this
+  repository is based on, does: one file per decision, scaffolded by `invoke adr`, and checked by
+  the strict docs build. But the published site is documentation for users of the package, and
+  records about development practice do not belong in it.
+- **ADRs under `docs/adr/`, outside the Sphinx source**: the same files and `invoke adr`, read on
+  GitHub next to CONTRIBUTING.md instead of on the published site.
 
 ## Decision
 
-Use ADRs. Each is `docs/source/adr/NNNN-<slug>.md` with the sections Context / Options considered /
-Decision / Consequences, created with `uv run invoke adr <slug> --title "<title>"`. CONTRIBUTING.md
-holds the rules, ADRs hold the reasons.
+Use ADRs, kept outside the Sphinx source. Each is `docs/adr/NNNN-<slug>.md` with the sections
+Context / Options considered / Decision / Consequences, created with
+`uv run invoke adr <slug> --title "<title>"`. CONTRIBUTING.md holds the rules, ADRs hold the
+reasons.
 
 ## Consequences
 
 - A PR that changes development rules, tooling, dependency choices or architecture adds an ADR.
 - Accepted ADRs are not rewritten. A changed decision gets a new ADR, and the old one's status
   becomes `Superseded by NNNN`.
-- ADRs are part of the Sphinx site, so `invoke docs --strict` checks them.
+- ADRs are for contributors, so they stay outside `docs/source/`: the published Sphinx site is
+  documentation for users of the package.

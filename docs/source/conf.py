@@ -21,8 +21,7 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-# `invoke adr` expands adr/_template.md; it is not a page of its own.
-exclude_patterns = ["adr/_template.md"]
+exclude_patterns = []
 
 # Render single backticks (used Markdown-style in the Rust /// docstrings) as
 # inline code rather than reStructuredText title references.

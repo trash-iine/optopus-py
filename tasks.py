@@ -11,7 +11,7 @@ from invoke import task
 
 ROOT = Path(__file__).parent
 DOCS_BUILD = ROOT / "docs" / "build"
-ADR_DIR = ROOT / "docs" / "source" / "adr"
+ADR_DIR = ROOT / "docs" / "adr"
 ADR_TEMPLATE = ADR_DIR / "_template.md"
 ADR_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 ADR_GLOB = "[0-9][0-9][0-9][0-9]-*.md"
@@ -139,7 +139,7 @@ def adr(c, slug, title=""):
     today = dt.datetime.now(tz=dt.timezone.utc).date()
     path.write_text(render_adr(ADR_TEMPLATE.read_text(), number, title or slug, today))
     print(f"Created {path.relative_to(ROOT)}")
-    print("Fill in the sections, then run `uv run invoke docs --strict` to check the build.")
+    print("Fill in the sections.")
 
 
 @task(

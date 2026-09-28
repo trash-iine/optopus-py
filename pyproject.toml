@@ -87,7 +87,7 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-# A bug-finding set rather than "ALL"; see docs/source/adr/0003-adopt-a-moderate-ruff-rule-set.md.
+# A bug-finding set rather than "ALL"; see docs/adr/0003-adopt-a-moderate-ruff-rule-set.md.
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings

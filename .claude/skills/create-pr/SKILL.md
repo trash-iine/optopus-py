@@ -34,7 +34,7 @@ Follow the `/quality-check` skill (`uv run invoke ci`) and continue only once ev
 - Development rules changed? Make sure `CONTRIBUTING.md`, `AGENTS.md` and the affected skills are
   updated in this PR.
 - A decision about conventions, tooling, dependencies or architecture? Make sure an ADR exists in
-  `docs/source/adr/`; if not, create one with the `/adr` skill.
+  `docs/adr/`; if not, create one with the `/adr` skill.
 
 ## 4. Push and open the PR
 
