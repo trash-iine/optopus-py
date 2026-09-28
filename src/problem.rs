@@ -472,7 +472,9 @@ impl Qubo {
     /// Build a QUBO instance from matrix entries.
     ///
     /// Diagonal entries ``(i, i, c)`` are the linear terms; off-diagonal entries
-    /// ``(i, j, c)`` are the quadratic interaction terms.
+    /// ``(i, j, c)`` are the quadratic interaction terms. ``(i, j)`` and ``(j, i)`` name the
+    /// same coefficient, and an entry given twice replaces the earlier one rather than adding
+    /// to it, so sum the terms of a pair into one entry first.
     ///
     /// Args:
     ///     entries (list[tuple[int, int, int]]): Matrix entries ``(i, j, coefficient)``

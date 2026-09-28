@@ -162,20 +162,8 @@ problem that defines the ruin methods.
 
 ### Neighborhoods
 
-Generic heuristics take the neighborhood as a string. The accepted values per problem:
-
-| Problem | `neighbor` |
-|---|---|
-| `MaxCut`, `Qubo`, `Sat`, `VertexCover` | `"Flip"`, `"Swap"` |
-| `Tsp` | `"TwoOpt"`, `"Relocate"` |
-| `JobShopScheduling` | `"Swap"`, `"Relocate"` |
-| `Vrp` | `"Relocate"`, `"Swap"`, `"TwoOpt"` |
-| `GraphColoring` | `"Recolor"`, `"Swap"` |
-| `Formula` | `"Change"` (alias `"Flip"`), `"Swap"`, `"Reverse"` |
-
-`Vrp`'s `"TwoOpt"` reverses a segment within one route, so on its own it cannot move a customer
-between vehicles; pair it with `"Relocate"` or `"Swap"` through
-`VariableNeighborhoodSearch` to do both.
+Generic heuristics take the neighborhood as a string. The accepted values and what each move
+does are listed per problem in [Neighborhoods](problems.md#neighborhoods).
 
 ## Stop condition
 
@@ -186,7 +174,9 @@ between vehicles; pair it with `"Relocate"` or `"Swap"` through
 
 ## Results
 
-Every `run` call returns a `RunReport` aggregating one or more `RunResult` entries.
+Every `run` call returns a `RunReport` aggregating one or more `RunResult` entries. What the
+objective values mean for each problem, penalties included, is in
+[What a run reports](problems.md#what-a-run-reports).
 
 ```{eval-rst}
 .. autoclass:: optopus.RunReport

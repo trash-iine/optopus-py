@@ -61,6 +61,13 @@ entries below are breaking; see **Changed** and **Removed**.
   assignment without running a search.
 - The Sphinx documentation is now published to GitHub Pages at
   <https://trash-iine.github.io/optopus-py/>, rebuilt from `main` on every push.
+- Three guide pages in the documentation. "Built-in problems" compares the problems, the
+  constraints each penalizes itself and what a run reports for each, including that
+  `best_objective` carries the penalty for `VertexCover`, `Vrp`, `GraphColoring` and `Formula`
+  and that a minimizing `Formula` reports it negated. "Modeling with Formula" covers the
+  polynomial and constraint format, how a violation is penalized and how to choose a penalty
+  weight. "Choosing a heuristic" covers which heuristic to use, what one iteration costs and how
+  to set the main parameters.
 
 ### Changed
 

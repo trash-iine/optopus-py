@@ -31,11 +31,9 @@ fn check_positive(name: &str, value: f64) -> PyResult<()> {
 /// Greedy best-improving local search; halts at a local optimum.
 ///
 /// Args:
-///     neighbor (str): Neighborhood move, ``"Flip"`` (flip a single
-///         variable/vertex) or ``"Swap"`` (swap the values of two
-///         variables/vertices). ``"Swap"`` preserves the number of set bits, so
-///         it explores a constrained neighborhood; ``"Flip"`` is the usual
-///         default. An unknown value raises ``ValueError`` when ``run`` is called.
+///     neighbor (str): Neighborhood move by name, such as ``"Flip"``. The accepted names
+///         depend on the problem, see the neighborhoods table on the "Built-in problems"
+///         page. An unknown value raises ``ValueError`` when ``run`` is called.
 ///     stop (StopCondition): Stopping criterion.
 #[pyclass(module = "optopus")]
 pub struct LocalSearch {
@@ -89,8 +87,9 @@ impl LocalSearch {
 /// Simulated annealing with ``exp(-Δ/T)`` acceptance and multiplicative cooling.
 ///
 /// Args:
-///     neighbor (str): Neighborhood move, ``"Flip"`` or ``"Swap"`` (see
-///         ``LocalSearch`` for the difference).
+///     neighbor (str): Neighborhood move by name, such as ``"Flip"``. The accepted names
+///         depend on the problem, see the neighborhoods table on the "Built-in problems"
+///         page. An unknown value raises ``ValueError`` when ``run`` is called.
 ///     initial_temperature (float): Starting temperature ``T``.
 ///     cooling_rate (float): Multiplicative cooling factor applied each step
 ///         (e.g. ``0.99``).
@@ -162,8 +161,9 @@ impl SimulatedAnnealing {
 /// Tabu search; best non-tabu neighbor with aspiration on global-best improvement.
 ///
 /// Args:
-///     neighbor (str): Neighborhood move, ``"Flip"`` or ``"Swap"`` (see
-///         ``LocalSearch`` for the difference).
+///     neighbor (str): Neighborhood move by name, such as ``"Flip"``. The accepted names
+///         depend on the problem, see the neighborhoods table on the "Built-in problems"
+///         page. An unknown value raises ``ValueError`` when ``run`` is called.
 ///     tabu_tenure (tuple[int, int]): Tabu tenure range ``(min, max)``.
 ///     stop (StopCondition): Stopping criterion.
 #[pyclass(module = "optopus")]
@@ -226,8 +226,9 @@ impl TabuSearch {
 /// ``history_length`` steps ago.
 ///
 /// Args:
-///     neighbor (str): Neighborhood move, ``"Flip"`` or ``"Swap"`` (see
-///         ``LocalSearch`` for the difference).
+///     neighbor (str): Neighborhood move by name, such as ``"Flip"``. The accepted names
+///         depend on the problem, see the neighborhoods table on the "Built-in problems"
+///         page. An unknown value raises ``ValueError`` when ``run`` is called.
 ///     history_length (int): Length of the acceptance history (``>= 1``).
 ///     stop (StopCondition): Stopping criterion.
 #[pyclass(module = "optopus")]
