@@ -160,9 +160,9 @@ Find the shortest closed tour through every city. Build it from `(x, y)` coordin
 explicit distance matrix, or a TSPLIB file with `load_file`. The solution lists the cities in
 visiting order; the return to the first city is implied.
 
-A distance matrix must be symmetric. The moves price a reversed segment from the edges at its
-ends, which is only right when a segment is as long in both directions; an asymmetric matrix
-makes the reported length drift from the real one.
+A distance matrix must be symmetric, finite and non-negative, and anything else raises
+`ValueError`. The moves price a reversed segment from the edges at its ends, which is only
+right when a segment is as long in both directions.
 
 ### JobShopScheduling
 
@@ -188,8 +188,9 @@ choose, packing the demands by first-fit decreasing and adding 10%; read the res
 capacity, is not an error: the search returns its best solution with `overload > 0`, so check
 the overload before using the routes.
 
-A distance matrix must be symmetric, for the reason given under `Tsp`; `matrix[i][j]` is the
-distance between nodes `i` and `j`. The depot's demand is ignored.
+A distance matrix must be symmetric, finite and non-negative, as for `Tsp`; `matrix[i][j]` is
+the distance between nodes `i` and `j`. Demands must not be negative, and the depot's demand is
+ignored.
 
 ### GraphColoring
 
