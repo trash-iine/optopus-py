@@ -32,15 +32,11 @@ def stop(iterations):
 
 
 def clustered_vrp():
-    return optopus.Vrp.from_coordinates(
-        VRP_CLUSTERS, VRP_DEMANDS, capacity=15, num_vehicles=2
-    )
+    return optopus.Vrp.from_coordinates(VRP_CLUSTERS, VRP_DEMANDS, capacity=15, num_vehicles=2)
 
 
 def single_route_vrp():
-    return optopus.Vrp.from_coordinates(
-        VRP_SINGLE_ROUTE, [0, 1, 1, 1], capacity=10, num_vehicles=1
-    )
+    return optopus.Vrp.from_coordinates(VRP_SINGLE_ROUTE, [0, 1, 1, 1], capacity=10, num_vehicles=1)
 
 
 def test_maxcut_simulated_annealing():
@@ -398,16 +394,16 @@ def test_planted_maxcut_rejects_unknown_couplers():
 # --- Torus lattices ---------------------------------------------------------
 
 
-@pytest.mark.parametrize("l", [3, 4, 5])
-def test_graph_grid_torus_2d(l):
-    g = optopus.Graph.grid_torus_2d(l)
-    assert (g.num_vertices(), g.num_edges()) == (l * l, 2 * l * l)
+@pytest.mark.parametrize("side", [3, 4, 5])
+def test_graph_grid_torus_2d(side):
+    g = optopus.Graph.grid_torus_2d(side)
+    assert (g.num_vertices(), g.num_edges()) == (side * side, 2 * side * side)
 
 
-@pytest.mark.parametrize("l", [3, 4])
-def test_graph_grid_torus_3d(l):
-    g = optopus.Graph.grid_torus_3d(l)
-    assert (g.num_vertices(), g.num_edges()) == (l**3, 3 * l**3)
+@pytest.mark.parametrize("side", [3, 4])
+def test_graph_grid_torus_3d(side):
+    g = optopus.Graph.grid_torus_3d(side)
+    assert (g.num_vertices(), g.num_edges()) == (side**3, 3 * side**3)
 
 
 def test_grid_torus_accepts_random_weights():

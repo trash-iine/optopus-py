@@ -65,6 +65,47 @@ dev = [
     "sphinx==8.2.3",      # docs generator (myst-parser v4 is not yet supported on sphinx v9+)
     "furo>=2025.12.19",   # docs theme
     "myst-parser>=4.0.1", # author docs in Markdown (MyST)
+    # lint / format
+    "ruff>=0.16.9",
     # task runner
     "invoke>=2.2.1",
+    # git hooks
+    "pre-commit>=4.6.2", # runs fast auto-fixing hooks before each commit
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Lets tests import `tasks.py` from the repository root.
+pythonpath = ["."]
+
+[tool.ruff]
+# Matches rustfmt's default max_width, so Rust and Python wrap at the same column.
+line-length = 100
+extend-exclude = [
+    "vendor", # the optopus submodule is linted upstream
+    "*.md",   # code blocks in the docs are hand-aligned for reading
+]
+
+[tool.ruff.lint]
+# A bug-finding set rather than "ALL"; see docs/source/adr/0003-adopt-a-moderate-ruff-rule-set.md.
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "PT",  # flake8-pytest-style
+    "RUF", # Ruff-specific rules
+]
+ignore = [
+    # Parametrized tests check that several bad inputs each raise ValueError; their
+    # messages differ per case, so a single `match=` does not fit.
+    "PT011",
+]
+
+[tool.ruff.lint.isort]
+# The package is built from Rust, so ruff cannot find it on disk to classify it.
+known-first-party = ["optopus"]
