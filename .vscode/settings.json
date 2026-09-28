@@ -1,7 +1,0 @@
-{
-  "ruff.enable": true,
-  "ruff.path": [
-    "${workspaceFolder}/.venv/bin/ruff",
-    "ruff"
-  ]
-}

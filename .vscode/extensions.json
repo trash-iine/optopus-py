@@ -1,9 +1,0 @@
-{
-  "recommendations": [
-    "rust-lang.rust-analyzer",
-    "tamasfe.even-better-toml",
-    "charliermarsh.ruff",
-    "ms-python.python",
-    "ms-python.vscode-python-envs"
-  ]
-}
