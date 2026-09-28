@@ -20,8 +20,10 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
   `check-version`. Do not add single-command wrappers (ADR 0002).
 - `.github/workflows/` — `ci.yml` (rust, lint, python matrix), `docs.yml` (Pages deploy),
   `release.yml` (wheels on `v*` tags).
-- `.claude/skills/` — `/quality-check`, `/create-pr`, `/update-docs`, `/adr`, `/release`. Keep them
-  in sync with `CONTRIBUTING.md` and this file when rules change.
+- `.claude/skills/` — `/quality-check`, `/create-pr`, `/update-docs`, `/adr`, `/release`,
+  `/port-to-rust`. Keep them in sync with `CONTRIBUTING.md` and this file when rules change;
+  `/port-to-rust`'s API map and run loop also follow `src/*.rs` (CONTRIBUTING.md, "Claude Code
+  skills").
 
 ## Commands
 - Setup: `git submodule update --init`, `uv sync --dev`, then `uv run pre-commit install` once.

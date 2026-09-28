@@ -132,6 +132,13 @@ session in this repository.
 | `/update-docs` | Add or edit doc pages and verify the strict build |
 | `/adr` | Record a design decision made in the conversation |
 | `/release` | Cut a release: version bump PR, then tag its merge commit |
+| `/port-to-rust` | Port Python code that uses optopus-py to a Rust crate and compare the two |
 
 The skills turn this document into procedures. When a rule here changes, update the affected
 skills and AGENTS.md in the same PR, and the other way around.
+
+`/port-to-rust` carries a map of the Python API onto optopus in
+`.claude/skills/port-to-rust/references/api-mapping.md`, read off `src/problem.rs`, `src/graph.rs`,
+`src/heuristic.rs`, `src/runner.rs` and `src/result.rs`, and a copy of the binding's run loop in
+`templates/src/harness.rs`. A PR that changes a constructor, a neighbor name, a default or the run
+loop there updates those files too.

@@ -1,0 +1,18 @@
+[package]
+name = "{{NAME}}"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88" # the optopus crate's minimum
+publish = false
+
+[dependencies]
+# Pinned to the commit optopus-py vendors, so the port runs the same core as the
+# Python code it was ported from. Bump it deliberately, never with `cargo update`.
+optopus = { git = "https://github.com/trash-iine/optopus", rev = "{{OPTOPUS_REV}}" }
+rand = "0.9.2" # the version optopus's trait signatures take their Rng types from
+serde_json = "1"
+
+[profile.release]
+# The same settings optopus benchmarks with; the neighborhood scans gain 8-10% from them.
+lto = "fat"
+codegen-units = 1
