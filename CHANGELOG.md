@@ -97,6 +97,11 @@ entries below are breaking; see **Changed** and **Removed**.
   the library and into `examples/rl_bls.rs`, so there is no longer a type to bind. The generic
   `BreakoutLocalSearch` covers the same algorithm with a fixed schedule.
 
+### Fixed
+
+- `Formula` raises `ValueError` when a constraint reads a variable index outside `[0, n_vars)`,
+  as it already did for the objective. It used to fail with a `PanicException` from the core.
+
 ## 0.1.0 (2026-08-06)
 
 ### Added

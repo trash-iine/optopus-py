@@ -607,6 +607,30 @@ def test_same_seed_reproduces_report():
             id="formula-variable-out-of-range",
         ),
         pytest.param(
+            lambda: optopus.Formula(
+                n_vars=2,
+                objective=[([0], 1.0)],
+                constraints=[([([5], 1.0)], "Le", [([], 1.0)], 1.0)],
+            ),
+            id="formula-constraint-lhs-out-of-range",
+        ),
+        pytest.param(
+            lambda: optopus.Formula(
+                n_vars=2,
+                objective=[([0], 1.0)],
+                constraints=[([([0], 1.0)], "Ge", [([2], 1.0)], 1.0)],
+            ),
+            id="formula-constraint-rhs-out-of-range",
+        ),
+        pytest.param(
+            lambda: optopus.Formula(
+                n_vars=2,
+                objective=[([0], 1.0)],
+                constraints=[([([0, 3], 1.0)], "Clamp", (0.0, 1.0), 1.0)],
+            ),
+            id="formula-clamp-out-of-range",
+        ),
+        pytest.param(
             lambda: optopus.GraphColoring.from_edges(TRIANGLE, num_colors=0),
             id="graph-coloring-no-colors",
         ),
