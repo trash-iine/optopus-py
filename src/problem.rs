@@ -1124,8 +1124,8 @@ impl Formula {
     ///
     /// Raises:
     ///     ValueError: If ``n_vars`` is 0, ``bounds`` has the wrong length, a bound is inverted,
-    ///         the direction or a relation is unrecognized, or the objective reads a variable
-    ///         index outside ``[0, n_vars)``.
+    ///         the direction or a relation is unrecognized, or the objective or a constraint
+    ///         reads a variable index outside ``[0, n_vars)``.
     #[new]
     #[pyo3(signature = (n_vars, objective, direction="Maximize".to_string(), constraints=Vec::new(), bounds=None))]
     fn new(
@@ -1141,12 +1141,13 @@ impl Formula {
         let maximize = parse_direction(&direction)?;
         let vars = build_int_vars(n_vars, bounds)?;
 
+        // Upstream panics when an expression reads a variable outside `vars`, so check the
+        // indices of the objective and of every constraint here and report them as a
+        // `ValueError` instead.
         let mut compiled = Vec::with_capacity(constraints.len());
         for c in constraints {
-            compiled.push(extract_constraint(&c)?);
+            compiled.push(extract_constraint(&c, n_vars)?);
         }
-        // Upstream panics when an expression reads a variable outside `vars`, so check the
-        // indices here and report them as a `ValueError` instead.
         check_var_indices(n_vars, &objective)?;
 
         let obj = poly_to_expr(&objective);
@@ -1269,7 +1270,9 @@ fn check_var_indices(n_vars: usize, poly: &PyPoly) -> PyResult<()> {
 /// Extracts a single [`Constraint`] from a Python tuple. Supports two shapes:
 /// - ``(lhs_poly, rel, rhs_poly, penalty_weight)`` → [`Constraint::Comparison`].
 /// - ``(expr_poly, "Clamp", (lo, hi), penalty_weight)`` → [`Constraint::Clamp`].
-fn extract_constraint(c: &Bound<'_, PyAny>) -> PyResult<Constraint> {
+///
+/// Every polynomial must read only variables in `[0, n_vars)`.
+fn extract_constraint(c: &Bound<'_, PyAny>, n_vars: usize) -> PyResult<Constraint> {
     let tup: (Bound<'_, PyAny>, String, Bound<'_, PyAny>, f64) = c.extract().map_err(|_| {
         PyValueError::new_err(
             "constraint must be a 4-tuple (lhs_poly, rel, rhs_poly, penalty_weight) \
@@ -1279,6 +1282,7 @@ fn extract_constraint(c: &Bound<'_, PyAny>) -> PyResult<Constraint> {
     let (lhs_any, rel, rhs_any, penalty_weight) = tup;
     if rel == "Clamp" {
         let expr_poly: PyPoly = lhs_any.extract()?;
+        check_var_indices(n_vars, &expr_poly)?;
         let (lo, hi): (f64, f64) = rhs_any.extract()?;
         Ok(Constraint::Clamp {
             expr: poly_to_expr(&expr_poly),
@@ -1289,6 +1293,8 @@ fn extract_constraint(c: &Bound<'_, PyAny>) -> PyResult<Constraint> {
     } else {
         let lhs_poly: PyPoly = lhs_any.extract()?;
         let rhs_poly: PyPoly = rhs_any.extract()?;
+        check_var_indices(n_vars, &lhs_poly)?;
+        check_var_indices(n_vars, &rhs_poly)?;
         Ok(Constraint::Comparison {
             lhs: poly_to_expr(&lhs_poly),
             rel: parse_rel(&rel)?,
