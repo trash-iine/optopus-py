@@ -21,9 +21,10 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
 - `.github/workflows/` — `ci.yml` (rust, lint, python matrix), `docs.yml` (Pages deploy),
   `release.yml` (wheels on `v*` tags).
 - `.claude/skills/` — `/quality-check`, `/create-pr`, `/update-docs`, `/adr`, `/release`,
-  `/port-to-rust`. Keep them in sync with `CONTRIBUTING.md` and this file when rules change;
-  `/port-to-rust`'s run-loop template and the functions it points at also follow `src/*.rs`
-  (CONTRIBUTING.md, "Claude Code skills").
+  `/port-to-rust`, `/model-problem`. Keep them in sync with `CONTRIBUTING.md` and this file when
+  rules change; `/port-to-rust`'s run-loop template and the places `/port-to-rust` and
+  `/model-problem` point at also follow `src/*.rs` and the docs (CONTRIBUTING.md, "Claude Code
+  skills").
 
 ## Commands
 - Setup: `git submodule update --init`, `uv sync --dev`, then `uv run pre-commit install` once.

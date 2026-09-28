@@ -133,6 +133,7 @@ session in this repository.
 | `/adr` | Record a design decision made in the conversation |
 | `/release` | Cut a release: version bump PR, then tag its merge commit |
 | `/port-to-rust` | Port Python code that uses optopus-py to a Rust crate and compare the two |
+| `/model-problem` | Model a task described in words as an optopus-py script, checked by brute force |
 
 The skills turn this document into procedures. When a rule here changes, update the affected
 skills and AGENTS.md in the same PR, and the other way around.
@@ -143,3 +144,7 @@ move with it in the same PR: `templates/src/harness.rs`, a copy of `run_all` and
 `src/runner.rs` and of the report arithmetic in `src/result.rs`, and the table in its `SKILL.md`
 that names the functions to read (`solve`, `build_<problem>`, `build_generic`, `build_nested`,
 `build_python`).
+
+`/model-problem` likewise names where to read the problems, `Formula`, the Python problem
+protocol and the heuristics (the docs pages and `src/*.rs`) instead of listing them. Its table of
+those places moves with them.
