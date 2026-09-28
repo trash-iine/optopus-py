@@ -493,6 +493,8 @@ fn tabu_key(key: &Bound<'_, PyAny>) -> PyResult<TabuKey> {
             _ => Err(invalid()),
         };
     }
+    // An int is whatever the user computed, so it is a `Var`, kept in the map. `DenseVar` would
+    // size an array by it, and a key such as `item * 10**15 + bin` aborted the process.
     key.extract::<usize>()
         .map(TabuKey::Var)
         .map_err(|_| invalid())

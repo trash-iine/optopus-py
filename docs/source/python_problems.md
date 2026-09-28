@@ -40,9 +40,9 @@ module, and a run with a `seed` reproduces exactly.
 
 `tabu_keys` returns one key or a list of keys, and a move is tabu while any of its keys is. A
 key is a non-negative int, or a tuple of two or three non-negative ints; anything else raises
-`TypeError`. An int key indexes an array as long as the largest key, so keep int keys small
-and dense, such as a variable or item index, and combine indices in a tuple, `(item, bin)`,
-rather than arithmetic such as `item * 1000 + bin`. An empty list makes the move never tabu.
+`TypeError`. An int may be as large as you like, `item * 10**15 + bin` included, though a
+tuple, `(item, bin)`, says the same thing more plainly. An int and a tuple never collide, even
+when the numbers match. An empty list makes the move never tabu.
 Keys of different neighborhoods share one memory, so a flip and a swap keyed on the same
 variable index forbid each other.
 
