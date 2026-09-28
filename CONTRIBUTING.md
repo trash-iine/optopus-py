@@ -117,34 +117,42 @@ is a digest of this document for AI agents; where the two disagree, this documen
 
 - A version bump never rides along in a feature PR. One `release/vX.Y.Z` PR moves every
   version reference with `uv run invoke set-version X.Y.Z`, and the tag goes on its merge commit.
-  The `/release` skill (`.claude/skills/release/SKILL.md`) has the full procedure and the reasons
+  The `release` skill (`.agents/skills/release/SKILL.md`) has the full procedure and the reasons
   for its ordering.
 
-## Claude Code skills
+## Agent skills
 
-Project-shared skills live in `.claude/skills/` and are available as `/<name>` in a Claude Code
-session in this repository.
+Project-shared skills follow the [Agent Skills](https://agentskills.io/specification) format and
+live in `.agents/skills/`, which Codex, Gemini CLI, Cursor, GitHub Copilot and OpenCode read.
+`.claude/skills` is a symlink to it for Claude Code (ADR 0004). Agents pick a skill by its
+description, or when asked for it by name (`/<name>` in Claude Code).
 
 | Skill | Purpose |
 | --- | --- |
-| `/quality-check` | Run the CI checks and fix failures until they pass |
-| `/create-pr` | Branch check → checks → commits → push → pull request |
-| `/update-docs` | Add or edit doc pages and verify the strict build |
-| `/adr` | Record a design decision made in the conversation |
-| `/release` | Cut a release: version bump PR, then tag its merge commit |
-| `/port-to-rust` | Port Python code that uses optopus-py to a Rust crate and compare the two |
-| `/model-problem` | Model a task described in words as an optopus-py script, checked by brute force |
+| `quality-check` | Run the CI checks and fix failures until they pass |
+| `create-pr` | Branch check → checks → commits → push → pull request |
+| `update-docs` | Add or edit doc pages and verify the strict build |
+| `adr` | Record a design decision made in the conversation |
+| `release` | Cut a release: version bump PR, then tag its merge commit |
+| `port-to-rust` | Port Python code that uses optopus-py to a Rust crate and compare the two |
+| `model-problem` | Model a task described in words as an optopus-py script, checked by brute force |
+
+Edit the skills under `.agents/skills/` and keep them agent-neutral: frontmatter only from the
+specification (`allowed-tools` is fine; agents without it ignore it), no Claude Code-only
+substitutions such as `$ARGUMENTS`, other skills referred to by name ("the `adr` skill"), and an
+agent's own tools named only as an example. On Windows, Claude Code needs git symlinks enabled
+(`core.symlinks`) to see `.claude/skills`.
 
 The skills turn this document into procedures. When a rule here changes, update the affected
 skills and AGENTS.md in the same PR, and the other way around.
 
-`/port-to-rust` does not copy the Python-to-optopus mapping; it reads it from `src/*.rs` on each
+`port-to-rust` does not copy the Python-to-optopus mapping; it reads it from `src/*.rs` on each
 port, so the binding stays the only place it is written. Two things there follow the binding and
 move with it in the same PR: `templates/src/harness.rs`, a copy of `run_all` and `derive_seed` in
 `src/runner.rs` and of the report arithmetic in `src/result.rs`, and the table in its `SKILL.md`
 that names the functions to read (`solve`, `build_<problem>`, `build_generic`, `build_nested`,
 `build_python`).
 
-`/model-problem` likewise names where to read the problems, `Formula`, the Python problem
+`model-problem` likewise names where to read the problems, `Formula`, the Python problem
 protocol and the heuristics (the docs pages and `src/*.rs`) instead of listing them. Its table of
 those places moves with them.
