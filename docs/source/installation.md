@@ -11,16 +11,16 @@ Install the one matching your platform:
 
 ```bash
 # Linux x86_64
-$ pip install https://github.com/trash-iine/optopus-py/releases/download/v0.2.0/optopus-0.2.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+$ pip install https://github.com/trash-iine/optopus-py/releases/download/v0.1.0/optopus-0.1.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
 # macOS (Apple Silicon)
-$ pip install https://github.com/trash-iine/optopus-py/releases/download/v0.2.0/optopus-0.2.0-cp39-abi3-macosx_11_0_arm64.whl
+$ pip install https://github.com/trash-iine/optopus-py/releases/download/v0.1.0/optopus-0.1.0-cp39-abi3-macosx_11_0_arm64.whl
 
 # macOS (Intel)
-$ pip install https://github.com/trash-iine/optopus-py/releases/download/v0.2.0/optopus-0.2.0-cp39-abi3-macosx_11_0_x86_64.whl
+$ pip install https://github.com/trash-iine/optopus-py/releases/download/v0.1.0/optopus-0.1.0-cp39-abi3-macosx_11_0_x86_64.whl
 ```
 
-For another version, replace `v0.2.0` and the version in the filename with the tag you want. The
+For another version, replace `v0.1.0` and the version in the filename with the tag you want. The
 extension targets the stable ABI (abi3), so a single wheel per platform covers CPython 3.9+ — no
 need to match your Python minor version.
 
@@ -36,7 +36,7 @@ $ pip install git+https://github.com/trash-iine/optopus-py.git
 To pin a specific tag or commit:
 
 ```bash
-$ pip install git+https://github.com/trash-iine/optopus-py.git@v0.2.0
+$ pip install git+https://github.com/trash-iine/optopus-py.git@v0.1.0
 ```
 
 Requirements: [Python](https://www.python.org) ≥ 3.9 and a [Rust toolchain](https://rustup.rs)
