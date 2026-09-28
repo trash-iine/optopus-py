@@ -18,7 +18,7 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
 - `tasks.py` — Invoke tasks that bundle several steps: `ci`, `fix`, `docs`, `adr`, `set-version`,
   `check-version`. Do not add single-command wrappers (ADR 0002).
 - `.github/workflows/` — `ci.yml` (rust, lint, python matrix), `docs.yml` (Pages deploy),
-  `release.yml` (wheels on `v*` tags); `.github/dependabot.yml`.
+  `release.yml` (wheels on `v*` tags).
 - `.claude/skills/` — `/quality-check`, `/create-pr`, `/update-docs`, `/adr`, `/release`. Keep them
   in sync with `CONTRIBUTING.md` and this file when rules change.
 

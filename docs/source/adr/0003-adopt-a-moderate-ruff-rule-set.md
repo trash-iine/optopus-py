@@ -32,7 +32,7 @@ examples in the docs.
 ## Consequences
 
 - CI's `lint` job, `invoke ci` and the pre-commit hooks run `ruff check` and `ruff format --check`.
-- Because the set is not `ALL`, a Ruff upgrade rarely introduces new failures, so the template's
-  Dependabot auto-fix workflow is not needed.
+- Because the set is not `ALL`, a Ruff upgrade rarely introduces new failures, so upgrading Ruff
+  does not need the template's auto-fix workflow.
 - No type checker (`ty`) is run: the extension ships no `.pyi` stubs, so there is little for one
   to check.

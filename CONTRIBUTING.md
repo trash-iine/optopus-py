@@ -51,7 +51,7 @@ is a digest of this document for AI agents; where the two disagree, this documen
   a panic; Python users should never see a Rust panic.
 - `vendor/optopus` is a git submodule and a path dependency. Update it in its own commit
   (`Update the vendored optopus to <sha>`) together with the binding changes the new upstream API
-  requires; Dependabot deliberately does not bump it.
+  requires.
 
 ## Python
 
@@ -107,12 +107,10 @@ is a digest of this document for AI agents; where the two disagree, this documen
 
 ## Dependency updates
 
-- Dependabot opens weekly PRs for Cargo, uv (`pyproject.toml` / `uv.lock`), GitHub Actions and
-  pre-commit hook revisions (`.github/dependabot.yml`).
 - Keep the `astral-sh/ruff-pre-commit` `rev` in `.pre-commit-config.yaml` in step with the ruff
-  version in `pyproject.toml`; Dependabot updates both, but in separate PRs.
+  version in `pyproject.toml`, and bump them together.
 - A `pyo3` or `rand` bump may need binding changes (`rand` must match the vendored optopus), so
-  those PRs are not merged on a green CI alone without reading the upstream changelog.
+  read the upstream changelog rather than relying on a green CI alone.
 
 ## Releases
 
