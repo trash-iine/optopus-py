@@ -51,4 +51,5 @@ quickstart
 python_problems
 api_reference
 examples
+adr/index
 ```
