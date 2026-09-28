@@ -59,6 +59,8 @@ entries below are breaking; see **Changed** and **Removed**.
 - `Formula` accepts a `bounds` argument giving each variable an integer range, and the `Reverse`
   neighborhood alongside `Change` and `Swap`. `eval_objective` and `eval_penalty` score an
   assignment without running a search.
+- `Vrp.penalty_weight()`, the weight the objective charges per unit of overload, matching
+  `GraphColoring.penalty_weight()`.
 - The Sphinx documentation is now published to GitHub Pages at
   <https://trash-iine.github.io/optopus-py/>, rebuilt from `main` on every push.
 - Three guide pages in the documentation. "Built-in problems" compares the problems, the

@@ -261,7 +261,15 @@ def test_vrp_evaluate_routes_separates_distance_from_penalty():
 
     overloaded = vrp.evaluate_routes([[1, 2, 3, 4], []])
     assert overloaded["overload"] == 5
-    assert overloaded["objective"] > overloaded["distance"]
+    assert overloaded["objective"] == pytest.approx(
+        overloaded["distance"] + vrp.penalty_weight() * overloaded["overload"]
+    )
+
+
+def test_vrp_penalty_weight_exceeds_any_route_set():
+    vrp = clustered_vrp()
+    # 4 customers + 2 vehicles, times the longest edge (11 to -11 is 22), plus 1.
+    assert vrp.penalty_weight() == 6 * 22.0 + 1
 
 
 def test_vrp_evaluate_routes_rejects_an_invalid_partition():

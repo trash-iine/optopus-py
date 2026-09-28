@@ -117,7 +117,7 @@ solution exists. Nothing needs adding for these; check the result with the probl
 | Problem | Constraint | Penalty weight | Check with |
 |---|---|---|---|
 | `VertexCover` | every edge covered | `num_vertices + 1` per uncovered edge | the solution: an edge with neither end `True` is uncovered |
-| `Vrp` | vehicle capacity | `(num_customers + num_vehicles) · longest_edge + 1` per unit of overload | `evaluate_routes(routes)["overload"] == 0` |
+| `Vrp` | vehicle capacity | `(num_customers + num_vehicles) · longest_edge + 1` per unit of overload, `penalty_weight()` | `evaluate_routes(routes)["overload"] == 0` |
 | `GraphColoring` | no edge within one color | `num_vertices + 1` per conflict, `penalty_weight()` | `evaluate_colors(colors)["conflicts"] == 0` |
 | `Formula` | the constraints you give it | the weight you give each | `eval_penalty(values) == 0` |
 
