@@ -279,6 +279,12 @@ def test_vrp_evaluate_routes_rejects_an_invalid_partition():
         clustered_vrp().evaluate_routes([[1, 2], [3]])
 
 
+@pytest.mark.parametrize("routes", [[[1, 2, 3, 4]], [[1, 2], [3], [4]]], ids=["fewer", "more"])
+def test_vrp_evaluate_routes_needs_one_route_per_vehicle(routes):
+    with pytest.raises(ValueError, match=r"one route per vehicle \(2\)"):
+        clustered_vrp().evaluate_routes(routes)
+
+
 def test_vrp_picks_a_fleet_size_when_asked():
     vrp = optopus.Vrp.from_coordinates(VRP_CLUSTERS, VRP_DEMANDS, capacity=10)
     # 20 units of demand over capacity 10 needs at least 2 vehicles; the margin adds more.
@@ -316,7 +322,9 @@ def test_vrp_load_file(tmp_path):
     assert vrp.num_customers() == 4
     assert vrp.capacity() == 15
     # EUC_2D rounds to the nearest integer, and these coordinates are already integral.
-    assert vrp.evaluate_routes([[1, 2], [3, 4]])["distance"] == VRP_OPTIMUM
+    # num_vehicles=0 in the file's absence picks 2 that pack plus a spare, so 3 routes.
+    assert vrp.num_vehicles() == 3
+    assert vrp.evaluate_routes([[1, 2], [3, 4], []])["distance"] == VRP_OPTIMUM
 
 
 def test_vrp_load_file_reports_a_missing_file():

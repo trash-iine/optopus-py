@@ -1021,7 +1021,9 @@ impl Vrp {
     ///     ValueError: If the file cannot be read or does not parse.
     #[staticmethod]
     fn load_file(path: &str) -> PyResult<Self> {
-        OptVrp::load_file(path)
+        // `OptVrp::load_file` reads a `.toml` file as a mixed fleet, which this class does not
+        // expose, so read CVRPLIB whatever the file is named.
+        OptVrp::load_cvrplib(std::path::Path::new(path))
             .map(|inner| Self { inner })
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1080,12 +1082,12 @@ impl Vrp {
     /// Fleet size. When the instance was built with ``num_vehicles=0``, this is the value
     /// optopus picked.
     fn num_vehicles(&self) -> usize {
-        self.inner.num_vehicles
+        self.inner.num_slots()
     }
 
     /// Vehicle capacity.
     fn capacity(&self) -> i64 {
-        self.inner.capacity
+        self.capacity_of_the_fleet()
     }
 
     /// The penalty charged per unit of load over capacity.
@@ -1099,9 +1101,9 @@ impl Vrp {
     /// Score a route partition without running a heuristic.
     ///
     /// Args:
-    ///     routes (list[list[int]]): One route per vehicle, holding customer indices in
-    ///         visiting order. Every customer ``1..=n`` must appear exactly once across all
-    ///         routes; the depot must not appear.
+    ///     routes (list[list[int]]): One route per vehicle, ``num_vehicles()`` of them with
+    ///         empty ones included, holding customer indices in visiting order. Every customer
+    ///         ``1..=n`` must appear exactly once across all routes; the depot must not appear.
     ///
     /// Returns:
     ///     dict: ``{"objective": float, "distance": float, "overload": int,
@@ -1109,19 +1111,28 @@ impl Vrp {
     ///     partition is feasible, i.e. when ``overload`` is 0.
     ///
     /// Raises:
-    ///     ValueError: If ``routes`` is not a valid partition of the customers.
+    ///     ValueError: If there is not one route per vehicle, or ``routes`` is not a valid
+    ///         partition of the customers.
     fn evaluate_routes<'py>(
         &self,
         py: Python<'py>,
         routes: Vec<Vec<usize>>,
     ) -> PyResult<Bound<'py, PyDict>> {
+        // optopus checks this too, but speaks of slots, which this class never names.
+        let fleet = self.inner.num_slots();
+        if routes.len() != fleet {
+            return Err(PyValueError::new_err(format!(
+                "'routes' must have one route per vehicle ({fleet}), empty ones included, got {}",
+                routes.len()
+            )));
+        }
         self.inner
             .validate_routes(&routes)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let solution = self.inner.solution_from_routes(routes);
         let dict = PyDict::new(py);
         dict.set_item("objective", solution.objective)?;
-        dict.set_item("distance", solution.distance)?;
+        dict.set_item("distance", solution.total_distance())?;
         dict.set_item("overload", solution.overload)?;
         dict.set_item("route_loads", solution.route_loads)?;
         Ok(dict)
@@ -1132,9 +1143,19 @@ impl Vrp {
             "Vrp(name={:?}, num_customers={}, capacity={}, num_vehicles={})",
             self.inner.name,
             self.inner.get_n(),
-            self.inner.capacity,
-            self.inner.num_vehicles
+            self.capacity_of_the_fleet(),
+            self.inner.num_slots()
         )
+    }
+}
+
+impl Vrp {
+    /// The capacity of the one vehicle type every instance the binding builds has.
+    ///
+    /// optopus's `Vrp` also covers a mixed fleet, but the binding's constructors and
+    /// `load_file` (CVRPLIB only) build a single type, so there is one capacity to report.
+    fn capacity_of_the_fleet(&self) -> i64 {
+        self.inner.vehicle_types()[0].capacity
     }
 }
 

@@ -188,8 +188,9 @@ least one spare; read the result back with `num_vehicles()`. A fleet too small f
 capacity, is not an error: the search returns its best solution with `overload > 0`, so check
 the overload before using the routes.
 
-`evaluate_routes` checks that every customer appears exactly once, not how many routes there
-are, so compare `len(routes)` with `num_vehicles()` yourself when a plan comes from elsewhere.
+`evaluate_routes` takes one route per vehicle, `num_vehicles()` of them with empty ones
+included, and raises `ValueError` otherwise, so a plan that needs more vehicles than the fleet
+has is rejected rather than scored.
 
 `HybridGeneticSearch` and `AdaptiveLargeNeighborhoodSearch` handle both kinds of move
 themselves. A generic heuristic needs them combined, since `"Relocate"` and `"Swap"` only move

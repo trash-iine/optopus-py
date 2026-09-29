@@ -83,6 +83,11 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Changed
 
+- `Vrp.evaluate_routes` raises `ValueError` unless it gets one route per vehicle, empty routes
+  included, instead of scoring a plan the fleet cannot run. Pad a plan with `[]` up to
+  `num_vehicles()`. This follows optopus, now vendored at `41ef2c4`, whose `Vrp` also covers a
+  mixed fleet; the binding still builds a single vehicle type, and `Vrp.load_file` still reads
+  CVRPLIB whatever the file is named.
 - Wheels are built with the release settings optopus measured, fat LTO and a single codegen
   unit, which the binding had never applied. `TabuSearch` runs about 1.9x faster on a
   2000-vertex MaxCut; the other heuristics measured gain little.
