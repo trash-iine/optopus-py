@@ -105,7 +105,7 @@ The report holds no best solution of its own. Pick the run whose `best_objective
 and read its `solution`:
 
 ```python
-best = min(report.runs, key=lambda r: r.best_objective)  # max for a problem where higher is better
+best = min(report.runs, key=lambda r: r.best_objective)  # max for MaxCut, Sat and every Formula
 ```
 
 ## Constraints a problem handles itself
@@ -183,10 +183,47 @@ distance, the overload and each route's load.
 `num_vehicles` is the size of the fleet, and every heuristic returns exactly that many routes;
 the unused vehicles are empty routes. Setting it above what the demand needs is therefore safe,
 and a spare vehicle gives the search room to move customers. `num_vehicles=0` lets optopus
-choose, packing the demands by first-fit decreasing and adding 10%; read the result back with
-`num_vehicles()`. A fleet too small for the demand, or a customer whose demand exceeds the
+choose: the vehicles first-fit decreasing packs the demands into, plus 10% rounded down and at
+least one spare; read the result back with `num_vehicles()`. A fleet too small for the demand, or a customer whose demand exceeds the
 capacity, is not an error: the search returns its best solution with `overload > 0`, so check
 the overload before using the routes.
+
+`evaluate_routes` checks that every customer appears exactly once, not how many routes there
+are, so compare `len(routes)` with `num_vehicles()` yourself when a plan comes from elsewhere.
+
+`HybridGeneticSearch` and `AdaptiveLargeNeighborhoodSearch` handle both kinds of move
+themselves. A generic heuristic needs them combined, since `"Relocate"` and `"Swap"` only move
+customers between routes and `"TwoOpt"` only reorders one; a `SimulatedAnnealing` over a single
+one of them stalls. A variable neighborhood search that polishes with all three:
+
+```python
+import random
+import optopus
+
+rng = random.Random(7)
+coords = [(0, 0)] + [(rng.randint(-50, 50), rng.randint(-50, 50)) for _ in range(30)]
+demands = [0] + [rng.randint(1, 9) for _ in range(30)]
+vrp = optopus.Vrp.from_coordinates(coords, demands, capacity=40, num_vehicles=6)
+
+# One round runs every move type to a local optimum. Each LocalSearch ends on one
+# non-improving iteration, so 3 failed iterations in a row is a round that found nothing.
+polish = optopus.Sequential(
+    [optopus.LocalSearch(nb, stop=optopus.StopCondition(max_iteration=1_000))
+     for nb in ("Relocate", "Swap", "TwoOpt")],
+    stop=optopus.StopCondition(max_failed_update=3),
+)
+vns = optopus.VariableNeighborhoodSearch(
+    search=polish,
+    shakes=[optopus.RandomWalk("Relocate", stop=optopus.StopCondition(max_iteration=k))
+            for k in (2, 4, 8)],
+    stop=optopus.StopCondition(max_duration_secs=2.0),
+)
+report = vns.run(vrp, runs=3, seed=42)
+print(report.best_objective)  # ≈ 606.12, the optimum HybridGeneticSearch also reaches
+```
+
+A larger `max_failed_update` on `polish` repeats rounds that have already converged and spends
+the budget there.
 
 A distance matrix must be symmetric, finite and non-negative, as for `Tsp`; `matrix[i][j]` is
 the distance between nodes `i` and `j`. Demands must not be negative, and the depot's demand is

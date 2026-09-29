@@ -70,6 +70,13 @@ entries below are breaking; see **Changed** and **Removed**.
   polynomial and constraint format, how a violation is penalized and how to choose a penalty
   weight. "Choosing a heuristic" covers which heuristic to use, what one iteration costs and how
   to set the main parameters.
+- More guidance from a second simulated first use: a stop condition is checked between units of
+  work, so `HybridGeneticSearch` always builds its initial population; measuring deltas to set
+  a `SimulatedAnnealing` temperature, including on a secondary term and under `"Eq"`
+  constraints; `AdaptiveLargeNeighborhoodSearch`'s removal cap, per-iteration cost and cooling
+  for a time budget; a `Vrp` variable neighborhood search; a one-hot assignment with
+  `Formula`; the `tabu_keys` contract (`(i, j)` is one key, `[i, j]` two) and the ruin methods'
+  container numbering.
 
 ### Changed
 

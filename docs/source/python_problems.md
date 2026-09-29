@@ -38,13 +38,27 @@ that automatic.
 `rng` is a `random.Random` seeded from the run's seed. Draw from it, not from the global `random`
 module, and a run with a `seed` reproduces exactly.
 
-`tabu_keys` returns one key or a list of keys, and a move is tabu while any of its keys is. A
-key is a non-negative int, or a tuple of two or three non-negative ints; anything else raises
-`TypeError`. An int may be as large as you like, `item * 10**15 + bin` included, though a
-tuple, `(item, bin)`, says the same thing more plainly. An int and a tuple never collide, even
-when the numbers match. An empty list makes the move never tabu.
-Keys of different neighborhoods share one memory, so a flip and a swap keyed on the same
-variable index forbid each other.
+`tabu_keys` returns one key or a list of keys. The same keys serve twice: a move is tabu while
+any of its keys is, and applying it makes all of them tabu for the tenure. It receives the move
+alone, not the solution, so a move carries whatever its keys need, such as the bin an item
+leaves.
+
+A key is a non-negative int, or a tuple of two or three non-negative ints; anything else raises
+`TypeError`. A tuple is one key: `(i, j)` forbids the pair, while `[i, j]` is two keys and
+forbids `i` and `j` each. An int may be as large as you like, `item * 10**15 + bin` included,
+though a tuple, `(item, bin)`, says the same thing more plainly. An int and a tuple never
+collide, even when the numbers match. An empty list makes the move never tabu. Keys of different
+neighborhoods share one memory, so a flip and a swap keyed on the same variable index forbid
+each other.
+
+For a move that relocates an item, keying on the item alone forbids moving it again for a
+while, which is simple and usually enough. `(item, bin)` forbids only that item in that bin.
+Key on container numbers only if they stay put: a bin that shifts every later bin's number when
+it empties makes `(item, bin)` forbid the wrong bin.
+
+When every move is tabu, or `neighbors` returns nothing, `TabuSearch` counts the iteration as
+rejected and makes no move, and `LocalSearch` stops as at a local optimum. A tenure longer than
+the neighborhood leaves the search idle until prohibitions expire.
 
 `random_neighbor` returning `None` means the solution has no move in that neighborhood.
 `SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `LateAcceptanceHillClimbing` and
@@ -99,10 +113,14 @@ terms of what it loses:
 - `insertion_cost` is how much worse the partial gets by putting the element there. Lower is
   better, and repair puts each element where it is lowest.
 - `relatedness` returns a number, ints included; Shaw removal takes elements that are alike
-  together.
+  together. It sees only the two elements, not the partial, so it measures what the instance
+  says about them (sizes, positions, conflicts) rather than where they currently sit.
 - `num_buckets` counts the containers an element may go into now. A problem that opens
   containers on demand, like bins, includes one empty container here, so repair can always open
-  a new one.
+  a new one. The search reads the numbering fresh before every placement, so container numbers
+  only have to agree between `num_buckets`, `num_places`, `insertion_cost` and `insert` for the
+  partial as it stands; they may change after `remove_all` or `insert`. Keeping emptied
+  containers in place and offering the new one last is the simplest way to satisfy that.
 - `num_places` is `1` for a container whose order does not matter (a bin, a color class),
   `len + 1` for a sequence (a route), and `len` for a cyclic one (a tour).
 - `partial_objective` is in the problem's own direction, like `objective`. The search calls
@@ -110,6 +128,12 @@ terms of what it loses:
   saves time only once most candidates are rejected.
 - `repair_around` receives `anchors` as a list of the elements just put back, and edits the
   partial in place.
+
+Repair prices every place of every container for each element it puts back: greedy insertion
+makes about `k · P` calls to `insertion_cost` for `k` removed elements and `P` places in all,
+and regret insertion, which re-prices the remaining elements after each placement, about
+`k² · P / 2`. That is the cost of one iteration, so keep `insertion_cost` cheap and
+`removal_fraction` small on large instances; `k` is `removal_fraction · n`, at most 50.
 
 ## Example
 
@@ -184,6 +208,9 @@ Two optional methods decide most of that cost.
 - Without `random_neighbor`, simulated annealing, late acceptance, random walk and population
   annealing build the full list from `neighbors` every step just to pick one move from it.
 
+A `random_neighbor` that falls back to `neighbors` when it cannot find a move quickly costs as
+much as having none whenever the fallback runs, so make it find a move directly.
+
 With both, a step still calls `apply` and `objective` once for every move it accepts, since the
 new current solution needs its own value. An expensive `objective` shows up in proportion to
 the acceptance rate.
@@ -200,7 +227,17 @@ same reason.
 An objective that counts something, such as bins used, is flat: most moves leave the count
 unchanged, and the search cannot tell a move toward emptying a bin from any other. Add a
 secondary term, smaller than one unit of the count, that rewards progress, such as the sum of
-squared bin loads. A neighborhood that cannot change the count, such as a swap of two items
+squared bin loads. For bins of capacity `C` holding a total size `T`,
+
+```text
+objective = bins_used − Σ min(load, C)² / (C · T + 1)
+```
+
+rewards fuller bins while the subtracted sum stays below 1, since `Σ load² ≤ C · T`; the `min`
+keeps an overfull bin, which the penalty already charges, from earning extra. The useful
+deltas are then that term's size, small fractions of a bin, which is the scale to set a
+`SimulatedAnnealing` temperature on (see
+[SimulatedAnnealing](heuristics.md#simulatedannealing)). A neighborhood that cannot change the count, such as a swap of two items
 between bins, has to be paired with one that can.
 
 ## Errors

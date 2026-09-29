@@ -33,6 +33,9 @@ pub struct RunResult {
     #[pyo3(get)]
     pub best_iteration: u64,
     /// Elapsed seconds until the best solution was found.
+    ///
+    /// On a floating-point objective (``Vrp``, ``Tsp``) a gain at rounding level counts as a new
+    /// best, which can push this toward the end of the run; see ``n_best_updates``.
     #[pyo3(get)]
     pub time_to_best_secs: f64,
     /// Total elapsed seconds for the run.
@@ -51,6 +54,9 @@ pub struct RunResult {
     #[pyo3(get)]
     pub n_rejected: u64,
     /// Number of times the best solution was strictly improved.
+    ///
+    /// Any strict gain counts, including one of rounding size on a floating-point objective.
+    /// Thousands of updates late in a run usually mean the search reached its best long before.
     #[pyo3(get)]
     pub n_best_updates: u64,
     /// Seed actually used for the run, if one was provided.
