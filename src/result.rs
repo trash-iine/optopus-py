@@ -32,6 +32,13 @@ pub struct RunResult {
     /// Iteration at which the best solution was found.
     #[pyo3(get)]
     pub best_iteration: u64,
+    /// Iterations the run made, in the heuristic's own unit (see "Stopping" in the docs).
+    ///
+    /// It includes what a heuristic charges as iterations without accepting or rejecting a
+    /// move, such as ``HybridGeneticSearch``'s initial population, so it can exceed
+    /// ``n_accepted + n_rejected``.
+    #[pyo3(get)]
+    pub iterations: u64,
     /// Elapsed seconds until the best solution was found.
     ///
     /// On a floating-point objective (``Vrp``, ``Tsp``) a gain at rounding level counts as a new
@@ -118,6 +125,9 @@ pub struct RunReport {
     /// Mean improvement from initial to best across runs (sign-corrected; positive = better).
     #[pyo3(get)]
     pub avg_improvement: f64,
+    /// Mean number of iterations across runs.
+    #[pyo3(get)]
+    pub avg_iterations: f64,
     /// Mean number of accepted moves across runs.
     #[pyo3(get)]
     pub avg_n_accepted: f64,
@@ -172,6 +182,7 @@ impl RunReport {
         let avg_total = runs.iter().map(|r| r.total_time_secs).sum::<f64>() / nf;
         let avg_initial = runs.iter().map(|r| r.initial_objective).sum::<f64>() / nf;
         let avg_improvement = runs.iter().map(|r| r.improvement).sum::<f64>() / nf;
+        let avg_iterations = runs.iter().map(|r| r.iterations as f64).sum::<f64>() / nf;
         let avg_accepted = runs.iter().map(|r| r.n_accepted as f64).sum::<f64>() / nf;
         let avg_rejected = runs.iter().map(|r| r.n_rejected as f64).sum::<f64>() / nf;
         let avg_best_updates = runs.iter().map(|r| r.n_best_updates as f64).sum::<f64>() / nf;
@@ -194,6 +205,7 @@ impl RunReport {
             avg_total_time_secs: avg_total,
             avg_initial_objective: avg_initial,
             avg_improvement,
+            avg_iterations,
             avg_n_accepted: avg_accepted,
             avg_n_rejected: avg_rejected,
             avg_n_best_updates: avg_best_updates,

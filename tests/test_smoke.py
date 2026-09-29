@@ -868,3 +868,29 @@ def test_signatures_show_real_defaults(name, obj):
     except (TypeError, ValueError):
         pytest.skip("not introspectable")
     assert "Ellipsis" not in signature, f"{name}{signature}"
+
+
+def test_iterations_count_every_step_of_a_plain_heuristic():
+    report = optopus.RandomWalk("Flip", stop(50)).run(
+        optopus.MaxCut.from_edges(TRIANGLE), runs=2, seed=0
+    )
+    for run in report.runs:
+        assert run.iterations == 50 == run.n_accepted + run.n_rejected
+    assert report.avg_iterations == 50
+
+
+def test_iterations_include_the_hgs_initial_population():
+    # The initial population is one unit of work: a limit of 1 still builds all 4 * 4 of it.
+    report = optopus.HybridGeneticSearch(stop(1), min_population_size=4).run(
+        clustered_vrp(), seed=0
+    )
+    assert report.runs[0].iterations == 16
+
+
+def test_iterations_of_a_composed_heuristic_are_its_steps():
+    # The outer limit is checked when the first step returns, after its own 10 iterations.
+    iterated = optopus.Iterated(
+        optopus.RandomWalk("Flip", stop(10)), optopus.RandomWalk("Flip", stop(3)), stop(1)
+    )
+    report = iterated.run(optopus.MaxCut.from_edges(TRIANGLE), seed=0)
+    assert report.runs[0].iterations == 10

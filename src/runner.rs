@@ -846,6 +846,7 @@ where
             best_objective,
             solution,
             best_iteration: state.best_iteration,
+            iterations: state.iteration,
             time_to_best_secs: state
                 .best_time
                 .saturating_duration_since(start)
