@@ -16,7 +16,9 @@ optimization library for combinatorial problems written in Rust.
 - `VertexCover` — minimum vertex cover
 - `Tsp` — traveling salesperson, from 2D coordinates, a distance matrix, or a TSPLIB file
 - `JobShopScheduling` — job shop scheduling
-- `Vrp` — capacitated vehicle routing, from coordinates, a distance matrix, or a CVRPLIB file
+- `Vrp` — capacitated vehicle routing, from coordinates, a distance matrix, or a CVRPLIB file,
+  and a mixed fleet of `VehicleType`s with service times and route-time limits, from
+  `Vrp.with_fleet` or a TOML file
 - `GraphColoring` — minimum proper coloring
 - `Formula` — custom objectives over bounded integer variables (binary by default)
 

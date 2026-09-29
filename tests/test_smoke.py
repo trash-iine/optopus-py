@@ -332,6 +332,230 @@ def test_vrp_load_file_reports_a_missing_file():
         optopus.Vrp.load_file("no-such-instance.vrp")
 
 
+# A truck (capacity 4) and two faster vans (capacity 2) over four customers of demand 2, each
+# with a service time of 1. Brute force over every partition and order gives the optima: the
+# truck serves the two customers on one side, a van each of the others.
+FLEET_COORDS = [(0.0, 0.0), (3.0, 0.0), (3.0, 4.0), (-3.0, 0.0), (-3.0, -4.0)]
+FLEET_DEMANDS = [0, 2, 2, 2, 2]
+FLEET_SERVICE = [0.0, 1.0, 1.0, 1.0, 1.0]
+# Route times 14 + 4 + 6 = 24 (makespan 14), cost 10 + 2 * 1 + 0.5 * (6 + 10) = 20.
+FLEET_OPTIMUM = {"TotalTime": 44.0, "Makespan": 34.0}
+
+
+def fleet_vrp(objective_mode="TotalTime", truck_min_count=0, van_max_route_time=None):
+    truck = optopus.VehicleType(
+        "truck", capacity=4, max_count=1, fixed_cost=10.0, min_count=truck_min_count
+    )
+    van = optopus.VehicleType(
+        "van",
+        capacity=2,
+        max_count=2,
+        speed=2.0,
+        fixed_cost=1.0,
+        variable_cost_per_distance=0.5,
+        max_route_time=van_max_route_time,
+    )
+    return optopus.Vrp.with_fleet(
+        FLEET_COORDS,
+        FLEET_DEMANDS,
+        [truck, van],
+        service_times=FLEET_SERVICE,
+        objective_mode=objective_mode,
+    )
+
+
+def test_vrp_with_fleet_lays_routes_out_by_vehicle_type():
+    vrp = fleet_vrp()
+    assert vrp.num_vehicles() == 3
+    assert vrp.slot_types() == [0, 1, 1]
+    assert [vt.name for vt in vrp.vehicle_types()] == ["truck", "van"]
+    assert vrp.vehicle_types()[1].speed == 2.0
+    assert vrp.vehicle_types()[1].max_route_time is None
+    assert vrp.service_times() == FLEET_SERVICE
+    assert vrp.objective_mode() == "TotalTime"
+    assert vrp.cost_weight() == 1.0
+    # 7 edges of at most 10 over speed 1, plus 4 of service; costs 10 + 2 + 0.5 * 70.
+    assert vrp.penalty_weight() == 74.0 + 47.0 + 1
+    with pytest.raises(ValueError, match="2 vehicle types"):
+        vrp.capacity()
+
+
+def test_vrp_with_fleet_evaluate_routes_reports_every_term():
+    result = fleet_vrp().evaluate_routes([[1, 2], [3], [4]])
+    assert result["route_distances"] == [12.0, 6.0, 10.0]
+    assert result["route_times"] == [14.0, 4.0, 6.0]
+    assert result["used_count"] == [1, 2]
+    assert (result["total_time"], result["makespan"]) == (24.0, 14.0)
+    assert result["total_cost"] == 20.0
+    assert result["objective"] == FLEET_OPTIMUM["TotalTime"]
+
+
+def test_vrp_with_fleet_penalizes_every_soft_constraint():
+    vrp = fleet_vrp(truck_min_count=1, van_max_route_time=5.0)
+    # The truck idles (1 short), and each van carries 4 over capacity 2 for 8 time units.
+    result = vrp.evaluate_routes([[], [1, 2], [3, 4]])
+    assert result["overload"] == 4
+    assert result["time_excess"] == 3.0 + 3.0
+    assert result["min_count_shortfall"] == 1
+    violation = 4 + 6.0 + 1
+    expected = result["total_time"] + result["total_cost"] + vrp.penalty_weight() * violation
+    assert result["objective"] == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("mode", ["TotalTime", "Makespan"])
+@pytest.mark.parametrize(
+    "heuristic",
+    [
+        optopus.HybridGeneticSearch(stop=stop(200)),
+        optopus.AdaptiveLargeNeighborhoodSearch(stop=stop(500)),
+    ],
+    ids=["hgs", "alns"],
+)
+def test_vrp_with_fleet_reaches_the_optimum(heuristic, mode):
+    report = heuristic.run(fleet_vrp(mode), runs=4, seed=42)
+    assert report.best_objective == pytest.approx(FLEET_OPTIMUM[mode])
+
+
+@pytest.mark.parametrize("neighbor", ["Relocate", "Swap", "TwoOpt"])
+def test_vrp_with_fleet_runs_the_generic_moves(neighbor):
+    vrp = fleet_vrp()
+    report = optopus.LocalSearch(neighbor, stop(2_000)).run(vrp, runs=2, seed=42)
+    solution = report.runs[0].solution
+    assert len(solution) == vrp.num_vehicles()
+    assert vrp.evaluate_routes(solution)["objective"] == pytest.approx(report.best_objective)
+
+
+def test_vrp_with_objective_mode_returns_a_copy():
+    vrp = fleet_vrp()
+    makespan = vrp.with_objective_mode("Makespan")
+    assert (vrp.objective_mode(), makespan.objective_mode()) == ("TotalTime", "Makespan")
+    routes = [[1, 2], [3], [4]]
+    assert makespan.evaluate_routes(routes)["objective"] == FLEET_OPTIMUM["Makespan"]
+    assert vrp.evaluate_routes(routes)["objective"] == FLEET_OPTIMUM["TotalTime"]
+
+
+def test_vrp_load_file_reads_a_toml_fleet(tmp_path):
+    instance = tmp_path / "fleet.toml"
+    customers = "".join(
+        f"[[customers]]\nid = {i}\nx = {x}\ny = {y}\ndemand = 2\nservice_time = 1.0\n"
+        for i, (x, y) in enumerate(FLEET_COORDS[1:], start=1)
+    )
+    instance.write_text(
+        'objective_mode = "Makespan"\n'
+        "[depot]\nx = 0.0\ny = 0.0\n"
+        '[[vehicle_types]]\nname = "truck"\ncapacity = 4\nspeed = 1.0\n'
+        "fixed_cost = 10.0\nmax_count = 1\n"
+        '[[vehicle_types]]\nname = "van"\ncapacity = 2\nspeed = 2.0\nfixed_cost = 1.0\n'
+        "variable_cost_per_distance = 0.5\nmax_count = 2\n" + customers
+    )
+    vrp = optopus.Vrp.load_file(str(instance))
+    # The name defaults to the file stem.
+    assert repr(vrp) == 'Vrp(name="fleet", num_customers=4, vehicle_types=2, num_vehicles=3)'
+    assert vrp.slot_types() == [0, 1, 1]
+    assert vrp.objective_mode() == "Makespan"
+    assert vrp.evaluate_routes([[1, 2], [3], [4]])["objective"] == FLEET_OPTIMUM["Makespan"]
+
+
+def test_vrp_load_file_reports_an_invalid_toml_fleet(tmp_path):
+    instance = tmp_path / "fleet.toml"
+    instance.write_text('objective_mode = "TotalTime"\n[depot]\nx = 0.0\ny = 0.0\n')
+    with pytest.raises(ValueError):
+        optopus.Vrp.load_file(str(instance))
+
+
+def test_vehicle_type_reports_its_arguments():
+    vt = optopus.VehicleType("van", capacity=2, max_count=3, min_count=1, max_route_time=8.0)
+    assert (vt.name, vt.capacity, vt.max_count, vt.min_count) == ("van", 2, 3, 1)
+    assert (vt.speed, vt.fixed_cost, vt.variable_cost_per_distance) == (1.0, 0.0, 0.0)
+    assert vt.max_route_time == 8.0
+    assert optopus.VehicleType("x", 1, 1, max_route_time=float("inf")).max_route_time is None
+
+
+@pytest.mark.parametrize(
+    ("make", "expected"),
+    [
+        pytest.param(lambda: optopus.VehicleType("v", 0, 1), "'capacity'", id="capacity"),
+        pytest.param(lambda: optopus.VehicleType("v", 1, 0), "'max_count'", id="max-count"),
+        pytest.param(lambda: optopus.VehicleType("v", 1, 1, speed=0.0), "'speed'", id="speed-zero"),
+        pytest.param(
+            lambda: optopus.VehicleType("v", 1, 1, min_count=2), "'min_count'", id="min-count"
+        ),
+        pytest.param(
+            lambda: optopus.VehicleType("v", 1, 1, fixed_cost=-1.0),
+            "'fixed_cost'",
+            id="negative-cost",
+        ),
+        pytest.param(
+            lambda: optopus.VehicleType("v", 1, 1, variable_cost_per_distance=float("nan")),
+            "'variable_cost_per_distance'",
+            id="nan-cost",
+        ),
+        pytest.param(
+            lambda: optopus.VehicleType("v", 1, 1, max_route_time=0.0),
+            "'max_route_time'",
+            id="route-time-zero",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.with_fleet([], [], [optopus.VehicleType("v", 1, 1)]),
+            "must not be empty",
+            id="fleet-no-depot",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.with_fleet(
+                [(0.0, float("inf"))], [0], [optopus.VehicleType("v", 1, 1)]
+            ),
+            "must be finite",
+            id="fleet-infinite-coordinate",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.with_fleet(FLEET_COORDS, FLEET_DEMANDS, []),
+            "at least one VehicleType",
+            id="fleet-empty",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.with_fleet(
+                FLEET_COORDS, FLEET_DEMANDS, [optopus.VehicleType("v", 1, 1)], service_times=[0.0]
+            ),
+            "'service_times' must have the same length",
+            id="fleet-service-length",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.with_fleet(
+                FLEET_COORDS,
+                FLEET_DEMANDS,
+                [optopus.VehicleType("v", 1, 1)],
+                service_times=[0.0, -1.0, 0.0, 0.0, 0.0],
+            ),
+            "service time 1 is -1",
+            id="fleet-negative-service",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.with_fleet(
+                FLEET_COORDS, FLEET_DEMANDS, [optopus.VehicleType("v", 1, 1)], objective_mode="Sum"
+            ),
+            "invalid objective mode 'Sum'",
+            id="fleet-objective-mode",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.with_fleet(
+                FLEET_COORDS, FLEET_DEMANDS, [optopus.VehicleType("v", 1, 1)], cost_weight=-1.0
+            ),
+            "'cost_weight'",
+            id="fleet-cost-weight",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.from_coordinates([(0.0, 0.0), (float("nan"), 0.0)], [0, 1], 5),
+            "coordinate 1",
+            id="cvrp-nan-coordinate",
+        ),
+    ],
+)
+def test_vrp_fleet_rejects_invalid_input(make, expected):
+    """Upstream panics on each of these, so the binding must reject them first."""
+    with pytest.raises(ValueError, match=expected):
+        make()
+
+
 # --- MaxCut kernelization ---------------------------------------------------
 
 # A path has pendant and degree-2 vertices at every step, so the rules reduce it away

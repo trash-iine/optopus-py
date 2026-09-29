@@ -2,8 +2,9 @@ use optopus::common::{Graph, seeded_rng};
 use optopus::problem::{
     Constraint, ConstraintRel, Expr, FormulaProblem, GraphColoring as OptGraphColoring, IntVar,
     IntVars, JobShopScheduling as OptJobShop, MaxCut as OptMaxCut, MaxCutKernel as OptMaxCutKernel,
-    PlantedMaxCut as OptPlantedMaxCut, Qubo as OptQubo, Sat as OptSat, TileProbs2d, TileProbs3d,
-    Tsp as OptTsp, VertexCover as OptVc, Vrp as OptVrp, WishartCouplers,
+    ObjectiveMode, PlantedMaxCut as OptPlantedMaxCut, Qubo as OptQubo, Sat as OptSat, TileProbs2d,
+    TileProbs3d, Tsp as OptTsp, VehicleType as OptVehicleType, VertexCover as OptVc, Vrp as OptVrp,
+    WishartCouplers,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -878,19 +879,228 @@ impl JobShopScheduling {
     }
 }
 
-/// The Capacitated Vehicle Routing Problem (minimization).
+/// One vehicle type of a ``Vrp`` fleet.
 ///
-/// A fleet of identical vehicles based at a depot must serve every customer exactly once
-/// without exceeding the vehicle capacity, minimizing the total travel distance.
+/// A type contributes ``max_count`` vehicles to the fleet. Every route driven by one of them
+/// is loaded, timed and priced with this type's numbers: its load may not exceed
+/// ``capacity``, it takes ``distance / speed`` plus the service times of its customers, and it
+/// costs ``fixed_cost`` once if it is used plus ``variable_cost_per_distance`` per unit of
+/// distance. Pass a list of these to :meth:`Vrp.with_fleet`.
 ///
-/// Index ``0`` is the depot; customers are ``1..=n``. A solution is encoded as a
-/// ``list[list[int]]`` with one route per vehicle, holding the customers in visiting order.
-/// The depot is implicit at both ends of every route, and empty routes are allowed.
+/// Args:
+///     name (str): A label, used in reports only; it need not be unique.
+///     capacity (int): Load a vehicle of this type carries, ``> 0``.
+///     max_count (int): Number of vehicles of this type available, ``>= 1``.
+///     speed (float): Distance units travelled per time unit, ``> 0``. Defaults to 1.0.
+///     fixed_cost (float): Cost charged once per used (non-empty) vehicle, ``>= 0``. Defaults
+///         to 0.0.
+///     variable_cost_per_distance (float): Cost per unit of distance travelled, ``>= 0``.
+///         Defaults to 0.0.
+///     min_count (int): Vehicles of this type that must be used, at most ``max_count``.
+///         Defaults to 0.
+///     max_route_time (float | None): Longest a single route of this type may take, ``> 0``.
+///         Defaults to None, which leaves routes unconstrained; ``float("inf")`` means the same.
 ///
-/// The objective a heuristic minimizes is ``distance + penalty_weight * overload``, so a
-/// solution that exceeds capacity scores worse than any feasible one but is not rejected
-/// outright. Use :meth:`evaluate_routes` to recover the raw distance and the overload
-/// separately.
+/// Raises:
+///     ValueError: If ``capacity``, ``speed`` or ``max_route_time`` is not positive, ``speed``
+///         or a cost is not finite, a cost is negative, ``max_count`` is 0, or ``min_count``
+///         exceeds ``max_count``.
+///
+/// Example:
+///     >>> truck = VehicleType("truck", capacity=6, max_count=2, fixed_cost=10.0)
+#[pyclass(module = "optopus", frozen)]
+pub struct VehicleType {
+    pub inner: OptVehicleType,
+}
+
+#[pymethods]
+impl VehicleType {
+    #[new]
+    #[pyo3(signature = (
+        name,
+        capacity,
+        max_count,
+        speed=1.0,
+        fixed_cost=0.0,
+        variable_cost_per_distance=0.0,
+        min_count=0,
+        max_route_time=None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        name: &str,
+        capacity: i64,
+        max_count: usize,
+        speed: f64,
+        fixed_cost: f64,
+        variable_cost_per_distance: f64,
+        min_count: usize,
+        max_route_time: Option<f64>,
+    ) -> PyResult<Self> {
+        let max_route_time = max_route_time.unwrap_or(f64::INFINITY);
+        // The checks upstream's `VehicleType::new` and `Vrp::with_fleet` panic on.
+        let invalid = |msg: String| {
+            Err(PyValueError::new_err(format!(
+                "vehicle type '{name}': {msg}"
+            )))
+        };
+        if capacity <= 0 {
+            return invalid(format!("'capacity' must be greater than 0, got {capacity}"));
+        }
+        if !(speed.is_finite() && speed > 0.0) {
+            return invalid(format!("'speed' must be positive and finite, got {speed}"));
+        }
+        if max_count == 0 {
+            return invalid("'max_count' must be at least 1".to_string());
+        }
+        if min_count > max_count {
+            return invalid(format!(
+                "'min_count' ({min_count}) must not exceed 'max_count' ({max_count})"
+            ));
+        }
+        for (arg, cost) in [
+            ("fixed_cost", fixed_cost),
+            ("variable_cost_per_distance", variable_cost_per_distance),
+        ] {
+            if !(cost.is_finite() && cost >= 0.0) {
+                return invalid(format!(
+                    "'{arg}' must be finite and non-negative, got {cost}"
+                ));
+            }
+        }
+        if max_route_time.is_nan() || max_route_time <= 0.0 {
+            return invalid(format!(
+                "'max_route_time' must be positive (None for no limit), got {max_route_time}"
+            ));
+        }
+        Ok(Self {
+            inner: OptVehicleType {
+                name: name.to_string(),
+                capacity,
+                speed,
+                fixed_cost,
+                variable_cost_per_distance,
+                min_count,
+                max_count,
+                max_route_time,
+            },
+        })
+    }
+
+    /// The label given at construction.
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    /// Load a vehicle of this type carries.
+    #[getter]
+    fn capacity(&self) -> i64 {
+        self.inner.capacity
+    }
+
+    /// Number of vehicles of this type available.
+    #[getter]
+    fn max_count(&self) -> usize {
+        self.inner.max_count
+    }
+
+    /// Distance units travelled per time unit.
+    #[getter]
+    fn speed(&self) -> f64 {
+        self.inner.speed
+    }
+
+    /// Cost charged once per used vehicle.
+    #[getter]
+    fn fixed_cost(&self) -> f64 {
+        self.inner.fixed_cost
+    }
+
+    /// Cost per unit of distance travelled.
+    #[getter]
+    fn variable_cost_per_distance(&self) -> f64 {
+        self.inner.variable_cost_per_distance
+    }
+
+    /// Vehicles of this type that must be used.
+    #[getter]
+    fn min_count(&self) -> usize {
+        self.inner.min_count
+    }
+
+    /// Longest a route of this type may take, or None when it is unconstrained.
+    #[getter]
+    fn max_route_time(&self) -> Option<f64> {
+        Some(self.inner.max_route_time).filter(|t| t.is_finite())
+    }
+
+    fn __repr__(&self) -> String {
+        let vt = &self.inner;
+        format!(
+            "VehicleType(name={:?}, capacity={}, max_count={}, speed={:?}, fixed_cost={:?}, \
+             variable_cost_per_distance={:?}, min_count={}, max_route_time={})",
+            vt.name,
+            vt.capacity,
+            vt.max_count,
+            vt.speed,
+            vt.fixed_cost,
+            vt.variable_cost_per_distance,
+            vt.min_count,
+            if vt.max_route_time.is_finite() {
+                format!("{:?}", vt.max_route_time)
+            } else {
+                "None".to_string()
+            }
+        )
+    }
+}
+
+/// Parses an objective mode name into upstream's `ObjectiveMode`.
+fn parse_objective_mode(mode: &str) -> PyResult<ObjectiveMode> {
+    match mode {
+        "TotalTime" => Ok(ObjectiveMode::TotalTime),
+        "Makespan" => Ok(ObjectiveMode::Makespan),
+        other => Err(PyValueError::new_err(format!(
+            "invalid objective mode '{other}' (use 'TotalTime' or 'Makespan')"
+        ))),
+    }
+}
+
+/// The Python name of an `ObjectiveMode`, the inverse of `parse_objective_mode`.
+fn objective_mode_name(mode: ObjectiveMode) -> &'static str {
+    match mode {
+        ObjectiveMode::TotalTime => "TotalTime",
+        ObjectiveMode::Makespan => "Makespan",
+    }
+}
+
+/// The Vehicle Routing Problem (minimization), capacitated and with a mixed fleet.
+///
+/// Vehicles based at a depot must serve every customer exactly once. Index ``0`` is the depot;
+/// customers are ``1..=n``. A solution is encoded as a ``list[list[int]]`` with one route per
+/// vehicle, holding the customers in visiting order. The depot is implicit at both ends of
+/// every route, and empty routes are allowed.
+///
+/// :meth:`from_coordinates`, :meth:`from_distance_matrix` and :meth:`load_file` on a CVRPLIB
+/// file build the capacitated VRP: one vehicle type of one capacity, and the objective a
+/// heuristic minimizes is ``distance + penalty_weight * overload``, so a solution that exceeds
+/// capacity scores worse than any feasible one but is not rejected outright.
+///
+/// :meth:`with_fleet` and :meth:`load_file` on a ``.toml`` file build a mixed fleet from a
+/// list of :class:`VehicleType`, with service times at the customers. The vehicles are laid out type
+/// by type, ``max_count`` of each in the order the types were given, so route ``i`` of every
+/// solution is driven by vehicle type ``slot_types()[i]``. The objective is::
+///
+///     time + cost_weight * cost
+///          + penalty_weight * (overload + time_excess + min_count_shortfall)
+///
+/// where ``time`` is the sum of the route times (``"TotalTime"``) or the longest one
+/// (``"Makespan"``), a route time being ``distance / speed`` plus the service times on it, and
+/// ``cost`` sums the fixed cost of every used vehicle and the per-distance cost of every route.
+/// With one type of speed 1 and no costs or service times it is the capacitated objective.
+///
+/// Use :meth:`evaluate_routes` to recover each part of the objective separately.
 ///
 /// Example:
 ///     >>> vrp = Vrp.from_coordinates(
@@ -903,13 +1113,28 @@ pub struct Vrp {
     pub inner: OptVrp,
 }
 
-/// Rejects a coordinate/demand pair that upstream would assert on.
-fn check_vrp_instance(coordinates: &[(f64, f64)], demands: &[i64], capacity: i64) -> PyResult<()> {
+/// Rejects a coordinate list upstream would panic on: an empty one, or a non-finite entry.
+fn check_coordinates(coordinates: &[(f64, f64)]) -> PyResult<()> {
     if coordinates.is_empty() {
         return Err(PyValueError::new_err(
             "'coordinates' must not be empty (index 0 is the depot)",
         ));
     }
+    match coordinates
+        .iter()
+        .position(|&(x, y)| !x.is_finite() || !y.is_finite())
+    {
+        Some(i) => Err(PyValueError::new_err(format!(
+            "coordinate {i} is {:?}; coordinates must be finite",
+            coordinates[i]
+        ))),
+        None => Ok(()),
+    }
+}
+
+/// Rejects a coordinate/demand pair that upstream would assert on.
+fn check_vrp_instance(coordinates: &[(f64, f64)], demands: &[i64], capacity: i64) -> PyResult<()> {
+    check_coordinates(coordinates)?;
     if coordinates.len() != demands.len() {
         return Err(PyValueError::new_err(format!(
             "'coordinates' and 'demands' must have the same length, got {} and {}",
@@ -982,8 +1207,8 @@ impl Vrp {
     ///     Vrp: A new problem instance.
     ///
     /// Raises:
-    ///     ValueError: If ``coordinates`` is empty, its length differs from ``demands``,
-    ///         ``capacity`` is not positive, or a demand is negative.
+    ///     ValueError: If ``coordinates`` is empty or holds a non-finite value, its length
+    ///         differs from ``demands``, ``capacity`` is not positive, or a demand is negative.
     #[staticmethod]
     #[pyo3(signature = (coordinates, demands, capacity, num_vehicles=0, name="vrp", rounded=false))]
     fn from_coordinates(
@@ -1004,12 +1229,118 @@ impl Vrp {
         Ok(Self { inner })
     }
 
-    /// Load a CVRP instance from a CVRPLIB-format file.
+    /// Build an instance with a mixed fleet and service times.
     ///
-    /// Accepts the TSPLIB-style header (``NAME``, ``DIMENSION``, ``EDGE_WEIGHT_TYPE: EUC_2D``,
-    /// ``CAPACITY``, and an optional ``COMMENT`` carrying ``No of trucks: K``) followed by the
-    /// ``NODE_COORD_SECTION``, ``DEMAND_SECTION`` and ``DEPOT_SECTION``. Node 1 in the file is
-    /// re-indexed to 0. Distances are always rounded, as CVRPLIB's ``EUC_2D`` prescribes.
+    /// Args:
+    ///     coordinates (list[tuple[float, float]]): ``(x, y)`` per node. Index 0 is the depot.
+    ///     demands (list[int]): Demand per node, same length as ``coordinates``. The depot's
+    ///         entry is ignored.
+    ///     vehicle_types (list[VehicleType]): The fleet, at least one type. Routes are laid out
+    ///         type by type in this order, ``max_count`` of each.
+    ///     service_times (list[float] | None): Time spent at each node, same length as
+    ///         ``coordinates``; the depot's entry is ignored. Defaults to None, no service time.
+    ///     objective_mode (str): ``"TotalTime"`` charges the sum of the route times,
+    ///         ``"Makespan"`` the longest one. Defaults to ``"TotalTime"``.
+    ///     cost_weight (float): Weight of the fleet's cost against the time term, ``>= 0``.
+    ///         Defaults to 1.0.
+    ///     name (str): Optional instance name (default ``"vrp"``).
+    ///     rounded (bool): When True, distances are rounded to the nearest integer, matching
+    ///         CVRPLIB's ``EUC_2D`` convention. Defaults to False (plain Euclidean).
+    ///
+    /// Returns:
+    ///     Vrp: A new problem instance.
+    ///
+    /// Raises:
+    ///     ValueError: If ``coordinates`` is empty or holds a non-finite value, ``demands`` or
+    ///         ``service_times`` differs from it in length, a demand is negative, a service time
+    ///         is negative or not finite, ``vehicle_types`` is empty, the objective mode is
+    ///         unrecognized, or ``cost_weight`` is negative or not finite.
+    #[staticmethod]
+    #[pyo3(signature = (
+        coordinates,
+        demands,
+        vehicle_types,
+        service_times=None,
+        objective_mode="TotalTime",
+        cost_weight=1.0,
+        name="vrp",
+        rounded=false,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn with_fleet(
+        coordinates: Vec<(f64, f64)>,
+        demands: Vec<i64>,
+        vehicle_types: Vec<PyRef<'_, VehicleType>>,
+        service_times: Option<Vec<f64>>,
+        objective_mode: &str,
+        cost_weight: f64,
+        name: &str,
+        rounded: bool,
+    ) -> PyResult<Self> {
+        check_coordinates(&coordinates)?;
+        let service_times = service_times.unwrap_or_else(|| vec![0.0; coordinates.len()]);
+        for (arg, len) in [
+            ("demands", demands.len()),
+            ("service_times", service_times.len()),
+        ] {
+            if len != coordinates.len() {
+                return Err(PyValueError::new_err(format!(
+                    "'coordinates' and '{arg}' must have the same length, got {} and {len}",
+                    coordinates.len()
+                )));
+            }
+        }
+        check_demands(&demands)?;
+        if let Some(i) = service_times
+            .iter()
+            .position(|&t| !t.is_finite() || t < 0.0)
+        {
+            return Err(PyValueError::new_err(format!(
+                "service time {i} is {}; service times must be finite and non-negative",
+                service_times[i]
+            )));
+        }
+        if vehicle_types.is_empty() {
+            return Err(PyValueError::new_err(
+                "'vehicle_types' must hold at least one VehicleType",
+            ));
+        }
+        let objective_mode = parse_objective_mode(objective_mode)?;
+        if !(cost_weight.is_finite() && cost_weight >= 0.0) {
+            return Err(PyValueError::new_err(format!(
+                "'cost_weight' must be finite and non-negative, got {cost_weight}"
+            )));
+        }
+        let vehicle_types = vehicle_types.iter().map(|vt| vt.inner.clone()).collect();
+        Ok(Self {
+            inner: OptVrp::with_fleet(
+                name,
+                coordinates,
+                demands,
+                service_times,
+                vehicle_types,
+                objective_mode,
+                cost_weight,
+                rounded,
+            ),
+        })
+    }
+
+    /// Load an instance from a file: a mixed fleet from a ``.toml`` file, a CVRP from any
+    /// other.
+    ///
+    /// The CVRPLIB reader accepts the TSPLIB-style header (``NAME``, ``DIMENSION``,
+    /// ``EDGE_WEIGHT_TYPE: EUC_2D``, ``CAPACITY``, and an optional ``COMMENT`` carrying
+    /// ``No of trucks: K``) followed by the ``NODE_COORD_SECTION``, ``DEMAND_SECTION`` and
+    /// ``DEPOT_SECTION``. Node 1 in the file is re-indexed to 0. Distances are always rounded,
+    /// as CVRPLIB's ``EUC_2D`` prescribes.
+    ///
+    /// A ``.toml`` file holds what :meth:`with_fleet` takes: top-level ``name``,
+    /// ``objective_mode``, ``cost_weight`` and ``rounded`` (all but ``objective_mode``
+    /// optional), a ``[depot]`` table with ``x`` and ``y``, one ``[[vehicle_types]]`` table per
+    /// type with the :class:`VehicleType` arguments as keys, and one ``[[customers]]`` table
+    /// per customer with ``id`` (exactly ``1..=n``), ``x``, ``y``, ``demand`` and an optional
+    /// ``service_time``. Unknown keys are rejected.
     ///
     /// Args:
     ///     path (str): Path to the instance file.
@@ -1018,12 +1349,11 @@ impl Vrp {
     ///     Vrp: The loaded problem instance.
     ///
     /// Raises:
-    ///     ValueError: If the file cannot be read or does not parse.
+    ///     ValueError: If the file cannot be read, does not parse, or describes an invalid
+    ///         instance.
     #[staticmethod]
     fn load_file(path: &str) -> PyResult<Self> {
-        // `OptVrp::load_file` reads a `.toml` file as a mixed fleet, which this class does not
-        // expose, so read CVRPLIB whatever the file is named.
-        OptVrp::load_cvrplib(std::path::Path::new(path))
+        OptVrp::load_file(path)
             .map(|inner| Self { inner })
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -1079,21 +1409,89 @@ impl Vrp {
         self.inner.get_n()
     }
 
-    /// Fleet size. When the instance was built with ``num_vehicles=0``, this is the value
+    /// Fleet size, the ``max_count`` of every vehicle type summed, and so the number of routes
+    /// in every solution. When a CVRP was built with ``num_vehicles=0``, this is the value
     /// optopus picked.
     fn num_vehicles(&self) -> usize {
         self.inner.num_slots()
     }
 
-    /// Vehicle capacity.
-    fn capacity(&self) -> i64 {
-        self.capacity_of_the_fleet()
+    /// Vehicle capacity of a fleet with one vehicle type.
+    ///
+    /// Raises:
+    ///     ValueError: If the fleet has several vehicle types; read their capacities from
+    ///         :meth:`vehicle_types` instead.
+    fn capacity(&self) -> PyResult<i64> {
+        match self.inner.vehicle_types() {
+            [only] => Ok(only.capacity),
+            types => Err(PyValueError::new_err(format!(
+                "the fleet has {} vehicle types, so there is no single capacity; \
+                 read vehicle_types() instead",
+                types.len()
+            ))),
+        }
     }
 
-    /// The penalty charged per unit of load over capacity.
+    /// The fleet's vehicle types, in the order their routes are laid out.
+    fn vehicle_types(&self) -> Vec<VehicleType> {
+        self.inner
+            .vehicle_types()
+            .iter()
+            .map(|vt| VehicleType { inner: vt.clone() })
+            .collect()
+    }
+
+    /// The vehicle type driving each route: entry ``i`` indexes :meth:`vehicle_types` for route
+    /// ``i`` of every solution. Its length is :meth:`num_vehicles`.
+    fn slot_types(&self) -> Vec<usize> {
+        (0..self.inner.num_slots())
+            .map(|s| self.inner.type_of_slot(s))
+            .collect()
+    }
+
+    /// Time spent at each node, index 0 (the depot) included and always 0.
+    fn service_times(&self) -> Vec<f64> {
+        self.inner.service_times.clone()
+    }
+
+    /// Which route times the objective charges: ``"TotalTime"`` (their sum) or
+    /// ``"Makespan"`` (the longest).
+    fn objective_mode(&self) -> &'static str {
+        objective_mode_name(self.inner.objective_mode())
+    }
+
+    /// Weight of the fleet's cost against the time term.
+    fn cost_weight(&self) -> f64 {
+        self.inner.cost_weight()
+    }
+
+    /// The same instance charging the other aggregation of route times.
     ///
-    /// It is ``(num_customers + num_vehicles) * longest_edge + 1``, more than any set of routes
-    /// can travel, so a solution within capacity always scores better than one over it.
+    /// Args:
+    ///     objective_mode (str): ``"TotalTime"`` or ``"Makespan"``.
+    ///
+    /// Returns:
+    ///     Vrp: A copy with the new mode; this instance is unchanged.
+    ///
+    /// Raises:
+    ///     ValueError: If the objective mode is unrecognized.
+    fn with_objective_mode(&self, objective_mode: &str) -> PyResult<Self> {
+        let mode = parse_objective_mode(objective_mode)?;
+        Ok(Self {
+            inner: self.inner.clone().with_objective_mode(mode),
+        })
+    }
+
+    /// The penalty charged per unit of overload, of route-time excess and of vehicle missing
+    /// from a ``min_count``.
+    ///
+    /// It bounds everything else the objective can charge, plus one: every route set travels
+    /// at most ``(num_customers + num_vehicles) * longest_edge``, which over the slowest speed
+    /// plus every service time bounds the time term, and the cost term is bounded by every
+    /// vehicle's fixed cost plus the highest per-distance cost over that distance, times
+    /// ``cost_weight``. For a CVRP it is ``(num_customers + num_vehicles) * longest_edge + 1``.
+    /// So a solution within capacity always scores better than one over it; a route-time
+    /// excess below one time unit is charged proportionally less.
     fn penalty_weight(&self) -> f64 {
         self.inner.penalty_weight()
     }
@@ -1102,13 +1500,29 @@ impl Vrp {
     ///
     /// Args:
     ///     routes (list[list[int]]): One route per vehicle, ``num_vehicles()`` of them with
-    ///         empty ones included, holding customer indices in visiting order. Every customer
-    ///         ``1..=n`` must appear exactly once across all routes; the depot must not appear.
+    ///         empty ones included, holding customer indices in visiting order. Route ``i`` is
+    ///         driven by vehicle type ``slot_types()[i]``. Every customer ``1..=n`` must appear
+    ///         exactly once across all routes; the depot must not appear.
     ///
     /// Returns:
-    ///     dict: ``{"objective": float, "distance": float, "overload": int,
-    ///     "route_loads": list[int]}``. ``objective`` equals ``distance`` exactly when the
-    ///     partition is feasible, i.e. when ``overload`` is 0.
+    ///     dict: The objective and its parts:
+    ///
+    ///     - ``objective`` (float): what a heuristic minimizes.
+    ///     - ``distance`` (float): total distance travelled.
+    ///     - ``overload`` (int): load over capacity, summed over the routes.
+    ///     - ``route_loads`` (list[int]), ``route_distances`` (list[float]),
+    ///       ``route_times`` (list[float]): per route.
+    ///     - ``used_count`` (list[int]): non-empty routes per vehicle type.
+    ///     - ``total_time`` (float), ``makespan`` (float): the sum and the maximum of the route
+    ///       times.
+    ///     - ``time_excess`` (float): route time over ``max_route_time``, summed.
+    ///     - ``min_count_shortfall`` (int): vehicles missing from each type's ``min_count``,
+    ///       summed.
+    ///     - ``total_cost`` (float): fixed plus per-distance cost, before ``cost_weight``.
+    ///
+    ///     The solution is feasible when ``overload``, ``time_excess`` and
+    ///     ``min_count_shortfall`` are all 0. For a CVRP ``objective`` then equals
+    ///     ``distance`` exactly.
     ///
     /// Raises:
     ///     ValueError: If there is not one route per vehicle, or ``routes`` is not a valid
@@ -1135,27 +1549,28 @@ impl Vrp {
         dict.set_item("distance", solution.total_distance())?;
         dict.set_item("overload", solution.overload)?;
         dict.set_item("route_loads", solution.route_loads)?;
+        dict.set_item("route_distances", solution.route_distance)?;
+        dict.set_item("route_times", solution.route_time)?;
+        dict.set_item("used_count", solution.used_count)?;
+        dict.set_item("total_time", solution.total_time)?;
+        dict.set_item("makespan", solution.makespan)?;
+        dict.set_item("time_excess", solution.time_excess)?;
+        dict.set_item("min_count_shortfall", solution.min_count_shortfall)?;
+        dict.set_item("total_cost", solution.total_cost)?;
         Ok(dict)
     }
 
     fn __repr__(&self) -> String {
+        let fleet = match self.inner.vehicle_types() {
+            [only] => format!("capacity={}", only.capacity),
+            types => format!("vehicle_types={}", types.len()),
+        };
         format!(
-            "Vrp(name={:?}, num_customers={}, capacity={}, num_vehicles={})",
+            "Vrp(name={:?}, num_customers={}, {fleet}, num_vehicles={})",
             self.inner.name,
             self.inner.get_n(),
-            self.capacity_of_the_fleet(),
             self.inner.num_slots()
         )
-    }
-}
-
-impl Vrp {
-    /// The capacity of the one vehicle type every instance the binding builds has.
-    ///
-    /// optopus's `Vrp` also covers a mixed fleet, but the binding's constructors and
-    /// `load_file` (CVRPLIB only) build a single type, so there is one capacity to report.
-    fn capacity_of_the_fleet(&self) -> i64 {
-        self.inner.vehicle_types()[0].capacity
     }
 }
 
