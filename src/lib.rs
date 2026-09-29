@@ -1,8 +1,8 @@
 //! Python bindings for the optopus combinatorial optimization library.
 //!
 //! Exposes problem types (MaxCut, Qubo, Sat, VertexCover, Tsp, JobShopScheduling,
-//! Vrp, GraphColoring, Formula), the Graph type behind the graph-based problems,
-//! generic heuristics (LocalSearch, SimulatedAnnealing, TabuSearch,
+//! Vrp with its VehicleType, GraphColoring, Formula), the Graph type behind the
+//! graph-based problems, generic heuristics (LocalSearch, SimulatedAnnealing, TabuSearch,
 //! LateAcceptanceHillClimbing, RandomWalk, BangBangSimulatedAnnealing, BeamSearch,
 //! PopulationAnnealing, ReinforcementLearningSearch), composed ones built from other
 //! heuristics (VariableNeighborhoodSearch, Sequential, Iterated, Restart,
@@ -39,6 +39,7 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<problem::Tsp>()?;
     m.add_class::<problem::JobShopScheduling>()?;
     m.add_class::<problem::Vrp>()?;
+    m.add_class::<problem::VehicleType>()?;
     m.add_class::<problem::GraphColoring>()?;
     m.add_class::<problem::Formula>()?;
     m.add_class::<heuristic::LocalSearch>()?;

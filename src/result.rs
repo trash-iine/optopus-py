@@ -21,8 +21,9 @@ pub struct RunResult {
     /// - ``Tsp`` → ``list[int]`` permutation of city indices.
     /// - ``JobShopScheduling`` → ``list[int]`` operation sequence.
     /// - ``Vrp`` → ``list[list[int]]``, one route of customer indices per vehicle. The list
-    ///   has ``Vrp.num_vehicles()`` entries, the depot is implicit at both ends of each
-    ///   route, and empty routes may appear.
+    ///   has ``Vrp.num_vehicles()`` entries, route ``i`` is driven by vehicle type
+    ///   ``Vrp.slot_types()[i]``, the depot is implicit at both ends of each route, and empty
+    ///   routes may appear.
     /// - ``GraphColoring`` → ``list[int]``, each vertex's color in ``[0, num_colors)``.
     /// - ``Formula`` → ``list[int]``, one value per variable. Binary variables report 0 and 1,
     ///   which compare equal to ``False`` and ``True``.
