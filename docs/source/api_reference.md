@@ -4,6 +4,8 @@ This reference is generated automatically from the docstrings of the compiled `o
 (authored as Rust `///` doc comments). For a narrative introduction, see
 [Quickstart](quickstart.md) and [Examples](examples.md).
 
+`optopus.__version__` is the installed package's version, as a string such as `"0.1.0"`.
+
 ## Problems
 
 A *problem* describes **what** to optimize. Each is built from in-memory Python data via a static

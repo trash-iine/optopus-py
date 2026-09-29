@@ -24,6 +24,8 @@ use pyo3::prelude::*;
 
 #[pymodule]
 fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // The package version is Cargo.toml's, which `invoke set-version` moves for a release.
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<stop_condition::StopCondition>()?;
     m.add_class::<result::RunResult>()?;
     m.add_class::<result::RunReport>()?;
