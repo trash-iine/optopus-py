@@ -59,6 +59,9 @@ entries below are breaking; see **Changed** and **Removed**.
 - `Formula` accepts a `bounds` argument giving each variable an integer range, and the `Reverse`
   neighborhood alongside `Change` and `Swap`. `eval_objective` and `eval_penalty` score an
   assignment without running a search.
+- `RunResult.iterations` and `RunReport.avg_iterations`, the iterations a run made in the
+  heuristic's own unit. It counts what `n_accepted + n_rejected` misses, such as
+  `HybridGeneticSearch`'s initial population.
 - `Vrp.penalty_weight()`, the weight the objective charges per unit of overload, matching
   `GraphColoring.penalty_weight()`.
 - The Sphinx documentation is now published to GitHub Pages at
