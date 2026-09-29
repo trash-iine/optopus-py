@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use optopus::prelude::StopCondition as OptStopCondition;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 /// Stopping criteria for a heuristic run.
@@ -13,6 +14,9 @@ use pyo3::prelude::*;
 ///     max_duration_secs (float | None): Stop after this wall-clock duration, in seconds.
 ///     max_failed_update (int | None): Stop after this many consecutive iterations
 ///         without improving the best solution.
+///
+/// Raises:
+///     ValueError: If ``max_duration_secs`` is negative or not finite.
 #[pyclass(module = "optopus", from_py_object)]
 #[derive(Clone)]
 pub struct StopCondition {
@@ -29,18 +33,31 @@ impl StopCondition {
         max_iteration: Option<u64>,
         max_duration_secs: Option<f64>,
         max_failed_update: Option<u64>,
-    ) -> Self {
-        Self {
+    ) -> PyResult<Self> {
+        // `Duration::from_secs_f64` panics on a negative or non-finite value.
+        if let Some(secs) = max_duration_secs
+            && !(secs >= 0.0 && secs.is_finite())
+        {
+            return Err(PyValueError::new_err(format!(
+                "'max_duration_secs' must be finite and non-negative, got {secs}"
+            )));
+        }
+        Ok(Self {
             max_iteration,
             max_duration_secs,
             max_failed_update,
-        }
+        })
     }
 
     fn __repr__(&self) -> String {
+        fn py<T: std::fmt::Display>(value: Option<T>) -> String {
+            value.map_or_else(|| "None".to_string(), |v| v.to_string())
+        }
         format!(
-            "StopCondition(max_iteration={:?}, max_duration_secs={:?}, max_failed_update={:?})",
-            self.max_iteration, self.max_duration_secs, self.max_failed_update
+            "StopCondition(max_iteration={}, max_duration_secs={}, max_failed_update={})",
+            py(self.max_iteration),
+            py(self.max_duration_secs.map(|s| format!("{s:?}"))),
+            py(self.max_failed_update)
         )
     }
 }

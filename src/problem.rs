@@ -49,7 +49,8 @@ fn parse_rel(rel: &str) -> PyResult<ConstraintRel> {
         "Ge" | ">=" => Ok(ConstraintRel::Ge),
         "Gt" | ">" => Ok(ConstraintRel::Gt),
         other => Err(PyValueError::new_err(format!(
-            "invalid relation '{other}' (use 'Lt', 'Le', 'Eq', 'Ge', or 'Gt')"
+            "invalid relation '{other}' (use 'Lt', 'Le', 'Eq', 'Ge', 'Gt', their symbols \
+             '<', '<=', '==', '>=', '>', or 'Clamp')"
         ))),
     }
 }
@@ -519,15 +520,29 @@ impl Sat {
     /// Returns:
     ///     Sat: A new problem instance.
     ///
+    /// Raises:
+    ///     ValueError: If a literal is 0 or names a variable above ``n_vars``.
+    ///
     /// Example:
     ///     ``Sat.from_clauses(3, [[1, -2, 3], [-1, 2], [3]])``
     #[staticmethod]
-    fn from_clauses(n_vars: usize, clauses: Vec<Vec<i64>>) -> Self {
+    fn from_clauses(n_vars: usize, clauses: Vec<Vec<i64>>) -> PyResult<Self> {
+        // Upstream panics on a literal it cannot index, so reject those here.
+        for (k, clause) in clauses.iter().enumerate() {
+            if let Some(&bad) = clause
+                .iter()
+                .find(|&&l| l == 0 || l.unsigned_abs() > n_vars as u64)
+            {
+                return Err(PyValueError::new_err(format!(
+                    "clause {k} has literal {bad}, outside ±1..={n_vars}"
+                )));
+            }
+        }
         let mut inner = OptSat::new(n_vars);
         for clause in clauses {
             inner.add_clause(clause);
         }
-        Self { inner }
+        Ok(Self { inner })
     }
 
     fn __repr__(&self) -> String {
@@ -642,10 +657,12 @@ impl Tsp {
     ///     Tsp: A new problem instance reading distances from the matrix.
     ///
     /// Raises:
-    ///     ValueError: If the matrix is empty or not square.
+    ///     ValueError: If the matrix is empty, not square, not symmetric, or holds a negative
+    ///         or non-finite distance.
     #[staticmethod]
     #[pyo3(signature = (matrix, name=String::new()))]
     fn from_distance_matrix(matrix: Vec<Vec<f64>>, name: String) -> PyResult<Self> {
+        check_distance_matrix(&matrix)?;
         OptTsp::from_distance_matrix(name, matrix)
             .map(|inner| Self { inner })
             .map_err(|e| PyValueError::new_err(e.to_string()))
@@ -904,6 +921,43 @@ fn check_vrp_instance(coordinates: &[(f64, f64)], demands: &[i64], capacity: i64
             "'capacity' must be greater than 0, got {capacity}"
         )));
     }
+    check_demands(demands)
+}
+
+/// Rejects a negative demand, which would let a route carry more than its capacity.
+fn check_demands(demands: &[i64]) -> PyResult<()> {
+    match demands.iter().position(|&d| d < 0) {
+        Some(i) => Err(PyValueError::new_err(format!(
+            "demand {i} is negative ({})",
+            demands[i]
+        ))),
+        None => Ok(()),
+    }
+}
+
+/// Rejects a distance matrix the moves would price wrongly: a negative or non-finite entry, or
+/// an asymmetric one, since a reversed segment is priced from the edges at its ends alone. A
+/// matrix that is not square is left for upstream to report.
+fn check_distance_matrix(matrix: &[Vec<f64>]) -> PyResult<()> {
+    let n = matrix.len();
+    if matrix.iter().any(|row| row.len() != n) {
+        return Ok(());
+    }
+    for (i, row) in matrix.iter().enumerate() {
+        for (j, &d) in row.iter().enumerate() {
+            if !d.is_finite() || d < 0.0 {
+                return Err(PyValueError::new_err(format!(
+                    "distance [{i}][{j}] is {d}; distances must be finite and non-negative"
+                )));
+            }
+            let e = matrix[j][i];
+            if j > i && (d - e).abs() > 1e-9 * d.abs().max(e.abs()).max(1.0) {
+                return Err(PyValueError::new_err(format!(
+                    "the matrix must be symmetric, but [{i}][{j}] is {d} and [{j}][{i}] is {e}"
+                )));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -927,8 +981,8 @@ impl Vrp {
     ///     Vrp: A new problem instance.
     ///
     /// Raises:
-    ///     ValueError: If ``coordinates`` is empty, its length differs from ``demands``, or
-    ///         ``capacity`` is not positive.
+    ///     ValueError: If ``coordinates`` is empty, its length differs from ``demands``,
+    ///         ``capacity`` is not positive, or a demand is negative.
     #[staticmethod]
     #[pyo3(signature = (coordinates, demands, capacity, num_vehicles=0, name="vrp".to_string(), rounded=false))]
     fn from_coordinates(
@@ -984,8 +1038,9 @@ impl Vrp {
     ///     Vrp: A new problem instance reading distances from the matrix.
     ///
     /// Raises:
-    ///     ValueError: If the matrix is empty or not square, its size differs from
-    ///         ``demands``, or ``capacity`` is not positive.
+    ///     ValueError: If the matrix is empty, not square, not symmetric, or holds a negative
+    ///         or non-finite distance, its size differs from ``demands``, ``capacity`` is not
+    ///         positive, or a demand is negative.
     #[staticmethod]
     #[pyo3(signature = (matrix, demands, capacity, num_vehicles=0, name="vrp".to_string()))]
     fn from_distance_matrix(
@@ -1007,6 +1062,8 @@ impl Vrp {
                 "'capacity' must be greater than 0, got {capacity}"
             )));
         }
+        check_demands(&demands)?;
+        check_distance_matrix(&matrix)?;
         OptVrp::from_distance_matrix(name, matrix, demands, capacity, num_vehicles)
             .map(|inner| Self { inner })
             .map_err(|e| PyValueError::new_err(e.to_string()))
@@ -1100,8 +1157,9 @@ impl Vrp {
 ///
 /// Raises:
 ///     ValueError: If ``n_vars`` is 0, ``bounds`` has the wrong length, a bound is inverted,
-///         the direction or a relation is unrecognized, or the objective or a constraint
-///         reads a variable index outside ``[0, n_vars)``.
+///         the direction or a relation is unrecognized, a ``penalty_weight`` is negative or
+///         not finite, a ``Clamp`` range has ``lo`` above ``hi``, or the objective or a
+///         constraint reads a variable index outside ``[0, n_vars)``.
 ///
 /// Example:
 ///     Minimize ``x0 + x1 - 2*x0*x1`` over two binary variables (an XOR-style objective)::
@@ -1288,10 +1346,21 @@ fn extract_constraint(c: &Bound<'_, PyAny>, n_vars: usize) -> PyResult<Constrain
         )
     })?;
     let (lhs_any, rel, rhs_any, penalty_weight) = tup;
+    // A negative weight would reward breaking the constraint.
+    if !(penalty_weight >= 0.0 && penalty_weight.is_finite()) {
+        return Err(PyValueError::new_err(format!(
+            "penalty_weight must be finite and non-negative, got {penalty_weight}"
+        )));
+    }
     if rel == "Clamp" {
         let expr_poly: PyPoly = lhs_any.extract()?;
         check_var_indices(n_vars, &expr_poly)?;
         let (lo, hi): (f64, f64) = rhs_any.extract()?;
+        if lo > hi {
+            return Err(PyValueError::new_err(format!(
+                "Clamp range has lo ({lo}) above hi ({hi})"
+            )));
+        }
         Ok(Constraint::Clamp {
             expr: poly_to_expr(&expr_poly),
             lo,

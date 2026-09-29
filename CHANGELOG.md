@@ -95,6 +95,13 @@ entries below are breaking; see **Changed** and **Removed**.
   than Rust doc examples, and rustdoc otherwise fails on the lib sharing its name with the
   `optopus` dependency.
 
+- Inputs the search would price wrongly now raise `ValueError` instead of running: an
+  asymmetric, negative or non-finite distance matrix in `Tsp.from_distance_matrix` and
+  `Vrp.from_distance_matrix`, a negative `Vrp` demand, and a negative or non-finite
+  `Formula` `penalty_weight` or a `Clamp` range with `lo` above `hi`. Symmetrize an
+  asymmetric matrix, for example with `(d[i][j] + d[j][i]) / 2`, and state a reward as a
+  positive weight on the opposite constraint instead of a negative weight.
+
 ### Removed
 
 - **`TspWithCoordinates`, renamed to `Tsp`.** optopus renamed the problem when it gained
@@ -106,6 +113,10 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Fixed
 
+- `Sat.from_clauses` raises `ValueError` for a literal of 0 or one naming a variable above
+  `n_vars`, and `StopCondition` for a negative or non-finite `max_duration_secs`. Both used to
+  fail with a `PanicException` from the core.
+- `StopCondition`'s repr prints `None` and plain numbers instead of Rust's `Some(...)`.
 - A large int returned by `tabu_keys`, such as `item * 10**15 + bin`, no longer aborts the
   Python process. Int keys used to index an array sized by the largest key; they are now kept
   in a map, through optopus's `TabuKey::Var`, with the same tabu behavior.

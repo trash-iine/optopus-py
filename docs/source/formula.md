@@ -68,7 +68,8 @@ one, and it pays `penalty_weight × violation` while it does. Each constraint is
 ```
 
 Each constraint and the `Clamp` range must be tuples; a list in their place raises
-`TypeError`. The relation is one of the names below, or its symbol: `"<"`, `"<="`, `"=="` (or
+`TypeError`. A negative or non-finite `penalty_weight`, or a `Clamp` range with `lo` above
+`hi`, raises `ValueError`. The relation is one of the names below, or its symbol: `"<"`, `"<="`, `"=="` (or
 `"="`), `">="`, `">"`.
 
 With `d = lhs − rhs`, the violation is:

@@ -634,6 +634,13 @@ def test_same_seed_reproduces_report():
             lambda: optopus.GraphColoring.from_edges(TRIANGLE, num_colors=0),
             id="graph-coloring-no-colors",
         ),
+        pytest.param(lambda: optopus.Sat.from_clauses(2, [[1, 3]]), id="sat-literal-too-large"),
+        pytest.param(lambda: optopus.Sat.from_clauses(2, [[-3]]), id="sat-negated-too-large"),
+        pytest.param(lambda: optopus.Sat.from_clauses(2, [[0]]), id="sat-literal-zero"),
+        pytest.param(lambda: optopus.StopCondition(max_duration_secs=-1.0), id="duration-negative"),
+        pytest.param(
+            lambda: optopus.StopCondition(max_duration_secs=float("inf")), id="duration-infinite"
+        ),
         pytest.param(
             lambda: optopus.Tsp.from_coordinates([]),
             id="tsp-no-cities",
@@ -694,6 +701,85 @@ def test_invalid_parameters_raise_value_error(make):
     """Upstream asserts on these, so the binding must reject them before the panic."""
     with pytest.raises(ValueError):
         make()
+
+
+@pytest.mark.parametrize(
+    ("make", "expected"),
+    [
+        pytest.param(
+            lambda: optopus.Formula(
+                n_vars=1, objective=[([0], 1.0)], constraints=[([([0], 1.0)], "Le", [], -1.0)]
+            ),
+            "penalty_weight must be finite and non-negative",
+            id="formula-negative-weight",
+        ),
+        pytest.param(
+            lambda: optopus.Formula(
+                n_vars=1,
+                objective=[([0], 1.0)],
+                constraints=[([([0], 1.0)], "Clamp", (2.0, 1.0), 1.0)],
+            ),
+            r"lo \(2\) above hi \(1\)",
+            id="formula-clamp-inverted",
+        ),
+        pytest.param(
+            lambda: optopus.Formula(
+                n_vars=1, objective=[([0], 1.0)], constraints=[([([0], 1.0)], "!=", [], 1.0)]
+            ),
+            "'Clamp'",
+            id="formula-unknown-relation-lists-clamp",
+        ),
+        pytest.param(
+            lambda: optopus.Tsp.from_distance_matrix([[0.0, 1.0], [2.0, 0.0]]),
+            "must be symmetric",
+            id="tsp-asymmetric-matrix",
+        ),
+        pytest.param(
+            lambda: optopus.Tsp.from_distance_matrix([[0.0, -1.0], [-1.0, 0.0]]),
+            "non-negative",
+            id="tsp-negative-distance",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.from_distance_matrix([[0.0, 1.0], [3.0, 0.0]], [0, 1], 5),
+            "must be symmetric",
+            id="vrp-asymmetric-matrix",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.from_distance_matrix(
+                [[0.0, float("nan")], [float("nan"), 0.0]], [0, 1], 5
+            ),
+            "finite",
+            id="vrp-nan-distance",
+        ),
+        pytest.param(
+            lambda: optopus.Vrp.from_coordinates([(0.0, 0.0), (1.0, 0.0)], [0, -1], 5),
+            "demand 1 is negative",
+            id="vrp-negative-demand",
+        ),
+    ],
+)
+def test_inputs_the_search_would_misprice_raise_value_error(make, expected):
+    """The search would run on these, but price moves or penalties wrongly."""
+    with pytest.raises(ValueError, match=expected):
+        make()
+
+
+def test_a_matrix_symmetric_up_to_rounding_is_accepted():
+    third = 1.0 / 3.0
+    tsp = optopus.Tsp.from_distance_matrix([[0.0, third], [third * (1 + 1e-12), 0.0]])
+    assert tsp.num_cities() == 2
+
+
+@pytest.mark.parametrize("rel", ["<", "<=", "==", "=", ">=", ">"])
+def test_formula_accepts_relation_symbols(rel):
+    constraint = ([([0], 1.0)], rel, [], 1.0)
+    optopus.Formula(n_vars=1, objective=[([0], 1.0)], constraints=[constraint])
+
+
+def test_stop_condition_repr_reads_as_python():
+    assert repr(optopus.StopCondition(max_iteration=5, max_duration_secs=1.0)) == (
+        "StopCondition(max_iteration=5, max_duration_secs=1.0, max_failed_update=None)"
+    )
 
 
 @pytest.mark.parametrize(
