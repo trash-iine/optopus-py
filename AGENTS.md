@@ -33,7 +33,8 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
 ## Commands
 - Setup: `git submodule update --init`, `uv sync --dev`, then `uv run pre-commit install` once.
 - Build the extension into `.venv`: `uv run maturin develop`. Tests exercise that build, so rebuild
-  after touching `src/` or `vendor/`.
+  after touching `src/` or `vendor/`. It is a dev build (opt-level 1, no LTO); anything that
+  measures time uses `uv run maturin develop --release`, which matches the wheels (ADR 0006).
 - All CI checks, run to completion with a summary: `uv run invoke ci` (`cargo fmt --check`,
   `cargo clippy --all-targets -- -D warnings`, `ruff check .`, `ruff format --check .`,
   `maturin develop`, `pytest`). Run it before pushing.

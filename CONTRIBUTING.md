@@ -49,6 +49,10 @@ is a digest of this document for AI agents; where the two disagree, this documen
   backticks render as inline code (`default_role = "literal"` in `docs/source/conf.py`).
 - Raise `ValueError` / `TypeError` from the binding for inputs the upstream crate would reject with
   a panic; Python users should never see a Rust panic.
+- Cargo takes build profiles from this crate only, so `Cargo.toml` sets them: `dev` at
+  opt-level 1, because the heuristics are instantiated here and run 13-24x slower unoptimized,
+  and `release` with optopus's `lto = "fat"` and `codegen-units = 1` (ADR 0006). Time anything,
+  and compare speed with anything, on `maturin develop --release`.
 - `vendor/optopus` is a git submodule and a path dependency. Update it in its own commit
   (`Update the vendored optopus to <sha>`) together with the binding changes the new upstream API
   requires.

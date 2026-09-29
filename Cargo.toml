@@ -27,3 +27,17 @@ pyo3 = { version = "0.28.3", features = ["abi3-py39"] }
 # and `cargo test` link against libpython instead; maturin turns it on for the
 # wheel via `features` in pyproject.toml.
 extension-module = ["pyo3/extension-module"]
+
+# Cargo reads profiles from this crate only, so the vendored optopus's own
+# `[profile.release]` never applied to the wheel. See ADR 0006 for the numbers.
+[profile.release]
+# The settings optopus measured for its neighborhood scans: `fat` LTO keeps
+# TabuSearch off an allocation-layout cliff (1.9x on a 2000-vertex MaxCut here).
+lto = "fat"
+codegen-units = 1
+
+[profile.dev]
+# The heuristics are generic and instantiated in this crate, so an unoptimized
+# dev build runs them 13-24x slower than opt-level 1, which keeps debug
+# assertions and costs a few seconds of build time. Time with `--release`.
+opt-level = 1
