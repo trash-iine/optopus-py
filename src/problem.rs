@@ -1085,6 +1085,14 @@ impl Vrp {
         self.inner.capacity
     }
 
+    /// The penalty charged per unit of load over capacity.
+    ///
+    /// It is ``(num_customers + num_vehicles) * longest_edge + 1``, more than any set of routes
+    /// can travel, so a solution within capacity always scores better than one over it.
+    fn penalty_weight(&self) -> f64 {
+        self.inner.penalty_weight()
+    }
+
     /// Score a route partition without running a heuristic.
     ///
     /// Args:
