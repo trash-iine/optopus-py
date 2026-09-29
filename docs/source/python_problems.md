@@ -38,8 +38,22 @@ that automatic.
 `rng` is a `random.Random` seeded from the run's seed. Draw from it, not from the global `random`
 module, and a run with a `seed` reproduces exactly.
 
-`tabu_keys` returns an int, a tuple of ints, or a list of those. A move is tabu while any of its
-keys is.
+`tabu_keys` returns one key or a list of keys, and a move is tabu while any of its keys is. A
+key is a non-negative int, or a tuple of two or three non-negative ints; anything else raises
+`TypeError`. An int key indexes an array as long as the largest key, so keep int keys small
+and dense, such as a variable or item index, and combine indices in a tuple, `(item, bin)`,
+rather than arithmetic such as `item * 1000 + bin`. An empty list makes the move never tabu.
+Keys of different neighborhoods share one memory, so a flip and a swap keyed on the same
+variable index forbid each other.
+
+`random_neighbor` returning `None` means the solution has no move in that neighborhood.
+`SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `LateAcceptanceHillClimbing` and
+`PopulationAnnealing` end the run there, and `RandomWalk` counts the step as rejected and tries
+again. Return `None` only when there truly is no move; a neighborhood that is empty only
+sometimes, such as a swap between bins when every item shares one, is better merged with one
+that always has a move.
+
+`RunResult.solution` is the solution object your methods produced, returned as it is.
 
 ## What some heuristics need besides
 
@@ -76,6 +90,26 @@ it edits, the partial, is any Python object your methods agree on, typically lis
 `to_partial` must copy. A partial that shares its lists with the solution would change the
 solution behind the search's back. Fold capacity violations into `insertion_cost` with a penalty,
 so that some place is always available.
+
+The costs are read as costs whatever `minimize` says, so a maximizing problem states them in
+terms of what it loses:
+
+- `removal_gain` is how much better the partial gets by taking the element out, positive when
+  removing it helps. Worst removal takes the elements with the largest gain first.
+- `insertion_cost` is how much worse the partial gets by putting the element there. Lower is
+  better, and repair puts each element where it is lowest.
+- `relatedness` returns a number, ints included; Shaw removal takes elements that are alike
+  together.
+- `num_buckets` counts the containers an element may go into now. A problem that opens
+  containers on demand, like bins, includes one empty container here, so repair can always open
+  a new one.
+- `num_places` is `1` for a container whose order does not matter (a bin, a color class),
+  `len + 1` for a sequence (a route), and `len` for a cyclic one (a tour).
+- `partial_objective` is in the problem's own direction, like `objective`. The search calls
+  `finish` only for a candidate it accepts and reads `partial_objective` for the others, so it
+  saves time only once most candidates are rejected.
+- `repair_around` receives `anchors` as a list of the elements just put back, and edits the
+  partial in place.
 
 ## Example
 
@@ -149,6 +183,25 @@ Two optional methods decide most of that cost.
   tabu search price the whole neighborhood every step.
 - Without `random_neighbor`, simulated annealing, late acceptance, random walk and population
   annealing build the full list from `neighbors` every step just to pick one move from it.
+
+With both, a step still calls `apply` and `objective` once for every move it accepts, since the
+new current solution needs its own value. An expensive `objective` shows up in proportion to
+the acceptance rate.
+
+## Constraints and flat objectives
+
+The generic heuristics accept any solution `new_solution` and `apply` return, so a hard
+constraint is either kept by construction, with moves that cannot break it, or penalized in
+`objective`. A penalty needs a weight larger than the most a move can gain by breaking the
+constraint, as [Choosing a penalty weight](formula.md#choosing-a-penalty-weight) explains
+for `Formula`; the built-in `VertexCover` and `GraphColoring` use `num_vertices + 1` for the
+same reason.
+
+An objective that counts something, such as bins used, is flat: most moves leave the count
+unchanged, and the search cannot tell a move toward emptying a bin from any other. Add a
+secondary term, smaller than one unit of the count, that rewards progress, such as the sum of
+squared bin loads. A neighborhood that cannot change the count, such as a swap of two items
+between bins, has to be paired with one that can.
 
 ## Errors
 

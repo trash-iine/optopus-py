@@ -251,5 +251,8 @@ print(lkh.run(tsp, seed=42).best_objective)       # 4.0 — the square's perimet
 
 ## Next steps
 
+- [Built-in problems](problems.md) — choosing a problem, its constraints, and what a run reports.
+- [Modeling with Formula](formula.md) — polynomials, constraints and penalty weights.
+- [Choosing a heuristic](heuristics.md) — which heuristic to use and how to set it.
 - [API reference](api_reference.md) — every class, method, parameter, and result field.
 - [Examples](examples.md) — multi-run statistics, comparing heuristics, reproducibility.

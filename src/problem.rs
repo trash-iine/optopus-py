@@ -472,7 +472,9 @@ impl Qubo {
     /// Build a QUBO instance from matrix entries.
     ///
     /// Diagonal entries ``(i, i, c)`` are the linear terms; off-diagonal entries
-    /// ``(i, j, c)`` are the quadratic interaction terms.
+    /// ``(i, j, c)`` are the quadratic interaction terms. ``(i, j)`` and ``(j, i)`` name the
+    /// same coefficient, and an entry given twice replaces the earlier one rather than adding
+    /// to it, so sum the terms of a pair into one entry first.
     ///
     /// Args:
     ///     entries (list[tuple[int, int, int]]): Matrix entries ``(i, j, coefficient)``
@@ -632,7 +634,8 @@ impl Tsp {
     /// Build a TSP instance from an explicit distance matrix.
     ///
     /// Args:
-    ///     matrix (list[list[float]]): Square matrix of pairwise distances.
+    ///     matrix (list[list[float]]): Square, symmetric matrix of pairwise distances. The
+    ///         moves assume a segment is as long in both directions.
     ///     name (str): Optional instance name (default ``""``).
     ///
     /// Returns:
@@ -970,8 +973,8 @@ impl Vrp {
     /// Build a CVRP instance from an explicit distance matrix.
     ///
     /// Args:
-    ///     matrix (list[list[float]]): Square matrix of pairwise distances. Index 0 is the
-    ///         depot.
+    ///     matrix (list[list[float]]): Square, symmetric matrix of pairwise distances. Index 0
+    ///         is the depot. The moves assume a segment is as long in both directions.
     ///     demands (list[int]): Demand per node, same length as ``matrix``.
     ///     capacity (int): Vehicle capacity, ``> 0``.
     ///     num_vehicles (int): Fleet size, or 0 to let optopus pick one.
@@ -1081,6 +1084,25 @@ impl Vrp {
 /// ``RunResult.best_objective`` reports the direction-corrected score including any constraint
 /// penalties (higher is always better).
 ///
+/// Args:
+///     n_vars (int): Number of variables.
+///     objective (list[tuple[list[int], float]]): The objective polynomial.
+///     direction (str): ``"Maximize"`` or ``"Minimize"``. Defaults to ``"Maximize"``.
+///     constraints (list[tuple]): Penalty-weighted constraints. Defaults to none. Each entry
+///         is a tuple ``(lhs_poly, rel, rhs_poly, penalty_weight)`` where ``rel`` is one of
+///         ``"Lt"``, ``"Le"``, ``"Eq"``, ``"Ge"``, ``"Gt"`` or the symbols ``"<"``, ``"<="``,
+///         ``"=="`` (or ``"="``), ``">="``, ``">"``, or a tuple
+///         ``(expr_poly, "Clamp", (lo, hi), penalty_weight)`` for a range constraint. A
+///         violated constraint costs ``penalty_weight`` times the amount of the violation;
+///         see "Modeling with Formula" in the documentation.
+///     bounds (list[tuple[int, int]] | None): Inclusive ``(lower, upper)`` range per
+///         variable. Defaults to None, which makes every variable binary.
+///
+/// Raises:
+///     ValueError: If ``n_vars`` is 0, ``bounds`` has the wrong length, a bound is inverted,
+///         the direction or a relation is unrecognized, or the objective or a constraint
+///         reads a variable index outside ``[0, n_vars)``.
+///
 /// Example:
 ///     Minimize ``x0 + x1 - 2*x0*x1`` over two binary variables (an XOR-style objective)::
 ///
@@ -1109,25 +1131,11 @@ pub struct Formula {
 
 #[pymethods]
 impl Formula {
-    /// Construct a new ``Formula`` problem.
-    ///
-    /// Args:
-    ///     n_vars (int): Number of variables.
-    ///     objective (list[tuple[list[int], float]]): The objective polynomial.
-    ///     direction (str): ``"Maximize"`` or ``"Minimize"`` (default ``"Maximize"``).
-    ///     constraints (list[tuple]): Optional list of penalty-weighted constraints. Each entry
-    ///         is either a 4-tuple ``(lhs_poly, rel, rhs_poly, penalty_weight)`` where ``rel``
-    ///         is one of ``"Lt"``, ``"Le"``, ``"Eq"``, ``"Ge"``, ``"Gt"``, or a 4-tuple
-    ///         ``(expr_poly, "Clamp", (lo, hi), penalty_weight)`` for a range constraint.
-    ///     bounds (list[tuple[int, int]] | None): Inclusive ``(lower, upper)`` range per
-    ///         variable. Defaults to None, which makes every variable binary.
-    ///
-    /// Raises:
-    ///     ValueError: If ``n_vars`` is 0, ``bounds`` has the wrong length, a bound is inverted,
-    ///         the direction or a relation is unrecognized, or the objective or a constraint
-    ///         reads a variable index outside ``[0, n_vars)``.
     #[new]
-    #[pyo3(signature = (n_vars, objective, direction="Maximize".to_string(), constraints=Vec::new(), bounds=None))]
+    #[pyo3(
+        signature = (n_vars, objective, direction="Maximize".to_string(), constraints=Vec::new(), bounds=None),
+        text_signature = "(n_vars, objective, direction='Maximize', constraints=[], bounds=None)"
+    )]
     fn new(
         n_vars: usize,
         objective: PyPoly,

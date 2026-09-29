@@ -5,7 +5,11 @@ use pyo3::prelude::*;
 /// All attributes are read-only.
 #[pyclass(module = "optopus", skip_from_py_object)]
 pub struct RunResult {
-    /// Best objective value found during the run.
+    /// Best objective value found during the run, on the scale the search ranks solutions by.
+    ///
+    /// For ``VertexCover``, ``Vrp``, ``GraphColoring`` and ``Formula`` it includes the
+    /// constraint penalty, for ``Sat`` it counts the satisfied clauses, and a ``Formula`` reports
+    /// it higher-is-better, negated when the formula minimizes.
     #[pyo3(get)]
     pub best_objective: f64,
     /// Best solution found during the run.
@@ -22,6 +26,7 @@ pub struct RunResult {
     /// - ``GraphColoring`` → ``list[int]``, each vertex's color in ``[0, num_colors)``.
     /// - ``Formula`` → ``list[int]``, one value per variable. Binary variables report 0 and 1,
     ///   which compare equal to ``False`` and ``True``.
+    /// - A problem written in Python → the solution object its methods produced, as it is.
     #[pyo3(get)]
     pub solution: Py<PyAny>,
     /// Iteration at which the best solution was found.
@@ -33,7 +38,7 @@ pub struct RunResult {
     /// Total elapsed seconds for the run.
     #[pyo3(get)]
     pub total_time_secs: f64,
-    /// Objective of the random initial solution.
+    /// Objective of the random initial solution, on the same scale as ``best_objective``.
     #[pyo3(get)]
     pub initial_objective: f64,
     /// Improvement from initial to best, sign-corrected (positive = better).
@@ -66,8 +71,12 @@ impl RunResult {
 /// Aggregated report over one or more runs of the same heuristic on a problem.
 ///
 /// Returned by every heuristic ``run`` call. All attributes are read-only.
-/// ``best_objective`` / ``worst_objective`` follow the problem direction
-/// (maximum for Max Cut, minimum for QUBO).
+/// ``best_objective`` / ``worst_objective`` follow the problem direction: the lowest value
+/// is the best for a minimizing problem such as ``Qubo``, the highest for a maximizing one such
+/// as ``MaxCut``. A ``Formula`` always reports higher-is-better, whichever way it optimizes.
+///
+/// The report holds no best solution of its own: pick the run whose ``best_objective`` equals
+/// the report's and read its ``solution``.
 #[pyclass(module = "optopus")]
 pub struct RunReport {
     /// Individual run results, ordered by run index.
@@ -76,7 +85,7 @@ pub struct RunReport {
     /// Number of runs performed.
     #[pyo3(get)]
     pub num_runs: usize,
-    /// Best objective across all runs (maximum for Max Cut, minimum for QUBO).
+    /// Best objective across all runs, in the problem's direction.
     #[pyo3(get)]
     pub best_objective: f64,
     /// Mean best objective across runs.

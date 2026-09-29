@@ -61,6 +61,13 @@ entries below are breaking; see **Changed** and **Removed**.
   assignment without running a search.
 - The Sphinx documentation is now published to GitHub Pages at
   <https://trash-iine.github.io/optopus-py/>, rebuilt from `main` on every push.
+- Three guide pages in the documentation. "Built-in problems" compares the problems, the
+  constraints each penalizes itself and what a run reports for each, including that
+  `best_objective` carries the penalty for `VertexCover`, `Vrp`, `GraphColoring` and `Formula`
+  and that a minimizing `Formula` reports it negated. "Modeling with Formula" covers the
+  polynomial and constraint format, how a violation is penalized and how to choose a penalty
+  weight. "Choosing a heuristic" covers which heuristic to use, what one iteration costs and how
+  to set the main parameters.
 
 ### Changed
 
@@ -101,6 +108,14 @@ entries below are breaking; see **Changed** and **Removed**.
 
 - `Formula` raises `ValueError` when a constraint reads a variable index outside `[0, n_vars)`,
   as it already did for the objective. It used to fail with a `PanicException` from the core.
+- `help(optopus.Formula)` and the API reference now show the constructor's arguments, which
+  were written where Python never reads them, and the signatures of `Formula`,
+  `PopulationAnnealing` and `HybridGeneticSearch` show their real defaults instead of
+  `Ellipsis`.
+- The docstrings of `Iterated`, `Restart`, `Sequential` and `VariableNeighborhoodSearch`
+  described their stop conditions and `Iterated`'s acceptance wrongly. The outer `stop` counts
+  the steps' iterations and is checked between steps, `Restart`'s `restart` is read against the
+  whole run, and `Iterated` does not undo a worse round.
 
 ## 0.1.0 (2026-08-06)
 

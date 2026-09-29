@@ -14,13 +14,13 @@ The API is the binding's and the docs', not this file's: read it there each time
 
 | To find | Read |
 |---|---|
-| the built-in problems, their constructors, solution encoding and what they penalize themselves | the `#[pyclass]` docstrings in `src/problem.rs` and `src/graph.rs`; `docs/source/quickstart.md` for usage |
-| which `neighbor` names a problem accepts | `build_<problem>` in `src/runner.rs` (the heuristic docstrings list only some) |
-| `Formula`'s polynomial, constraint and bounds format | the `#[new]` docstring of `Formula` in `src/problem.rs` |
-| how `Formula` penalizes a violated constraint | upstream `vendor/optopus/docs/problems/formula.md` |
+| which representation fits, and each built-in problem's objective, solution encoding, neighborhoods, crossovers and problem-specific heuristics | `docs/source/problems.md` |
+| which constraints a built-in problem penalizes itself, and how to check them | `docs/source/problems.md`, "Constraints a problem handles itself" |
+| what `run` reports per problem (penalties included, direction, `Formula`'s sign) | `docs/source/problems.md`, "What a run reports" |
+| `Formula`'s polynomial, constraint and bounds format, how it penalizes a violation, and choosing a weight | `docs/source/formula.md` |
 | the Python problem protocol, and what each heuristic needs from it | `docs/source/python_problems.md` |
-| heuristic parameters | the class `///` docstring and `fn new` arguments in `src/heuristic.rs` |
-| what `run` reports, per problem | `src/result.rs`, and the `run_all(...)` call for that problem in `solve`, `src/runner.rs` |
+| which heuristic to propose and how to set its main parameters | `docs/source/heuristics.md` |
+| every constructor argument and default | the `#[pyclass]` / `#[pymethods]` docstrings in `src/*.rs`, which the API reference renders |
 
 Read only the parts the task needs.
 
@@ -80,7 +80,7 @@ prefer `TabuSearch` there, or a Python problem that keeps it by construction.
 
 Propose a default and one alternative with their parameters (and `neighbor`, for the heuristics
 that take one) and say why. Prefer a problem-specific heuristic when the built-in problem has
-one (the README lists them). Let the user pick.
+one (`docs/source/heuristics.md` lists them). Let the user pick.
 
 `runs` execute one after another, so the user waits about `runs × max_duration_secs`: split the
 budget. A `TabuSearch` tenure of 1 only forbids undoing the last move and cycles; start from a
