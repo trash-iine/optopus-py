@@ -52,6 +52,12 @@ is a digest of this document for AI agents; where the two disagree, this documen
 - `vendor/optopus` is a git submodule and a path dependency. Update it in its own commit
   (`Update the vendored optopus to <sha>`) together with the binding changes the new upstream API
   requires.
+- A problem whose cause is in the core is fixed in
+  [trash-iine/optopus](https://github.com/trash-iine/optopus), not worked around here and not
+  patched inside `vendor/optopus` (ADR 0005). Open the fix there under optopus's own
+  conventions, link the two PRs, and merge the binding PR only once `vendor/optopus` points at
+  the commit that merged the fix into optopus's `main`. A workaround that cannot wait names, in a
+  comment, the core change that would remove it, and an issue is filed upstream.
 
 ## Python
 

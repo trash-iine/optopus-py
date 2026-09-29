@@ -35,6 +35,10 @@ Follow the `quality-check` skill (`uv run invoke ci`) and continue only once eve
   updated in this PR.
 - A decision about conventions, tooling, dependencies or architecture? Make sure an ADR exists in
   `docs/adr/`; if not, create one with the `adr` skill.
+- `vendor/optopus` moved? It is its own commit (`Update the vendored optopus to <sha>`), and
+  `<sha>` is on optopus's `main` (`git -C vendor/optopus branch -r --contains <sha>` lists
+  `origin/main`). If the core fix is not merged yet, open the PR as a draft and link the
+  upstream PR.
 
 ## 4. Push and open the PR
 
