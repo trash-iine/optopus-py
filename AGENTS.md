@@ -10,7 +10,9 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
 ## Project structure
 - `src/*.rs` — the bindings. `lib.rs` registers the module; the `///` comments on `#[pyclass]` /
   `#[pymethods]` items are the Python docstrings shown in the API reference.
-- `vendor/optopus/` — the Rust core as a git submodule and path dependency. Do not edit it here.
+- `vendor/optopus/` — the Rust core as a git submodule and path dependency. Do not edit it here:
+  fix a core problem in trash-iine/optopus, then move the submodule to the merged commit on its
+  `main` in its own commit (ADR 0005).
 - `tests/` — pytest suites run against the built extension; `tests/test_tasks.py` covers
   `tasks.py`.
 - `docs/source/` — the user documentation (Sphinx + MyST), published to GitHub Pages.
