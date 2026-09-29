@@ -47,6 +47,17 @@ different amounts of work:
 | `AdaptiveLargeNeighborhoodSearch` | ruins and recreates the solution once |
 | `Sequential`, `Iterated`, `VariableNeighborhoodSearch`, `Restart` | counts the iterations of their steps, see [Composing heuristics](#composing-heuristics) |
 
+A limit is checked between units of work, never inside one, so the smallest unit a heuristic
+has always runs to completion and a run can overshoot a time limit by up to one unit. For most
+heuristics the unit is one iteration. For a composed heuristic it is one call of a step. For
+`HybridGeneticSearch` the first unit is its whole initial population, `4 · min_population_size`
+individuals each split into routes and improved, which it counts as that many iterations: a run
+with `max_iteration=1` still builds it. On a large `Vrp` under a short time limit that first unit
+dominates; lower `min_population_size` to shorten it.
+
+Time on a `--release` build (`maturin develop --release`, or an installed wheel). The default
+development build is several times slower, and the ratio differs from heuristic to heuristic.
+
 A time limit sidesteps the difference and is the natural unit when comparing heuristics. An
 iteration limit makes a run reproducible regardless of the machine, which a time limit does
 not.
@@ -93,12 +104,39 @@ A worsening move of size Δ is accepted with probability `exp(−Δ / T)`, and T
   the last iteration: `cooling_rate = (T_end / T_start) ** (1 / iterations)`. For 10⁶
   iterations from 10 to 0.01 that is about `0.999993`.
 - On a problem that penalizes infeasibility (`Vrp`, `GraphColoring`, `VertexCover`, a
-  `Formula` with constraints), take Δ from moves between feasible solutions. A move that breaks
-  a constraint costs the penalty weight, far above any temperature worth setting, and is
-  rejected either way.
+  `Formula` with constraints), take Δ from moves between feasible solutions, and moves that
+  break a constraint are then rejected. That needs such moves to exist. When every move out of a
+  feasible solution breaks a constraint, as a single `"Change"` does under an `"Eq"` on a
+  `Formula`, the search has to cross infeasible solutions: set the temperature near the penalty
+  weight, or use `TabuSearch`, which crosses them without a temperature.
+- An objective with a small secondary term, such as a tie-breaker below one unit of a count,
+  puts the useful Δ on that term's scale, often thousandths, while a move that changes the count
+  costs a whole unit. Set the temperature on the small scale.
 - The schedule counts steps, not seconds. Under `max_duration_secs` alone, the temperature a
   run reaches depends on how fast the machine is, so derive `cooling_rate` from an iteration
   count measured on a short run.
+
+The typical Δ is easier to measure than to guess. For a problem written in Python, sample it
+with the neighborhood's own methods:
+
+```python
+import random
+
+def worsening_deltas(problem, neighborhood, samples=1_000, seed=0):
+    rng = random.Random(seed)
+    solution = problem.new_solution(rng)
+    deltas = []
+    for _ in range(samples):
+        move = neighborhood.random_neighbor(problem, solution, rng)
+        if move is not None:
+            d = neighborhood.delta(problem, solution, move)
+            deltas.append(d if problem.minimize else -d)
+    return sorted(d for d in deltas if d > 0)
+```
+
+Its median is a reasonable `initial_temperature`, and its smallest values bound `T_end`. Sample
+from a solution close to the ones the search will see, such as the result of a short
+`LocalSearch`, since a random solution has larger deltas.
 
 `BangBangSimulatedAnnealing` reheats between `min_wave_threshold` and `max_wave_threshold`
 instead of cooling once, which suits long runs that would otherwise freeze early.
@@ -136,18 +174,24 @@ Their defaults are the published settings and a sensible start. The ones worth k
 - `WalkSat(noise=0.3)`; `adaptive=True` tunes the noise during the run.
 - `BreakoutLocalSearch`'s `tabu_tenure` has the same meaning as in `TabuSearch`, so the paper's
   `rand[3, |V|/10]` is `(6, len(vertices) // 5)`.
-- `HybridGeneticSearch` counts one offspring per iteration, so budgets in the tens of thousands
-  of iterations are normal.
+- `HybridGeneticSearch` counts one offspring per iteration, after an initial population of
+  `4 · min_population_size` (see [Stopping](#stopping)). On a release build it produces
+  roughly 600 offspring a second on a 200-customer `Vrp` and ten times that on 30 customers, so
+  a few seconds is already thousands of iterations.
 - `AdaptiveLargeNeighborhoodSearch` removes `round(removal_fraction · n)` of the `n` elements
-  per iteration, at least 1 and at most `n − 1`, and caps it on large instances. On a small
-  instance the default 0.15 removes one element at a time, which a ruin-and-recreate cannot
-  improve with; raise it so that several elements move together. Its acceptance temperature
-  starts where a solution 5% worse than the start is accepted half the time, and
-  `cooling_rate` multiplies it every iteration.
-- For `Vrp`, `HybridGeneticSearch` is the stronger method on most instances and
-  `AdaptiveLargeNeighborhoodSearch` the simpler one; running both with the same budget is
-  cheap. `AdaptiveLargeNeighborhoodSearch` is also the one that runs on `Tsp` and on a problem
-  written in Python.
+  per iteration, at least 1, at most `n − 1` and at most 50. On a small instance the default
+  0.15 removes one element at a time, which a ruin-and-recreate cannot improve with; raise it so
+  that several elements move together. On a large one a smaller fraction makes each iteration
+  cheaper, since repair prices every place for every removed element, and buys more iterations
+  in the same time.
+- Its acceptance temperature starts where a solution 5% worse than the starting one is accepted
+  half the time, and `cooling_rate` multiplies it every iteration. The default 0.9995 barely
+  cools within a few thousand iterations. For a fixed time budget, measure the iterations a
+  short run makes, then choose `cooling_rate` from the SA formula above so that the temperature
+  falls by two or three orders of magnitude over the budget.
+- For `Vrp`, `HybridGeneticSearch` and `AdaptiveLargeNeighborhoodSearch` measure level at
+  equal budgets of tens of seconds, so try both. `AdaptiveLargeNeighborhoodSearch` is also the
+  one that runs on `Tsp` and on a problem written in Python.
 
 ## Composing heuristics
 
@@ -161,8 +205,13 @@ heuristic's current solution, and the best solution any step finds is kept.
 | `Iterated(search, perturbation)` | runs `search`, then `perturbation`, and carries on from the perturbed solution | escape a basin one search stalls in; the usual first composition to try |
 | `VariableNeighborhoodSearch(search, shakes)` | runs shake `k`, then `search`; keeps the result and returns to shake 0 if it improved on the round's start, otherwise restores that start and moves to shake `k + 1` | mix neighborhoods of different reach, such as `Vrp`'s inter- and intra-route moves |
 | `Restart(heuristic, restart)` | runs `heuristic`, then starts over from a new random solution if `restart` is met | sample many basins when each search converges fast |
-| `GeneticAlgorithm(population_size, mutation)` | recombines two parents with the problem's crossover and improves the child with `mutation` | keep a diverse population; `mutation` is typically a short `LocalSearch` |
+| `GeneticAlgorithm(population_size, mutation)` | recombines two parents with the problem's crossover and improves the child with `mutation` | keep a diverse population; `mutation` is typically a short `LocalSearch`. `parent_selection="DistantTopK"` and `"BiasedFitness"` read the problem's distance between solutions, `"Tournament"` does not |
 | `BreakoutLocalSearch.from_parts(descent, random, directed, ...)` | breakout local search from any heuristics | use the MaxCut algorithm's framework on another problem |
+
+Each call of a step starts that step afresh from the composed heuristic's current solution:
+a `SimulatedAnnealing` step starts again at its `initial_temperature`, and a
+`LateAcceptanceHillClimbing` step with an empty history. Only the solution carries over. Give
+such a step a short schedule of its own rather than one sized for the whole run.
 
 `Iterated` has no acceptance test: a perturbation that makes things worse is not undone, and
 only the best solution found survives it. Use `VariableNeighborhoodSearch` with one shake when

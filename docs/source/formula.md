@@ -57,6 +57,9 @@ Maximize:  objective(x) − Σ penalty(x)
 Minimize:  objective(x) + Σ penalty(x)
 ```
 
+An empty objective, `objective=[]`, is allowed and is 0 everywhere, which asks only for a
+solution that satisfies the constraints.
+
 ## Constraints
 
 Constraints are penalized, not enforced. The search may pass through a solution that breaks
@@ -100,6 +103,11 @@ the least violation it can cause:
 penalty_weight  >  (largest objective gain of one move) / (smallest violation of one move)
 ```
 
+The rule is about a move out of a feasible solution, which can only add violations; count each
+constraint the move breaks by its own violation. Between infeasible solutions a move may trade
+one violation for another at no net cost, and that is how the search walks back to
+feasibility.
+
 In a knapsack with integer weights, adding one item gains at most the largest item value, and
 an item that overfills the budget overfills it by at least 1, so any weight above the largest
 value works. Write that reasoning next to the weight in your code, because the weight is only
@@ -122,6 +130,9 @@ is exactly what makes it refuse. Two things help:
   over them fixed. It never changes how many variables hold each value, so it cannot repair a
   count the random starting solution got wrong: run it after `"Change"`, through `Sequential`
   or `VariableNeighborhoodSearch`, not on its own.
+
+`SimulatedAnnealing` can cross those infeasible steps too, but only with a temperature near the
+penalty weight, see [SimulatedAnnealing](heuristics.md#simulatedannealing).
 
 When neither fits, write the problem in Python so every move keeps the constraint by
 construction.
@@ -158,6 +169,12 @@ which take a solution and return plain values:
 Check hard constraints from `eval_penalty`, or better from the decoded solution in the task's
 own terms, and not from the sign of `best_objective`.
 
+A search cannot prove that no feasible solution exists. When `eval_penalty` stays above zero
+across heuristics and seeds, suspect constraints that contradict each other before the search:
+check the data against them, as a count of what is available against what is required. Which
+constraint the search leaves broken depends on the weights, so it does not say which one is at
+fault.
+
 ## Neighborhoods
 
 | `neighbor` | Move |
@@ -169,7 +186,9 @@ own terms, and not from the sign of `best_objective`.
 `"Swap"` and `"Reverse"` only rearrange values, so they keep how many variables hold each value.
 Pair them with `"Change"` unless the counts are right by construction. They are also pairwise:
 a `LocalSearch` or `TabuSearch` step scores about n²/2 moves for n variables, against the
-n · (range) of `"Change"`.
+n · (range) of `"Change"`. On a 56-variable binary model a `TabuSearch` step with `"Swap"` took
+about 100 times as long as one with `"Change"`, so give a `"Swap"` step inside `Sequential` a
+small budget of its own.
 
 `"Change"` reads its price from a table every solution keeps, one entry per value each variable
 could take, so a solution costs memory in proportion to the sum of `upper − lower` over the
@@ -180,7 +199,9 @@ variables. A variable ranging over millions of values is better written as a pro
 variable from either parent, or `"SubProblem"`, which solves the variables the parents disagree
 on as a smaller `Formula`.
 
-## Example
+## Examples
+
+### Knapsack
 
 A knapsack: choose items to maximize their total value within a weight budget.
 
@@ -229,4 +250,60 @@ left_behind = optopus.Formula(
 )
 report = ts.run(left_behind, runs=4, seed=42)
 print(report.best_objective)  # -8.0 — 8 left behind, negated so that higher is better
+```
+
+### Assignment
+
+A decision "who does what" is one binary variable per pair, a one-hot encoding: variable
+`x(w, s)` is 1 when worker `w` takes shift `s`. "Exactly one worker per shift" is then a
+linear `"Eq"`, a limit per worker a `"Le"` or `"Clamp"`, and a pair the task rules out is fixed
+at 0 through `bounds`. One integer per shift holding the worker's number reads more naturally
+but is not polynomial to constrain: "worker 2 works at most two shifts" has no linear form in
+those integers.
+
+```python
+import optopus
+
+workers = ["Ann", "Ben", "Cal"]
+shifts = ["Mon", "Tue", "Wed", "Thu"]
+cost = [  # cost[w][s]: what worker w charges for shift s
+    [4, 2, 5, 3],
+    [3, 4, 2, 5],
+    [5, 3, 4, 2],
+]
+unavailable = {("Cal", "Tue")}
+
+# One binary variable per (worker, shift): 1 when that worker takes that shift.
+def x(w, s):
+    return w * len(shifts) + s
+
+n_vars = len(workers) * len(shifts)
+bounds = [(0, 1)] * n_vars
+for w, s in unavailable:
+    bounds[x(workers.index(w), shifts.index(s))] = (0, 0)  # ruled out, never searched
+
+# A shift left empty or doubled saves at most max(cost) = 5, and breaks an "Eq" by 1.
+weight = 6.0
+constraints = []
+for s in range(len(shifts)):  # every shift has exactly one worker
+    constraints.append(([([x(w, s)], 1.0) for w in range(len(workers))], "Eq", [([], 1.0)], weight))
+for w in range(len(workers)):  # nobody works more than two shifts
+    constraints.append(([([x(w, s)], 1.0) for s in range(len(shifts))], "Le", [([], 2.0)], weight))
+
+roster = optopus.Formula(
+    n_vars=n_vars,
+    objective=[([x(w, s)], float(cost[w][s])) for w in range(len(workers)) for s in range(len(shifts))],
+    direction="Minimize",
+    constraints=constraints,
+    bounds=bounds,
+)
+ts = optopus.TabuSearch(
+    neighbor="Change", tabu_tenure=(2, 4), stop=optopus.StopCondition(max_failed_update=500)
+)
+report = ts.run(roster, runs=4, seed=1)
+best = max(report.runs, key=lambda r: r.best_objective)  # higher is better on a Formula
+
+print({shifts[s]: workers[w] for s in range(len(shifts)) for w in range(len(workers))
+       if best.solution[x(w, s)]})  # {'Mon': 'Ben', 'Tue': 'Ann', 'Wed': 'Ben', 'Thu': 'Cal'}
+print(roster.eval_objective(best.solution), roster.eval_penalty(best.solution))  # 9.0 0.0
 ```
