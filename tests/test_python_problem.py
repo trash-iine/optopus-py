@@ -198,6 +198,32 @@ def test_tabu_search_needs_tabu_keys():
         optopus.TabuSearch(neighbor="Swap", tabu_tenure=(1, 2), stop=stop(10)).run(Tsp(POINTS))
 
 
+class ScaledKeys(OneMax):
+    """OneMax whose flip of bit i is keyed as i * scale."""
+
+    class Flip(OneMax.Flip):
+        def __init__(self, scale):
+            self.scale = scale
+
+        def tabu_keys(self, problem, i):
+            return i * self.scale
+
+    def __init__(self, n, scale):
+        super().__init__(n)
+        self.neighborhoods = {"Flip": ScaledKeys.Flip(scale)}
+
+
+def test_large_int_tabu_keys_search_like_small_ones():
+    # A key as large as 10**15 used to size an array by it and abort the process.
+    def trace(scale):
+        report = optopus.TabuSearch(neighbor="Flip", tabu_tenure=(3, 6), stop=stop(200)).run(
+            ScaledKeys(30, scale), runs=2, seed=5
+        )
+        return [(r.solution, r.n_accepted, r.n_rejected, r.best_iteration) for r in report.runs]
+
+    assert trace(10**15) == trace(1)
+
+
 def test_problem_specific_heuristics_are_rejected():
     with pytest.raises(ValueError, match="WalkSat is only available for Sat"):
         optopus.WalkSat(stop=stop(10), noise=0.5, adaptive=False).run(Tsp(POINTS))

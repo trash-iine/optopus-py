@@ -106,6 +106,9 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Fixed
 
+- A large int returned by `tabu_keys`, such as `item * 10**15 + bin`, no longer aborts the
+  Python process. Int keys used to index an array sized by the largest key; they are now kept
+  in a map, through optopus's `TabuKey::Var`, with the same tabu behavior.
 - `Formula` raises `ValueError` when a constraint reads a variable index outside `[0, n_vars)`,
   as it already did for the objective. It used to fail with a `PanicException` from the core.
 - `help(optopus.Formula)` and the API reference now show the constructor's arguments, which
