@@ -677,12 +677,9 @@ impl PopulationAnnealing {
         delta_beta=0.02,
         sweeps_per_step=50,
         reset_period=400,
-        neighbor="Flip".to_string(),
+        neighbor="Flip",
         sweep_length=None,
-    ),
-    text_signature = "(population_size, stop, initial_beta=0.1, delta_beta=0.02, \
-                      sweeps_per_step=50, reset_period=400, neighbor='Flip', sweep_length=None)"
-    )]
+    ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         population_size: usize,
@@ -691,7 +688,7 @@ impl PopulationAnnealing {
         delta_beta: f64,
         sweeps_per_step: usize,
         reset_period: usize,
-        neighbor: String,
+        neighbor: &str,
         sweep_length: Option<usize>,
     ) -> PyResult<Self> {
         if population_size < 2 {
@@ -715,7 +712,7 @@ impl PopulationAnnealing {
             delta_beta,
             sweeps_per_step,
             reset_period: (reset_period > 0).then_some(reset_period),
-            neighbor,
+            neighbor: neighbor.to_string(),
             sweep_length,
             stop,
         })

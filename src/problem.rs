@@ -383,8 +383,8 @@ impl PlantedMaxCut {
     ///     ValueError: If ``n < 2``, ``alpha`` is outside ``(0, 1)``, or ``couplers`` is not a
     ///         recognized value.
     #[staticmethod]
-    #[pyo3(signature = (n, alpha, couplers="Gaussian".to_string(), seed=None))]
-    fn wishart(n: usize, alpha: f64, couplers: String, seed: Option<u64>) -> PyResult<Self> {
+    #[pyo3(signature = (n, alpha, couplers="Gaussian", seed=None))]
+    fn wishart(n: usize, alpha: f64, couplers: &str, seed: Option<u64>) -> PyResult<Self> {
         if n < 2 {
             return Err(PyValueError::new_err(format!(
                 "'n' must be at least 2, got {n}"
@@ -395,7 +395,7 @@ impl PlantedMaxCut {
                 "'alpha' must be within (0.0, 1.0), got {alpha}"
             )));
         }
-        let couplers = parse_couplers(&couplers)?;
+        let couplers = parse_couplers(couplers)?;
         let mut rng = seeded_rng(resolve_seed(seed));
         Ok(Self {
             inner: OptPlantedMaxCut::wishart(n, alpha, couplers, &mut rng),
@@ -636,13 +636,13 @@ impl Tsp {
     /// Raises:
     ///     ValueError: If ``coordinates`` is empty.
     #[staticmethod]
-    #[pyo3(signature = (coordinates, name=String::new()))]
-    fn from_coordinates(coordinates: Vec<(f64, f64)>, name: String) -> PyResult<Self> {
+    #[pyo3(signature = (coordinates, name=""))]
+    fn from_coordinates(coordinates: Vec<(f64, f64)>, name: &str) -> PyResult<Self> {
         if coordinates.is_empty() {
             return Err(PyValueError::new_err("'coordinates' must not be empty"));
         }
         Ok(Self {
-            inner: OptTsp::new(name, coordinates),
+            inner: OptTsp::new(name.to_string(), coordinates),
         })
     }
 
@@ -660,10 +660,10 @@ impl Tsp {
     ///     ValueError: If the matrix is empty, not square, not symmetric, or holds a negative
     ///         or non-finite distance.
     #[staticmethod]
-    #[pyo3(signature = (matrix, name=String::new()))]
-    fn from_distance_matrix(matrix: Vec<Vec<f64>>, name: String) -> PyResult<Self> {
+    #[pyo3(signature = (matrix, name=""))]
+    fn from_distance_matrix(matrix: Vec<Vec<f64>>, name: &str) -> PyResult<Self> {
         check_distance_matrix(&matrix)?;
-        OptTsp::from_distance_matrix(name, matrix)
+        OptTsp::from_distance_matrix(name.to_string(), matrix)
             .map(|inner| Self { inner })
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -852,8 +852,9 @@ impl JobShopScheduling {
     /// Returns:
     ///     JobShopScheduling: A new problem instance.
     #[staticmethod]
-    #[pyo3(signature = (jobs, name=String::new()))]
-    fn from_jobs(jobs: Vec<Vec<(usize, u32)>>, name: String) -> PyResult<Self> {
+    #[pyo3(signature = (jobs, name=""))]
+    fn from_jobs(jobs: Vec<Vec<(usize, u32)>>, name: &str) -> PyResult<Self> {
+        let name = name.to_string();
         if jobs.is_empty() {
             return Err(PyValueError::new_err("'jobs' must not be empty"));
         }
@@ -984,15 +985,16 @@ impl Vrp {
     ///     ValueError: If ``coordinates`` is empty, its length differs from ``demands``,
     ///         ``capacity`` is not positive, or a demand is negative.
     #[staticmethod]
-    #[pyo3(signature = (coordinates, demands, capacity, num_vehicles=0, name="vrp".to_string(), rounded=false))]
+    #[pyo3(signature = (coordinates, demands, capacity, num_vehicles=0, name="vrp", rounded=false))]
     fn from_coordinates(
         coordinates: Vec<(f64, f64)>,
         demands: Vec<i64>,
         capacity: i64,
         num_vehicles: usize,
-        name: String,
+        name: &str,
         rounded: bool,
     ) -> PyResult<Self> {
+        let name = name.to_string();
         check_vrp_instance(&coordinates, &demands, capacity)?;
         let inner = if rounded {
             OptVrp::with_rounding(name, coordinates, demands, capacity, num_vehicles)
@@ -1042,14 +1044,15 @@ impl Vrp {
     ///         or non-finite distance, its size differs from ``demands``, ``capacity`` is not
     ///         positive, or a demand is negative.
     #[staticmethod]
-    #[pyo3(signature = (matrix, demands, capacity, num_vehicles=0, name="vrp".to_string()))]
+    #[pyo3(signature = (matrix, demands, capacity, num_vehicles=0, name="vrp"))]
     fn from_distance_matrix(
         matrix: Vec<Vec<f64>>,
         demands: Vec<i64>,
         capacity: i64,
         num_vehicles: usize,
-        name: String,
+        name: &str,
     ) -> PyResult<Self> {
+        let name = name.to_string();
         if matrix.len() != demands.len() {
             return Err(PyValueError::new_err(format!(
                 "'matrix' and 'demands' must have the same length, got {} and {}",
