@@ -125,6 +125,10 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Fixed
 
+- The signatures of `Tsp.from_coordinates`, `Tsp.from_distance_matrix`,
+  `JobShopScheduling.from_jobs`, `Vrp.from_coordinates`, `Vrp.from_distance_matrix` and
+  `PlantedMaxCut.wishart` show their string defaults (`name=''`, `name='vrp'`,
+  `couplers='Gaussian'`) instead of `Ellipsis`.
 - `Sat.from_clauses` raises `ValueError` for a literal of 0 or one naming a variable above
   `n_vars`, and `StopCondition` for a negative or non-finite `max_duration_secs`. Both used to
   fail with a `PanicException` from the core.

@@ -4,6 +4,8 @@ The instances are tiny so every heuristic reaches the known optimum within the
 iteration budget regardless of seed.
 """
 
+import inspect
+
 import pytest
 
 import optopus
@@ -841,3 +843,28 @@ def test_variable_neighborhood_search_rejects_non_heuristic_step():
     )
     with pytest.raises(TypeError):
         vns.run(mc)
+
+
+def _public_callables():
+    for name in dir(optopus):
+        cls = getattr(optopus, name)
+        if isinstance(cls, type):
+            yield name, cls
+            for member in dir(cls):
+                if not member.startswith("_"):
+                    yield f"{name}.{member}", getattr(cls, member)
+
+
+PUBLIC_CALLABLES = list(_public_callables())
+
+
+@pytest.mark.parametrize(
+    ("name", "obj"), PUBLIC_CALLABLES, ids=[name for name, _ in PUBLIC_CALLABLES]
+)
+def test_signatures_show_real_defaults(name, obj):
+    # PyO3 renders a default it cannot print as a literal, such as `String::new()`, as `...`.
+    try:
+        signature = str(inspect.signature(obj))
+    except (TypeError, ValueError):
+        pytest.skip("not introspectable")
+    assert "Ellipsis" not in signature, f"{name}{signature}"
