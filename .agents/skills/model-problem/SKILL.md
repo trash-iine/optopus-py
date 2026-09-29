@@ -122,7 +122,9 @@ On the tiny instance:
   A no usually means a constraint was never stated: go back to step 1, not only to the code.
 
 Then run once at the realistic size, on synthetic data if the real data is not at hand, and
-check it finishes within the budget with every hard-constraint check passing. Compare with a
+check it finishes within the budget with every hard-constraint check passing. Build with
+`uv run maturin develop --release` first: the default build is several times slower than the
+wheel the user will install, so a budget sized on it is wrong. Compare with a
 bound when one is cheap (a knapsack DP, an ideal even split).
 
 When a check fails, find the cause before touching a penalty weight, a parameter or the stop

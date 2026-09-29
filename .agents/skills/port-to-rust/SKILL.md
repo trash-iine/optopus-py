@@ -100,8 +100,8 @@ hand-written move, the heuristic may need a trait it lacks (upstream
 ## 6. Compare with the Python original
 
 Build the Python side from this repository in release mode, right before comparing: `uv run
-invoke ci` and a plain `maturin develop` leave a debug build, which makes every speed ratio
-meaningless. Then run Rust first, since the driver reads its reports:
+invoke ci` and a plain `maturin develop` leave a dev build without the release settings the Rust
+template uses, which makes every speed ratio meaningless. Then run Rust first, since the driver reads its reports:
 
 ```bash
 uv run maturin develop --release
