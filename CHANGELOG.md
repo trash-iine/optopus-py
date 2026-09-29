@@ -62,6 +62,7 @@ entries below are breaking; see **Changed** and **Removed**.
 - `RunResult.iterations` and `RunReport.avg_iterations`, the iterations a run made in the
   heuristic's own unit. It counts what `n_accepted + n_rejected` misses, such as
   `HybridGeneticSearch`'s initial population.
+- `optopus.__version__`, the package version as a string.
 - `Vrp.penalty_weight()`, the weight the objective charges per unit of overload, matching
   `GraphColoring.penalty_weight()`.
 - The Sphinx documentation is now published to GitHub Pages at

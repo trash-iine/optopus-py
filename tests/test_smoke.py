@@ -4,6 +4,7 @@ The instances are tiny so every heuristic reaches the known optimum within the
 iteration budget regardless of seed.
 """
 
+import importlib.metadata
 import inspect
 
 import pytest
@@ -894,3 +895,7 @@ def test_iterations_of_a_composed_heuristic_are_its_steps():
     )
     report = iterated.run(optopus.MaxCut.from_edges(TRIANGLE), seed=0)
     assert report.runs[0].iterations == 10
+
+
+def test_version_matches_the_installed_package():
+    assert optopus.__version__ == importlib.metadata.version("optopus")
