@@ -12,6 +12,12 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `BranchAndBound`, which proves the best solution optimal on `MaxCut`, `Qubo`, `Sat`,
+  `VertexCover` and `Formula`. Another heuristic searches each node, the problem's own included
+  (`WalkSat`, `BreakoutLocalSearch`), and a relaxation prunes it: `"Binary"` on the binary
+  problems, `"Eigenvalue"` (the certified eigenvalue bound) on `MaxCut`, `"Interval"` on
+  `Formula`, or a Python callable taking the node's ranges. `RunResult` gains
+  `proven_optimal` and `dual_bound`, set on a `BranchAndBound` run and `None` otherwise.
 - `Vrp`, the capacitated vehicle routing problem, with the `Relocate`, `Swap` and `TwoOpt`
   neighborhoods. Build it from coordinates, an explicit distance matrix, or a CVRPLIB file;
   `num_vehicles=0` lets optopus pick a fleet size. `evaluate_routes` scores a route partition

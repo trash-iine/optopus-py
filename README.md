@@ -49,6 +49,11 @@ so any heuristic runs on it and `lift` maps the answer back.
 - `GeneticAlgorithm` — steady-state GA over the problem's crossover, with a mutation heuristic
 - `BreakoutLocalSearch.from_parts` — breakout local search from a descent and perturbations
 
+**Exact search** — proves the best solution optimal, with another heuristic searching each node:
+
+- `BranchAndBound` — branch-and-bound with a built-in or Python-written bound (`MaxCut`, `Qubo`,
+  `Sat`, `VertexCover`, `Formula`)
+
 **Problem-specific heuristics** — exploit one problem's structure, no `neighbor` argument:
 
 - `WalkSat` — WalkSAT/SKC with optional adaptive noise (`Sat`)

@@ -45,6 +45,9 @@ problem's crossover by name:
 | `JobShopScheduling` | `"Ppx"` |
 | `GraphColoring` | `"Uniform"` |
 
+`BranchAndBound` proves an optimum on `MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`, see
+[Proving optimality](heuristics.md#proving-optimality).
+
 ## Neighborhoods
 
 Generic heuristics take the neighborhood as a string through their `neighbor` argument, and an

@@ -142,6 +142,18 @@ provides as a method.
 `BreakoutLocalSearch.from_parts` builds breakout local search from other heuristics the same way,
 see `BreakoutLocalSearch` below.
 
+### Exact search
+
+`BranchAndBound` takes another heuristic too, and searches with it until the best solution is
+proven optimal. It runs on `MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`, and reports
+what it proved in `RunResult.proven_optimal` and `RunResult.dual_bound`. See
+[Proving optimality](heuristics.md#proving-optimality).
+
+```{eval-rst}
+.. autoclass:: optopus.BranchAndBound
+   :members:
+```
+
 ### Problem-specific
 
 These exploit the structure of one problem type and take no `neighbor` argument. Running one on a

@@ -70,6 +70,21 @@ pub struct RunResult {
     /// Seed actually used for the run, if one was provided.
     #[pyo3(get)]
     pub seed: Option<u64>,
+    /// Whether the run proved its best solution optimal, as far as the relaxation is a bound.
+    ///
+    /// Set only when the heuristic run is a ``BranchAndBound``, and ``None`` otherwise. It is
+    /// ``True`` when the search emptied its open nodes before its stop condition.
+    #[pyo3(get)]
+    pub proven_optimal: Option<bool>,
+    /// The best objective a solution not yet ruled out could reach, on the same scale as
+    /// ``best_objective``.
+    ///
+    /// Set only when the heuristic run is a ``BranchAndBound``, and ``None`` otherwise. It equals
+    /// ``best_objective`` once ``proven_optimal`` is ``True``, and the gap between the two bounds
+    /// how far a stopped search can be from the optimum. It is infinite when the search stopped
+    /// before the whole problem had been split once.
+    #[pyo3(get)]
+    pub dual_bound: Option<f64>,
 }
 
 #[pymethods]

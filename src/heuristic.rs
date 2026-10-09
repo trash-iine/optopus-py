@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 use optopus::heuristic::reinforcement_learning::feature::NUM_FEATURES;
 use optopus::heuristic::{ParentSelection, RewardShaping};
 
+use crate::branch_and_bound::RelaxationSpec;
 use crate::result::RunReport;
 use crate::runner::{self, HeuristicKind, HeuristicSpec};
 use crate::stop_condition::StopCondition;
@@ -1422,6 +1423,122 @@ impl Restart {
     /// Raises:
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
+    #[pyo3(signature = (problem, runs=1, seed=None))]
+    fn run(
+        &self,
+        py: Python<'_>,
+        problem: &Bound<'_, PyAny>,
+        runs: usize,
+        seed: Option<u64>,
+    ) -> PyResult<RunReport> {
+        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+    }
+}
+
+/// Branch-and-bound: proves the best solution optimal, with ``heuristic`` finding solutions
+/// and ``relaxation`` bounding what is left.
+///
+/// A node is the problem with some variables' ranges narrowed. Each iteration takes the open
+/// node whose bound is best and drops it when that bound cannot beat the best solution so far.
+/// Otherwise ``heuristic`` searches the node, starting from the best solution, and the node
+/// splits one variable's range in two at that solution's value. A run that empties the open
+/// nodes has proven its best solution optimal, which ``RunResult.proven_optimal`` reports;
+/// a run stopped earlier reports the best bound still open as ``RunResult.dual_bound``.
+///
+/// Runs on ``MaxCut``, ``Qubo``, ``Sat``, ``VertexCover`` and ``Formula``. A binary problem
+/// folds its fixed variables into a smaller instance of itself, so its own neighborhoods and
+/// heuristics, ``BreakoutLocalSearch`` and ``WalkSat`` included, search a node. A ``Formula``
+/// is searched over the narrowed ranges.
+///
+/// The heuristic only decides how soon good solutions turn up; the bound decides how many
+/// nodes are left to search. The built-in bounds prove optima of a few dozen variables.
+///
+/// Args:
+///     heuristic (object): Heuristic searching each node. Its stop condition is a budget per
+///         node, so keep it short, such as ``LocalSearch`` for a hundred iterations.
+///     stop (StopCondition | None): Stopping criterion for the whole search, counting one
+///         iteration per node on top of the iterations ``heuristic`` makes. ``None``, the
+///         default, runs until the open nodes are exhausted, however long that takes.
+///     relaxation (str | Callable[[list[tuple[int, int]]], float] | None): The bound a node
+///         is pruned by. ``None`` picks the problem's default.
+///
+///         - ``"Binary"``, the default on the binary problems: the fixed variables folded
+///           away and a simple bound of what is left, such as the sum of the positive weights
+///           on ``MaxCut``.
+///         - ``"Eigenvalue"``, on ``MaxCut`` only: the eigenvalue bound of Delorme and Poljak,
+///           certified in floating point and much tighter than ``"Binary"``. Its cost grows
+///           with the cube of the number of free vertices.
+///         - ``"Interval"``, the default on ``Formula``: every term bounded by interval
+///           arithmetic over the ranges. It is valid on every formula and weak on most.
+///         - A callable taking the node's ranges, one inclusive ``(lower, upper)`` pair per
+///           variable, and returning a bound on the objective in the problem's own terms and
+///           direction: at least the best objective any assignment within the ranges reaches
+///           on a maximized problem, at most it on a minimized one. On a binary problem a
+///           range is ``(0, 1)`` while free and ``(0, 0)`` or ``(1, 1)`` once fixed. On a
+///           ``Formula`` the objective includes the penalty and is not negated, whichever way
+///           it is reported. A value that is not a bound prunes the optimum without an error,
+///           so check one against enumeration on small instances.
+///
+/// Raises:
+///     ValueError: If ``relaxation`` is an unknown name.
+///     TypeError: If ``relaxation`` is neither ``None``, a name nor a callable.
+#[pyclass(module = "optopus")]
+pub struct BranchAndBound {
+    heuristic: Py<PyAny>,
+    stop: StopCondition,
+    relaxation: Option<Py<PyAny>>,
+}
+
+impl BranchAndBound {
+    pub(crate) fn to_spec(&self, py: Python<'_>) -> PyResult<HeuristicSpec> {
+        Ok(HeuristicSpec {
+            kind: HeuristicKind::BranchAndBound {
+                heuristic: Box::new(runner::spec_from_py(py, self.heuristic.bind(py))?),
+                relaxation: RelaxationSpec::from_py(self.relaxation.as_ref().map(|r| r.bind(py)))?,
+            },
+            neighbor: String::new(),
+            stop: self.stop.clone(),
+        })
+    }
+}
+
+#[pymethods]
+impl BranchAndBound {
+    #[new]
+    #[pyo3(signature = (heuristic, stop=None, relaxation=None))]
+    fn new(
+        heuristic: Py<PyAny>,
+        stop: Option<StopCondition>,
+        relaxation: Option<Bound<'_, PyAny>>,
+    ) -> PyResult<Self> {
+        // Checked here so a misspelled name fails where it is written, not at `run`.
+        RelaxationSpec::from_py(relaxation.as_ref())?;
+        Ok(Self {
+            heuristic,
+            stop: stop.unwrap_or_else(StopCondition::unlimited),
+            relaxation: relaxation.map(Bound::unbind),
+        })
+    }
+
+    /// Run the search on a problem and return an aggregated report.
+    ///
+    /// Args:
+    ///     problem: The problem instance to solve.
+    ///     runs (int): Number of independent runs to perform. Defaults to 1.
+    ///     seed (int | None): Master seed. When set, runs are deterministic
+    ///         (run 0 uses ``seed`` directly).
+    ///
+    /// Returns:
+    ///     RunReport: Aggregated statistics over all runs, each run with ``proven_optimal``
+    ///     and ``dual_bound`` set.
+    ///
+    /// Raises:
+    ///     ValueError: If ``problem`` is not one ``BranchAndBound`` runs on, ``relaxation``
+    ///         does not apply to it, ``heuristic`` does not fit it, a callable relaxation
+    ///         returns NaN, or ``runs`` is 0.
+    ///     TypeError: If ``problem`` is not a problem instance, ``heuristic`` is not a
+    ///         heuristic, or a callable relaxation returns something other than a number.
+    ///         An exception the callable raises is raised as it is.
     #[pyo3(signature = (problem, runs=1, seed=None))]
     fn run(
         &self,

@@ -18,6 +18,8 @@ executing in native Rust.
 - **Problem-specific heuristics** that exploit one problem's structure: `WalkSat`,
   `BreakoutLocalSearch`, `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch`, and
   `HybridGeneticSearch`.
+- **Exact search**: `BranchAndBound` proves an optimum on `MaxCut`, `Qubo`, `Sat`,
+  `VertexCover` and `Formula`, with another heuristic searching each node.
 - **Instances with a known optimum**: `PlantedMaxCut` plants an optimal cut by construction, so
   "did the heuristic reach the optimum" is answerable; `MaxCutKernel` reduces an instance
   exactly and lifts the answer back.

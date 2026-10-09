@@ -9,9 +9,11 @@
 //! GeneticAlgorithm, BreakoutLocalSearch.from_parts) and problem-specific ones
 //! (WalkSat, BreakoutLocalSearch, LinKernighanHelsgaun,
 //! AdaptiveLargeNeighborhoodSearch, HybridGeneticSearch) as Python classes, plus the
-//! MaxCutKernel reduction and the PlantedMaxCut instance generators. The generic and
-//! composed heuristics, and ALNS, also run on problems written in Python.
+//! MaxCutKernel reduction and the PlantedMaxCut instance generators. BranchAndBound searches
+//! the binary problems and Formula exactly, with another heuristic searching each node. The
+//! generic and composed heuristics, and ALNS, also run on problems written in Python.
 
+mod branch_and_bound;
 mod graph;
 mod heuristic;
 mod problem;
@@ -61,5 +63,6 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::LinKernighanHelsgaun>()?;
     m.add_class::<heuristic::AdaptiveLargeNeighborhoodSearch>()?;
     m.add_class::<heuristic::HybridGeneticSearch>()?;
+    m.add_class::<heuristic::BranchAndBound>()?;
     Ok(())
 }
