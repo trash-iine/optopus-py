@@ -177,6 +177,32 @@ def test_walksat_adaptive_noise():
     assert report.best_objective == 3.0
 
 
+# Clauses that hold a variable twice: a tautology, a repeated literal, and a tautology with a
+# third literal. The incremental count used to drift on them, so the reported objective stopped
+# matching the clauses the solution satisfies.
+SAT_REPEATED = [[1, -1], [2, 2], [-2, -2, 3], [1, -1, -3], [-1, 2], [3, -2]]
+
+
+def count_satisfied(clauses, x):
+    return sum(any(x[abs(lit) - 1] == (lit > 0) for lit in clause) for clause in clauses)
+
+
+@pytest.mark.parametrize(
+    "heuristic",
+    [
+        optopus.SimulatedAnnealing("Flip", 1.0, 0.999, stop(2_000)),
+        optopus.WalkSat(stop=stop(2_000)),
+    ],
+    ids=["SimulatedAnnealing", "WalkSat"],
+)
+def test_sat_counts_a_clause_with_a_repeated_variable_once(heuristic):
+    sat = optopus.Sat.from_clauses(3, SAT_REPEATED)
+    report = heuristic.run(sat, runs=3, seed=7)
+    for run in report.runs:
+        assert run.best_objective == count_satisfied(SAT_REPEATED, run.solution)
+    assert report.best_objective == len(SAT_REPEATED)
+
+
 def test_population_annealing():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
     pa = optopus.PopulationAnnealing(population_size=10, stop=stop(50), sweeps_per_step=5)

@@ -104,7 +104,7 @@ entries below are breaking; see **Changed** and **Removed**.
 - Wheels are built with the release settings optopus measured, fat LTO and a single codegen
   unit, which the binding had never applied. `TabuSearch` runs about 1.9x faster on a
   2000-vertex MaxCut; the other heuristics measured gain little.
-- Updated the vendored optopus to `8de6180`.
+- Updated the vendored optopus to `8de6180`, and later to `2959c73`.
 - **`PopulationAnnealing` is now a generic heuristic**: optopus generalized it off Max Cut, so it
   runs on every problem type and takes a `neighbor` argument. It defaults to `"Flip"` and comes
   after the existing parameters, so calls that did not name it keep working. Its `cluster_moves`
@@ -146,6 +146,10 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Fixed
 
+- `Sat` counts a clause that holds a variable twice, repeated as in `[2, 2]` or negated as in
+  `[1, -1]`, as one clause. Moves priced such a clause wrongly, so a run on one could report
+  an objective other than the number of clauses its solution satisfies. Fixed in optopus
+  (`a45ed19`).
 - The signatures of `Tsp.from_coordinates`, `Tsp.from_distance_matrix`,
   `JobShopScheduling.from_jobs`, `Vrp.from_coordinates`, `Vrp.from_distance_matrix` and
   `PlantedMaxCut.wishart` show their string defaults (`name=''`, `name='vrp'`,

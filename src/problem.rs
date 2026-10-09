@@ -1,7 +1,8 @@
-use optopus::common::{Graph, seeded_rng};
+use optopus::building_blocks::instance::{Graph, seeded_rng};
+use optopus::building_blocks::representation::{IntVar, IntVars};
 use optopus::problem::{
-    Constraint, ConstraintRel, Expr, FormulaProblem, GraphColoring as OptGraphColoring, IntVar,
-    IntVars, JobShopScheduling as OptJobShop, MaxCut as OptMaxCut, MaxCutKernel as OptMaxCutKernel,
+    Constraint, ConstraintRel, Expr, FormulaProblem, GraphColoring as OptGraphColoring,
+    JobShopScheduling as OptJobShop, MaxCut as OptMaxCut, MaxCutKernel as OptMaxCutKernel,
     ObjectiveMode, PlantedMaxCut as OptPlantedMaxCut, Qubo as OptQubo, Sat as OptSat, TileProbs2d,
     TileProbs3d, Tsp as OptTsp, VehicleType as OptVehicleType, VertexCover as OptVc, Vrp as OptVrp,
     WishartCouplers,
