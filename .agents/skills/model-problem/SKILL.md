@@ -51,10 +51,12 @@ step 2.
 
 Take the first rung that fits the confirmed formulation exactly:
 
-1. **A built-in problem**, when the task is that problem and nothing more: capacitated routing
-   → `Vrp`, one tour → `Tsp`, operations on machines → `JobShopScheduling`, a bipartition →
-   `MaxCut`, conflict-free labels → `GraphColoring`, a binary quadratic → `Qubo`, clauses →
-   `Sat`, covering edges → `VertexCover`. Compare its objective and constraints with the
+1. **A built-in problem**, when the task is that problem and nothing more: capacitated routing,
+   also with vehicle types of their own capacity, speed, costs, counts and route-time limit and
+   with service times → `Vrp` (`Vrp.with_fleet` for a mixed fleet), one tour → `Tsp`,
+   operations on machines → `JobShopScheduling`, a bipartition → `MaxCut`, conflict-free labels
+   → `GraphColoring`, a binary quadratic → `Qubo`, clauses → `Sat`, covering edges →
+   `VertexCover`. Compare its objective and constraints with the
    confirmed ones; a side constraint it lacks moves the task down a rung. `Qubo` has no
    constraints, so a linear inequality such as a budget means `Formula`.
 2. **`Formula`**, when every variable is a bounded integer and the objective and constraints

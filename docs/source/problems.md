@@ -30,7 +30,7 @@ A task can reach the search in three ways. Take the first that fits the task exa
 | `VertexCover` | min cover size | `list[bool]`, whether each vertex is in the cover | `"Flip"`, `"Swap"` | |
 | `Tsp` | min tour length | `list[int]`, a permutation of the cities | `"TwoOpt"`, `"Relocate"` | `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch` |
 | `JobShopScheduling` | min makespan | `list[int]`, an operation sequence | `"Swap"`, `"Relocate"` | |
-| `Vrp` | min total distance | `list[list[int]]`, one route of customers per vehicle | `"Relocate"`, `"Swap"`, `"TwoOpt"` | `HybridGeneticSearch`, `AdaptiveLargeNeighborhoodSearch` |
+| `Vrp` | min total distance, or time and cost for a mixed fleet | `list[list[int]]`, one route of customers per vehicle | `"Relocate"`, `"Swap"`, `"TwoOpt"` | `HybridGeneticSearch`, `AdaptiveLargeNeighborhoodSearch` |
 | `GraphColoring` | min colors used | `list[int]`, the color of each vertex | `"Recolor"`, `"Swap"` | |
 | `Formula` | a polynomial, either direction | `list[int]`, each variable | `"Change"` (alias `"Flip"`), `"Swap"`, `"Reverse"` | |
 
@@ -84,7 +84,7 @@ search ranks solutions by. For some problems that is not the plain objective:
 | `VertexCover` | `cover_size + (num_vertices + 1) · uncovered_edges` | lower |
 | `Tsp` | tour length | lower |
 | `JobShopScheduling` | makespan | lower |
-| `Vrp` | `distance + penalty_weight · overload` | lower |
+| `Vrp` | `distance + penalty_weight · overload`; for a mixed fleet, see [Mixed fleet](#vrp-mixed-fleet) | lower |
 | `GraphColoring` | `colors_used + (num_vertices + 1) · conflicts` | lower |
 | `Formula` | `objective − penalty`, or `−(objective + penalty)` when minimizing | higher |
 | a Python problem | `objective(solution)` | as its `minimize` says |
@@ -117,7 +117,7 @@ solution exists. Nothing needs adding for these; check the result with the probl
 | Problem | Constraint | Penalty weight | Check with |
 |---|---|---|---|
 | `VertexCover` | every edge covered | `num_vertices + 1` per uncovered edge | the solution: an edge with neither end `True` is uncovered |
-| `Vrp` | vehicle capacity | `(num_customers + num_vehicles) · longest_edge + 1` per unit of overload, `penalty_weight()` | `evaluate_routes(routes)["overload"] == 0` |
+| `Vrp` | vehicle capacity; for a mixed fleet also route-time limits and minimum counts | `(num_customers + num_vehicles) · longest_edge + 1` per unit of overload, more with speeds, service times and costs, `penalty_weight()` | `evaluate_routes(routes)["overload"] == 0`, and `time_excess` and `min_count_shortfall` for a mixed fleet |
 | `GraphColoring` | no edge within one color | `num_vertices + 1` per conflict, `penalty_weight()` | `evaluate_colors(colors)["conflicts"] == 0` |
 | `Formula` | the constraints you give it | the weight you give each | `eval_penalty(values) == 0` |
 
@@ -176,7 +176,8 @@ early as the machines allow.
 
 Serve every customer once from a depot with vehicles of one capacity, minimizing the total
 distance. Index `0` is the depot and customers are `1` to `n`. Build it from coordinates and
-demands, a distance matrix, or a CVRPLIB file. A solution has one route per vehicle, with the
+demands, a distance matrix, or a CVRPLIB file; a fleet of several vehicle types is described
+under [Mixed fleet](#vrp-mixed-fleet). A solution has one route per vehicle, with the
 depot implied at both ends, and a route may be empty. `evaluate_routes` reports the raw
 distance, the overload and each route's load.
 
@@ -188,8 +189,9 @@ least one spare; read the result back with `num_vehicles()`. A fleet too small f
 capacity, is not an error: the search returns its best solution with `overload > 0`, so check
 the overload before using the routes.
 
-`evaluate_routes` checks that every customer appears exactly once, not how many routes there
-are, so compare `len(routes)` with `num_vehicles()` yourself when a plan comes from elsewhere.
+`evaluate_routes` takes one route per vehicle, `num_vehicles()` of them with empty ones
+included, and raises `ValueError` otherwise, so a plan that needs more vehicles than the fleet
+has is rejected rather than scored.
 
 `HybridGeneticSearch` and `AdaptiveLargeNeighborhoodSearch` handle both kinds of move
 themselves. A generic heuristic needs them combined, since `"Relocate"` and `"Swap"` only move
@@ -228,6 +230,94 @@ the budget there.
 A distance matrix must be symmetric, finite and non-negative, as for `Tsp`; `matrix[i][j]` is
 the distance between nodes `i` and `j`. Demands must not be negative, and the depot's demand is
 ignored.
+
+(vrp-mixed-fleet)=
+#### Mixed fleet
+
+`Vrp.with_fleet` builds an instance served by several vehicle types. A `VehicleType` has a
+capacity, a `max_count` of vehicles, a speed, a `fixed_cost` charged once per used vehicle, a
+`variable_cost_per_distance`, a `min_count` of vehicles that must be used and a
+`max_route_time`. Customers can take a service time. The fleet has `num_vehicles()` routes, the
+`max_count` of every type summed, laid out type by type in the order the types were given:
+route `i` of every solution is driven by type `slot_types()[i]`. A customer moved between routes
+of two types changes vehicle type, so the same neighborhoods, `HybridGeneticSearch` and
+`AdaptiveLargeNeighborhoodSearch` all choose the fleet as they route.
+
+The objective is
+
+```text
+time + cost_weight · cost + penalty_weight · (overload + time_excess + min_count_shortfall)
+```
+
+A route takes `distance / speed` plus the service times on it. `time` sums those route times
+with `objective_mode="TotalTime"`, the default, or takes the longest with `"Makespan"`. `cost`
+adds the fixed cost of every used vehicle and the per-distance cost of every route, and
+`cost_weight` (default 1.0) sets its exchange rate against time. A capacity, a route-time limit
+and a minimum count are penalized alike, at a weight that bounds everything else the objective
+can charge. One type of speed 1 with no costs or service times is exactly the CVRP above.
+
+```python
+import random
+import optopus
+
+rng = random.Random(3)
+coords = [(0, 0)] + [(rng.randint(-30, 30), rng.randint(-30, 30)) for _ in range(20)]
+demands = [0] + [rng.randint(1, 5) for _ in range(20)]
+service = [0] + [2.0] * 20
+
+truck = optopus.VehicleType("truck", capacity=30, max_count=2, fixed_cost=50.0)
+van = optopus.VehicleType(
+    "van", capacity=10, max_count=4, speed=1.5, fixed_cost=10.0, max_route_time=90.0
+)
+vrp = optopus.Vrp.with_fleet(coords, demands, [truck, van], service_times=service)
+
+report = optopus.HybridGeneticSearch(stop=optopus.StopCondition(max_iteration=500)).run(
+    vrp, runs=3, seed=42
+)
+best = min(report.runs, key=lambda r: r.best_objective)
+result = vrp.evaluate_routes(best.solution)
+print(round(result["objective"], 2), result["used_count"])  # 374.15 [1, 3]
+for route, t, time in zip(best.solution, vrp.slot_types(), result["route_times"]):
+    if route:
+        print(vrp.vehicle_types()[t].name, route, round(time, 1))
+```
+
+The best plan uses one truck and three vans. The truck drives the longest route, 137.7 time
+units, which no van may, and each van stays within its 90. `evaluate_routes` reports every term of the objective separately:
+`route_distances`, `route_times`, `used_count` per type, `total_time`, `makespan`,
+`time_excess`, `min_count_shortfall` and `total_cost`, next to the CVRP's `distance`,
+`overload` and `route_loads`. The solution is feasible when `overload`, `time_excess` and
+`min_count_shortfall` are all 0. `capacity()` raises `ValueError` on a fleet of several types;
+read each type's from `vehicle_types()`. `with_objective_mode("Makespan")` returns a copy that
+charges the longest route instead.
+
+`Vrp.load_file` reads a mixed fleet from a `.toml` file, in optopus's format; any other file is
+read as CVRPLIB:
+
+```toml
+name = "demo"                  # optional, defaults to the file name
+objective_mode = "TotalTime"   # or "Makespan"
+cost_weight = 1.0              # optional
+rounded = false                # optional, round distances as CVRPLIB does
+
+[depot]
+x = 0.0
+y = 0.0
+
+[[vehicle_types]]              # one table per type, keys as VehicleType's arguments
+name = "truck"
+capacity = 30
+speed = 1.0
+fixed_cost = 50.0
+max_count = 2
+
+[[customers]]                  # one table per customer, ids exactly 1..n
+id = 1
+x = 3.0
+y = 4.0
+demand = 2
+service_time = 2.0             # optional
+```
 
 ### GraphColoring
 

@@ -33,6 +33,9 @@ factory method, then handed to a heuristic.
 .. autoclass:: optopus.Vrp
    :members:
 
+.. autoclass:: optopus.VehicleType
+   :members:
+
 .. autoclass:: optopus.GraphColoring
    :members:
 

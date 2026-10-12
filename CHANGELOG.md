@@ -17,6 +17,16 @@ entries below are breaking; see **Changed** and **Removed**.
   `num_vehicles=0` lets optopus pick a fleet size. `evaluate_routes` scores a route partition
   and reports the raw distance and the capacity overload separately, since the objective a
   heuristic minimizes is `distance + penalty_weight * overload`.
+- A mixed fleet for `Vrp`: `VehicleType` describes a vehicle type (capacity, speed, fixed and
+  per-distance cost, minimum and maximum count, route-time limit), and `Vrp.with_fleet` builds
+  an instance from a list of them, with service times at the customers, a `"TotalTime"` or
+  `"Makespan"` objective and a `cost_weight`; `Vrp.load_file` reads the same from optopus's
+  TOML format. Capacity, route-time limit and minimum count are penalized like the capacity of
+  a CVRP. `vehicle_types()`, `slot_types()` (the vehicle type of each route), `service_times()`,
+  `objective_mode()`, `cost_weight()` and `with_objective_mode()` read the fleet back, and
+  `evaluate_routes` reports per-route distances and times, vehicles used per type, total time,
+  makespan, route-time excess, minimum-count shortfall and cost. Every `Vrp` heuristic and
+  neighborhood runs on a mixed fleet.
 - `GraphColoring`, minimum proper coloring, with the `Recolor` and `Swap` neighborhoods and an
   `evaluate_colors` that reports colors used and conflicts. The palette defaults to
   `max_degree + 1` and can be set explicitly.
@@ -84,6 +94,13 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Changed
 
+- `Vrp.evaluate_routes` raises `ValueError` unless it gets one route per vehicle, empty routes
+  included, instead of scoring a plan the fleet cannot run. Pad a plan with `[]` up to
+  `num_vehicles()`. This follows optopus, now vendored at `41ef2c4`, whose `Vrp` also covers a
+  mixed fleet (see **Added**).
+- `Vrp.load_file` reads a `.toml` file as a mixed fleet, as optopus does; any other file is
+  still read as CVRPLIB. `Vrp.capacity()` raises `ValueError` on a fleet of several vehicle
+  types, which have no single capacity; read `vehicle_types()` instead.
 - Wheels are built with the release settings optopus measured, fat LTO and a single codegen
   unit, which the binding had never applied. `TabuSearch` runs about 1.9x faster on a
   2000-vertex MaxCut; the other heuristics measured gain little.
@@ -133,6 +150,8 @@ entries below are breaking; see **Changed** and **Removed**.
   `JobShopScheduling.from_jobs`, `Vrp.from_coordinates`, `Vrp.from_distance_matrix` and
   `PlantedMaxCut.wishart` show their string defaults (`name=''`, `name='vrp'`,
   `couplers='Gaussian'`) instead of `Ellipsis`.
+- `Vrp.from_coordinates` raises `ValueError` for a non-finite coordinate instead of failing
+  with a `PanicException` from the core.
 - `Sat.from_clauses` raises `ValueError` for a literal of 0 or one naming a variable above
   `n_vars`, and `StopCondition` for a negative or non-finite `max_duration_secs`. Both used to
   fail with a `PanicException` from the core.
