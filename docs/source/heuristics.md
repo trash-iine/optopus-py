@@ -1,69 +1,23 @@
 # Choosing a heuristic
 
 A heuristic decides how the search moves through a problem's solutions. This page says which to
-reach for, how to set its main parameters, and how to spend a time budget. Every argument is in
-the [API reference](api_reference.md#heuristics).
+reach for and how to set its main parameters. Each heuristic has a section of its own, with
+every argument and an example, on one of four pages:
 
-## Running one
+- [Generic heuristics](heuristics_generic.md) run on every problem and take its moves by name:
+  `LocalSearch`, `SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `TabuSearch`,
+  `LateAcceptanceHillClimbing`, `RandomWalk`, `BeamSearch`, `PopulationAnnealing`,
+  `ParallelTempering`, `ReinforcementLearningSearch`.
+- [Composed heuristics](heuristics_composed.md) are built from other heuristics:
+  `Sequential`, `Iterated`, `VariableNeighborhoodSearch`, `Restart`, `GeneticAlgorithm`,
+  `BreakoutLocalSearch.from_parts`.
+- [Problem-specific heuristics](heuristics_specific.md) exploit one problem's structure:
+  `WalkSat`, `BreakoutLocalSearch`, `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch`,
+  `IteratedGreedy`, `GreedyRandomizedConstruction`, `HybridGeneticSearch`.
+- [Exact search](heuristics_exact.md) proves an optimum: `BranchAndBound`.
 
-Every heuristic has the same `run(problem, runs=1, seed=None)` and returns a
-[`RunReport`](api_reference.md#results).
-
-- `runs` independent runs execute **one after another**, each from its own random starting
-  solution. A budget of `max_duration_secs=d` per run makes the call take about `runs × d`.
-- With a `seed`, run 0 uses that seed and the others derive theirs from it, so the same call
-  reproduces the same report. Without one, every call differs.
-- A heuristic instance holds only its configuration. Reuse it across problems and calls.
-
-## Stopping
-
-`StopCondition` stops a run as soon as any of its limits is reached:
-
-| Argument | Stops after |
-|---|---|
-| `max_iteration` | this many iterations |
-| `max_duration_secs` | this much wall-clock time |
-| `max_failed_update` | this many consecutive iterations without a new best |
-
-Set at least one: a `StopCondition()` with none is accepted, and a heuristic that does not
-stop by itself then runs forever. `LocalSearch` stops by itself at a local optimum, and
-`WalkSat` once every clause holds; the others run until the condition says otherwise.
-
-A small problem often reaches its best in milliseconds, so a large `max_iteration` mostly
-spends time after the answer is found. `max_failed_update` stops a run once it stagnates and
-makes a good first budget when you do not yet know how long the search needs; read
-`time_to_best_secs` in the report to size a fixed budget afterwards.
-
-What one iteration is depends on the heuristic, so the same `max_iteration` means very
-different amounts of work:
-
-| Heuristic | One iteration |
-|---|---|
-| `LocalSearch`, `TabuSearch` | scores the **whole** neighborhood and applies one move |
-| `SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `LateAcceptanceHillClimbing`, `RandomWalk` | scores one random move |
-| `BeamSearch` | expands the whole neighborhood of every candidate in the beam |
-| `PopulationAnnealing` | one temperature step: resampling plus `sweeps_per_step` sweeps of every replica |
-| `ParallelTempering` | one sweep of every replica; a round of `sweeps_per_exchange` sweeps and one exchange counts that many |
-| `GeneticAlgorithm`, `HybridGeneticSearch` | produces one offspring |
-| `AdaptiveLargeNeighborhoodSearch`, `IteratedGreedy` | ruins and recreates the solution once |
-| `GreedyRandomizedConstruction` | builds one solution, and a call makes exactly one |
-| `Sequential`, `Iterated`, `VariableNeighborhoodSearch`, `Restart` | counts the iterations of their steps, see [Composing heuristics](#composing-heuristics) |
-| `BranchAndBound` | takes one node, on top of the iterations its `heuristic` makes there, see [Proving optimality](#proving-optimality) |
-
-A limit is checked between units of work, never inside one, so the smallest unit a heuristic
-has always runs to completion and a run can overshoot a time limit by up to one unit. For most
-heuristics the unit is one iteration. For a composed heuristic it is one call of a step. For
-`HybridGeneticSearch` the first unit is its whole initial population, `4 · min_population_size`
-individuals each split into routes and improved, which it counts as that many iterations: a run
-with `max_iteration=1` still builds it. On a large `Vrp` under a short time limit that first unit
-dominates; lower `min_population_size` to shorten it.
-
-Time on a `--release` build (`maturin develop --release`, or an installed wheel). The default
-development build is several times slower, and the ratio differs from heuristic to heuristic.
-
-A time limit sidesteps the difference and is the natural unit when comparing heuristics. An
-iteration limit makes a run reproducible regardless of the machine, which a time limit does
-not.
+How to run any of them, stop them and read their results is in
+[Running a search](running.md).
 
 ## Which one
 
@@ -72,24 +26,24 @@ the problem's structure and usually wins.
 
 | Problem | Start with |
 |---|---|
-| `Sat` | `WalkSat` |
-| `MaxCut` | `BreakoutLocalSearch` |
-| `Tsp` | `LinKernighanHelsgaun` |
-| `Vrp` | `HybridGeneticSearch`, or `AdaptiveLargeNeighborhoodSearch` |
-| `FlowShop` | `IteratedGreedy` |
-| `Qap` | `TabuSearch` with `"Swap"` |
-| `BinPacking` | `AdaptiveLargeNeighborhoodSearch` |
+| `Sat` | [`WalkSat`](heuristics_specific.md#walksat) |
+| `MaxCut` | [`BreakoutLocalSearch`](heuristics_specific.md#breakoutlocalsearch) |
+| `Tsp` | [`LinKernighanHelsgaun`](heuristics_specific.md#linkernighanhelsgaun) |
+| `Vrp` | [`HybridGeneticSearch`](heuristics_specific.md#hybridgeneticsearch), or [`AdaptiveLargeNeighborhoodSearch`](heuristics_specific.md#adaptivelargeneighborhoodsearch) |
+| `FlowShop` | [`IteratedGreedy`](heuristics_specific.md#iteratedgreedy) |
+| `Qap` | [`TabuSearch`](heuristics_generic.md#tabusearch) with `"Swap"` |
+| `BinPacking` | [`AdaptiveLargeNeighborhoodSearch`](heuristics_specific.md#adaptivelargeneighborhoodsearch) |
 
 Otherwise pick a generic heuristic by what the search landscape needs:
 
 | Situation | Reach for |
 |---|---|
-| A quick baseline, or a polishing step inside a composed heuristic | `LocalSearch` |
-| A general default when one random move is cheap to score | `SimulatedAnnealing` |
-| As `SimulatedAnnealing`, with one parameter instead of a temperature schedule | `LateAcceptanceHillClimbing` |
-| Small neighborhoods, or a landscape where every good move goes through a worse solution (for instance `Formula` with `"Eq"` constraints) | `TabuSearch` |
-| A search that stalls in one basin | `Iterated` or `VariableNeighborhoodSearch` around one of the above |
-| Diversity across many candidates | `PopulationAnnealing`, `ParallelTempering`, `GeneticAlgorithm` |
+| A quick baseline, or a polishing step inside a composed heuristic | [`LocalSearch`](heuristics_generic.md#localsearch) |
+| A general default when one random move is cheap to score | [`SimulatedAnnealing`](heuristics_generic.md#simulatedannealing) |
+| As [`SimulatedAnnealing`](heuristics_generic.md#simulatedannealing), with one parameter instead of a temperature schedule | [`LateAcceptanceHillClimbing`](heuristics_generic.md#lateacceptancehillclimbing) |
+| Small neighborhoods, or a landscape where every good move goes through a worse solution (for instance `Formula` with `"Eq"` constraints) | [`TabuSearch`](heuristics_generic.md#tabusearch) |
+| A search that stalls in one basin | [`Iterated`](heuristics_composed.md#iterated) or [`VariableNeighborhoodSearch`](heuristics_composed.md#variableneighborhoodsearch) around one of the above |
+| Diversity across many candidates | [`PopulationAnnealing`](heuristics_generic.md#populationannealing), [`ParallelTempering`](heuristics_generic.md#paralleltempering), [`GeneticAlgorithm`](heuristics_composed.md#geneticalgorithm) |
 
 `LocalSearch` and `TabuSearch` score every move of the neighborhood at each step. That is cheap
 for a flip over a few thousand variables and expensive for a pairwise move such as `"TwoOpt"` or
@@ -144,232 +98,27 @@ Its median is a reasonable `initial_temperature`, and its smallest values bound 
 from a solution close to the ones the search will see, such as the result of a short
 `LocalSearch`, since a random solution has larger deltas.
 
-`BangBangSimulatedAnnealing` reheats between `min_wave_threshold` and `max_wave_threshold`
-instead of cooling once, which suits long runs that would otherwise freeze early.
+### The other heuristics
 
-### TabuSearch
-
-After a move, the variables or edges it touched stay tabu for a tenure drawn uniformly from
-`tabu_tenure = (min, max)`. A tabu move is still taken when it would give a new best.
-
-- A tenure of 1 only forbids undoing the last move, and the search cycles between two
-  solutions.
-- Start from a few moves and grow it with the instance, around a tenth of the number of
-  variables. A tenure close to the number of variables forbids almost everything.
-- A range rather than a single value, such as `(5, 15)`, keeps the search from settling into a
-  cycle of fixed length.
-
-### LateAcceptanceHillClimbing
-
-A move is accepted when the result is no worse than the solution `history_length` steps
-earlier. `1` is close to hill climbing. A few thousand is a reasonable default; longer histories
-explore more and converge more slowly, so they need more iterations.
-
-### PopulationAnnealing
-
-Keeps `population_size` replicas and raises the inverse temperature β from `initial_beta` by
-`delta_beta` per step, resampling the replicas by their Boltzmann weight. `neighbor` defaults to
-`"Flip"`, which suits the binary problems; pass the problem's own move otherwise. With a pairwise
-move such as `"TwoOpt"`, set `sweep_length`, because the default counts the whole neighborhood
-once per run.
-
-### ParallelTempering
-
-Keeps `num_replicas` replicas on a fixed ladder of inverse temperatures, geometric from
-`beta_min` (hottest) to `beta_max` (coldest), and lets neighbouring replicas trade places after
-every `sweeps_per_exchange` sweeps. Nothing cools, which is the difference from
-`PopulationAnnealing`. The temperatures are in the units of the objective: `beta_max` should
-make the coldest replica a descent, `beta_min` let the hottest move freely, and the replicas
-should be close enough that neighbours overlap in energy, or a good configuration never travels
-down the ladder. When widening the range, add replicas with it. `neighbor` and `sweep_length`
-work as in `PopulationAnnealing`.
+Each one's section says what its parameters do and where to start them:
+[`TabuSearch`](heuristics_generic.md#tabusearch),
+[`LateAcceptanceHillClimbing`](heuristics_generic.md#lateacceptancehillclimbing),
+[`PopulationAnnealing`](heuristics_generic.md#populationannealing) and
+[`ParallelTempering`](heuristics_generic.md#paralleltempering) on
+[Generic heuristics](heuristics_generic.md).
 
 ### Problem-specific heuristics
 
-Their defaults are the published settings and a sensible start. The ones worth knowing:
-
-- `WalkSat(noise=0.3)`; `adaptive=True` tunes the noise during the run.
-- `BreakoutLocalSearch`'s `tabu_tenure` has the same meaning as in `TabuSearch`, so the paper's
-  `rand[3, |V|/10]` is `(6, len(vertices) // 5)`.
-- `HybridGeneticSearch` counts one offspring per iteration, after an initial population of
-  `4 · min_population_size` (see [Stopping](#stopping)). On a release build it produces
-  roughly 600 offspring a second on a 200-customer `Vrp` and ten times that on 30 customers, so
-  a few seconds is already thousands of iterations.
-- `AdaptiveLargeNeighborhoodSearch` removes `round(removal_fraction · n)` of the `n` elements
-  per iteration, at least 1, at most `n − 1` and at most 50. On a small instance the default
-  0.15 removes one element at a time, which a ruin-and-recreate cannot improve with; raise it so
-  that several elements move together. On a large one a smaller fraction makes each iteration
-  cheaper, since repair prices every place for every removed element, and buys more iterations
-  in the same time.
-- Its acceptance temperature starts where a solution 5% worse than the starting one is accepted
-  half the time, and `cooling_rate` multiplies it every iteration. The default 0.9995 barely
-  cools within a few thousand iterations. For a fixed time budget, measure the iterations a
-  short run makes, then choose `cooling_rate` from the SA formula above so that the temperature
-  falls by two or three orders of magnitude over the budget.
-- For `Vrp`, `HybridGeneticSearch` and `AdaptiveLargeNeighborhoodSearch` measure level at
-  equal budgets of tens of seconds, so try both. `AdaptiveLargeNeighborhoodSearch` also runs on
-  `Tsp`, `FlowShop`, `BinPacking` and a problem written in Python.
-- `IteratedGreedy(removal_count=4, temperature_factor=0.4)` on `FlowShop` is the tuned setting
-  of its paper. It accepts a worse sequence at a fixed temperature, a tenth of the mean
-  processing time times `temperature_factor`.
-- `GreedyRandomizedConstruction` is not a search: a call builds one solution, drawing each
-  element from those within `alpha` of the cheapest to place. GRASP is that construction as the
-  perturbation of `Iterated`, with a descent as its search:
-
-  ```python
-  grasp = optopus.Iterated(
-      search=optopus.LocalSearch("Relocate", stop=optopus.StopCondition(max_iteration=1_000)),
-      perturbation=optopus.GreedyRandomizedConstruction(alpha=0.2),
-      stop=optopus.StopCondition(max_duration_secs=1.0),
-  )
-  ```
-
-  One construction prices every element left at every step, `O(n²)` placements for `n`
-  elements, which is slow on thousands of them.
-
-## Composing heuristics
-
-Composed heuristics take other heuristic instances as steps, each with its own neighborhood and
-its own `StopCondition`, which bounds one call of that step. The steps work on the composed
-heuristic's current solution, and the best solution any step finds is kept.
-
-| Heuristic | One round | Use it to |
-|---|---|---|
-| `Sequential(steps)` | runs every step in order | clean up a random start with `LocalSearch`, then hand over to `TabuSearch` |
-| `Iterated(search, perturbation)` | runs `search`, then `perturbation`, and carries on from the perturbed solution | escape a basin one search stalls in; the usual first composition to try |
-| `VariableNeighborhoodSearch(search, shakes)` | runs shake `k`, then `search`; keeps the result and returns to shake 0 if it improved on the round's start, otherwise restores that start and moves to shake `k + 1` | mix neighborhoods of different reach, such as `Vrp`'s inter- and intra-route moves |
-| `Restart(heuristic, restart)` | runs `heuristic`, then starts over from a new random solution if `restart` is met | sample many basins when each search converges fast |
-| `GeneticAlgorithm(population_size, mutation)` | recombines two parents with the problem's crossover and improves the child with `mutation` | keep a diverse population; `mutation` is typically a short `LocalSearch`. `parent_selection="DistantTopK"` and `"BiasedFitness"` read the problem's distance between solutions, `"Tournament"` does not |
-| `BreakoutLocalSearch.from_parts(descent, random, directed, ...)` | breakout local search from any heuristics | use the MaxCut algorithm's framework on another problem |
-
-Each call of a step starts that step afresh from the composed heuristic's current solution:
-a `SimulatedAnnealing` step starts again at its `initial_temperature`, and a
-`LateAcceptanceHillClimbing` step with an empty history. Only the solution carries over. Give
-such a step a short schedule of its own rather than one sized for the whole run.
-
-`Iterated` has no acceptance test: a perturbation that makes things worse is not undone, and
-only the best solution found survives it. Use `VariableNeighborhoodSearch` with one shake when
-you want a round kept only if it improves.
-
-### How the outer `stop` counts
-
-The outer `stop` of `Sequential`, `Iterated`, `VariableNeighborhoodSearch` and `Restart` does
-not count rounds. Every iteration a step makes counts toward it, and it is checked only when a
-step returns, never in the middle of one:
-
-- `max_iteration=n` stops at the first step boundary at or after `n` iterations of the steps
-  added together. `Iterated(search=LocalSearch(...), ..., stop=StopCondition(max_iteration=20))`
-  stops after the first search if that search alone takes 20 iterations.
-- `Sequential` checks after every step, so a limit reached inside the first step skips the
-  others. `Iterated` checks between `search` and `perturbation`, and
-  `VariableNeighborhoodSearch` between the shake and `search`.
-- `max_failed_update=m` counts iterations since the best solution of the whole run improved,
-  across all steps. A step that ends on a non-improving iteration, as every `LocalSearch` does,
-  adds to it.
-
-To run a number of rounds, multiply by the iterations one round makes. To stop when a whole
-round finds nothing, use `max_failed_update` larger than one round's iterations. A time limit
-avoids the arithmetic altogether.
-
-`Restart`'s `restart` condition is read the same way, against the whole run's counters and
-not from the start of the attempt. With `max_iteration=n` it restarts after every call of
-`heuristic` once `n` iterations have passed in total. With `max_failed_update=m` it restarts
-after every call once `m` iterations have passed without a new best, until a new best resets
-the count. Give `heuristic` its own `max_failed_update` to decide how long one attempt runs.
-
-A perturbation is typically a `RandomWalk` with a small `max_iteration`, the number of random
-moves it makes:
-
-```python
-import optopus
-
-ils = optopus.Iterated(
-    search=optopus.LocalSearch("Flip", stop=optopus.StopCondition(max_iteration=1_000)),
-    perturbation=optopus.RandomWalk("Flip", stop=optopus.StopCondition(max_iteration=10)),
-    stop=optopus.StopCondition(max_duration_secs=1.0),
-)
-mc = optopus.MaxCut.from_graph(optopus.Graph.erdos_renyi(200, 0.05, seed=1))
-print(ils.run(mc, runs=2, seed=42).best_objective)
-```
+Their defaults are the published settings and a sensible start; what is worth changing is in
+each one's section on [Problem-specific heuristics](heuristics_specific.md), such as
+`AdaptiveLargeNeighborhoodSearch`'s `removal_fraction` on a small instance and its
+`cooling_rate` under a time budget.
 
 ## Proving optimality
 
-Every heuristic above returns the best solution it found, and none can say whether a better one
-exists. `BranchAndBound` can, on `MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`. It splits
-the problem into nodes, each with some variables' ranges narrowed, searches each node with
-another heuristic, and drops a node once a bound, the *relaxation*, shows that nothing in it beats
-the best solution so far. When no node is left, the best solution is optimal.
-
-```python
-import optopus
-
-mc = optopus.MaxCut.from_graph(optopus.Graph.erdos_renyi(30, 0.3, seed=1))
-bnb = optopus.BranchAndBound(
-    heuristic=optopus.TabuSearch("Flip", (2, 5), stop=optopus.StopCondition(max_iteration=100)),
-    stop=optopus.StopCondition(max_duration_secs=10.0),
-    relaxation="Eigenvalue",
-)
-run = bnb.run(mc, seed=42).runs[0]
-print(run.best_objective, run.proven_optimal)  # 93.0 True
-```
-
-Two fields of the `RunResult` say what the search proved; on every other heuristic they are
-`None`:
-
-- `proven_optimal` is `True` when the search ran out of nodes before its `stop`.
-- `dual_bound` is the best objective a solution not yet ruled out could reach. It equals
-  `best_objective` once the optimum is proven, and the gap between the two bounds how far a
-  search stopped by `stop` can be from the optimum.
-
-`heuristic` searches each node, so its stop condition is a budget per node; a short `LocalSearch`
-or `TabuSearch` is the usual choice. A binary problem folds the variables a node fixes into a
-smaller instance of itself, so its own heuristics, `WalkSat` and `BreakoutLocalSearch` included,
-search a node as they search the whole problem. `stop` defaults to no limit, which on a large
-instance means a run that never ends; give it a time limit there.
-
-The relaxation decides how many nodes are searched. Each problem has a default:
-
-| `relaxation` | Problems | Bound |
-|---|---|---|
-| `"Binary"` (default) | `MaxCut`, `Qubo`, `Sat`, `VertexCover` | the fixed variables folded away and a simple bound of what is left, such as the sum of the positive weights on `MaxCut` |
-| `"Eigenvalue"` | `MaxCut` | the eigenvalue bound of Delorme and Poljak, much tighter; its cost per node grows with the cube of the free vertices |
-| `"Interval"` (default) | `Formula` | every term bounded by interval arithmetic over the ranges, valid on every formula and weak on most |
-
-On the 30-vertex graph above, `"Binary"` proves the same optimum with about 2,500 times as many
-iterations as `"Eigenvalue"`. The built-in bounds suit instances of a few dozen variables.
-
-A bound that knows the problem is written as a function. It takes the node's ranges, one
-inclusive `(lower, upper)` pair per variable, and returns a number no assignment within them
-beats: at least the best objective on a maximized problem, at most it on a minimized one. The
-objective is the one the search ranks by, penalty included and, on a `Formula`, not negated.
-On the knapsack of [Modeling with Formula](formula.md#knapsack), the items held at 1
-plus the free ones filling the room left, best value per weight first and the last one in part,
-is such a bound:
-
-```python
-def fractional_fill(ranges):
-    taken = [i for i, (lower, _) in enumerate(ranges) if lower == 1]
-    free = [i for i, (lower, upper) in enumerate(ranges) if lower < upper]
-    bound = float(sum(values[i] for i in taken))
-    room = max(budget - sum(weights[i] for i in taken), 0)
-    for i in sorted(free, key=lambda i: values[i] / weights[i], reverse=True):
-        part = min(1.0, room / weights[i])
-        bound += part * values[i]
-        room -= part * weights[i]
-    return bound
-
-bnb = optopus.BranchAndBound(
-    heuristic=optopus.LocalSearch("Change", stop=optopus.StopCondition(max_iteration=100)),
-    relaxation=fractional_fill,
-)
-run = bnb.run(knapsack, seed=42).runs[0]
-print(run.best_objective, run.solution, run.proven_optimal)  # 9.0 [0, 1, 1, 0] True
-```
-
-A function that is not a bound prunes the optimum without an error, and the run then reports
-`proven_optimal=True` for a solution that is not optimal. Check a new bound against enumeration
-on instances small enough to enumerate. A function that raises stops the run, and `run` raises
-the exception.
+None of the heuristics above can tell whether a better solution exists. `BranchAndBound` can, on
+`MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`, with any of them searching each node; see
+[Exact search](heuristics_exact.md).
 
 ## Problems written in Python
 

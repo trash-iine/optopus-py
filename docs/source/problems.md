@@ -37,20 +37,11 @@ A task can reach the search in three ways. Take the first that fits the task exa
 | `GraphColoring` | min colors used | `list[int]`, the color of each vertex | `"Recolor"`, `"Swap"` | |
 | `Formula` | a polynomial, either direction | `list[int]`, each variable | `"Change"` (alias `"Flip"`), `"Swap"`, `"Reverse"` | |
 
-Every generic and composed heuristic runs on every problem. `GeneticAlgorithm` takes the
-problem's crossover by name:
-
-| Problem | `crossover` (default first) |
-|---|---|
-| `MaxCut`, `Qubo`, `Sat`, `VertexCover`, `Formula` | `"Uniform"`, `"SubProblem"` |
-| `Tsp` | `"Order"`, `"SubProblem"` |
-| `Vrp`, `FlowShop`, `Qap` | `"Order"` |
-| `JobShopScheduling` | `"Ppx"` |
-| `BinPacking` | `"Group"` |
-| `GraphColoring` | `"Uniform"` |
+Every generic and composed heuristic runs on every problem. The crossovers `GeneticAlgorithm`
+can use on each are listed under [GeneticAlgorithm](heuristics_composed.md#geneticalgorithm).
 
 `BranchAndBound` proves an optimum on `MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`, see
-[Proving optimality](heuristics.md#proving-optimality).
+[Exact search](heuristics_exact.md).
 
 ## Neighborhoods
 
@@ -115,12 +106,8 @@ solution you keep with the problem's evaluator. On `Vrp` those tiny differences 
 as improvements, which makes `n_best_updates` and `time_to_best_secs` overstate how long the
 search kept improving and delays `max_failed_update`.
 
-The report holds no best solution of its own. Pick the run whose `best_objective` is the report's,
-and read its `solution`:
-
-```python
-best = min(report.runs, key=lambda r: r.best_objective)  # max for MaxCut, Sat and every Formula
-```
+The report holds no best solution of its own; [Picking the best solution](running.md#picking-the-best-solution)
+shows how to read it.
 
 ## Constraints a problem handles itself
 
@@ -142,59 +129,223 @@ put an item where it fits.
 
 ## Per problem
 
+Each section lists how to build the problem and what else it offers, then solves a tiny
+instance whose optimum is known. Every constructor is a static method, and the ones that take a
+`name` default it to `""` (`"vrp"` for `Vrp`); `load_file` names the instance after the file.
+
 ### MaxCut
 
-Partition the vertices into two sides, maximizing the weight of edges between them. Build it
-with `from_edges([(u, v, weight), ...])` or `from_graph(graph)`. Weights are stored as 32-bit
-floats, so a sum of many non-integer weights compares only within rounding; integer weights
-compare exactly. `MaxCutKernel` shrinks a sparse instance exactly before the search, and
-`PlantedMaxCut` builds instances whose optimum is known.
+Partition the vertices into two sides, maximizing the weight of edges between them.
+
+| Constructor | Builds |
+|---|---|
+| `MaxCut.from_edges(edges)` | the instance over `(u, v, weight)` edges, 0-indexed |
+| `MaxCut.from_graph(graph)` | the instance over a [`Graph`](graphs_and_instances.md#graph) |
+
+```python
+import optopus
+
+# A 4-cycle with heavy edges 0–1 and 2–3 and a chord 0–2.
+mc = optopus.MaxCut.from_edges([(0, 1, 3.0), (1, 2, 1.0), (2, 3, 3.0), (3, 0, 1.0), (0, 2, 2.0)])
+
+ts = optopus.TabuSearch("Flip", (1, 2), stop=optopus.StopCondition(max_iteration=100))
+report = ts.run(mc, runs=3, seed=42)
+print(report.best_objective)    # 8.0 — every edge but the chord is cut
+print(report.runs[0].solution)  # [False, True, False, True] — the side of each vertex
+```
+
+Weights are stored as 32-bit floats, so a sum of many non-integer weights compares only within
+rounding; integer weights compare exactly. `MaxCutKernel` shrinks a sparse instance exactly
+before the search, and `PlantedMaxCut` builds instances whose optimum is known, see
+[Graphs and test instances](graphs_and_instances.md).
 
 ### Qubo
 
-Minimize x^T Q x over binary x. `from_entries([(i, j, coefficient), ...])` takes integer
-coefficients. A diagonal entry `(i, i, c)` is the linear term of x_i. `(i, j)` and `(j, i)` name
-the same coefficient, and an entry given twice replaces the earlier one rather than adding to
-it: sum your terms into one entry per pair before passing them.
+Minimize x^T Q x over binary x.
+
+| Constructor | Builds |
+|---|---|
+| `Qubo.from_entries(entries)` | the instance from `(i, j, coefficient)` entries with integer coefficients |
+
+A diagonal entry `(i, i, c)` is the linear term c·x_i, and an off-diagonal one the product
+term c·x_i·x_j.
+
+```python
+# Minimize −3·x0 − 2·x1 − 2·x2 + 4·x0·x1 + x1·x2 − x0·x2.
+q = optopus.Qubo.from_entries(
+    [(0, 0, -3), (1, 1, -2), (2, 2, -2), (0, 1, 4), (1, 2, 1), (0, 2, -1)]
+)
+
+ls = optopus.LocalSearch("Flip", stop=optopus.StopCondition(max_iteration=100))
+print([r.best_objective for r in ls.run(q, runs=3, seed=42).runs])  # [-3.0, -3.0, -6.0]
+
+ts = optopus.TabuSearch("Flip", (1, 2), stop=optopus.StopCondition(max_iteration=100))
+best = ts.run(q, runs=3, seed=42).runs[0]
+print(best.best_objective, best.solution)  # -6.0 [True, False, True] — x0 = x2 = 1
+```
+
+Two of the descents stop at a local optimum of −3, `x1` alone; the tabu search walks out of it.
+
+`(i, j)` and `(j, i)` name the same coefficient, and an entry given twice replaces the earlier
+one rather than adding to it. Sum your terms into one entry per pair before passing them:
+
+```python
+terms = [(0, 1, 2), (1, 0, 2), (0, 0, -1)]  # 2·x0·x1 written from both sides
+summed = {}
+for i, j, c in terms:
+    key = (min(i, j), max(i, j))
+    summed[key] = summed.get(key, 0) + c
+q = optopus.Qubo.from_entries([(i, j, c) for (i, j), c in summed.items()])
+```
+
+A QUBO with a side constraint, such as a budget, is a [`Formula`](formula.md).
 
 ### Sat
 
 Maximize the number of satisfied clauses (MaxSAT; a satisfiable instance is solved when every
-clause holds). `from_clauses(n_vars, clauses)` takes DIMACS literals: `+i` is variable `i` and
-`-i` its negation, **1-indexed**, while the solution list is 0-indexed, so variable `i` is
-`solution[i - 1]`. `WalkSat` stops as soon as every clause holds.
+clause holds).
+
+| Constructor | Builds |
+|---|---|
+| `Sat.from_clauses(n_vars, clauses)` | the instance over `n_vars` variables; each clause is a list of DIMACS literals |
+
+A literal `+i` is variable `i` and `-i` its negation, **1-indexed**, while the solution list is
+0-indexed, so variable `i` is `solution[i - 1]`.
+
+```python
+# x1, ¬x1 and (x1 ∨ x2): at most two of the three clauses can hold together.
+sat = optopus.Sat.from_clauses(2, [[1], [-1], [1, 2]])
+
+best = optopus.WalkSat(stop=optopus.StopCondition(max_iteration=1_000)).run(sat, seed=42).runs[0]
+print(best.best_objective)  # 2.0
+x1, x2 = best.solution  # variable i is solution[i - 1]
+```
+
+`WalkSat` stops as soon as every clause holds; on an unsatisfiable instance like this one it
+runs to its `stop`. A literal 0 or a variable above `n_vars` raises `ValueError`.
 
 ### VertexCover
 
-Choose the fewest vertices such that every edge has a chosen end. Edge weights are ignored; pass
-`1.0`. An uncovered edge is penalized as in the table above.
+Choose the fewest vertices such that every edge has a chosen end.
+
+| Constructor | Builds |
+|---|---|
+| `VertexCover.from_edges(edges)` | the instance over `(u, v, weight)` edges; the weights are ignored, pass `1.0` |
+| `VertexCover.from_graph(graph)` | the instance over a [`Graph`](graphs_and_instances.md#graph) |
+
+```python
+edges = [(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 4, 1.0), (4, 0, 1.0), (0, 2, 1.0)]
+vc = optopus.VertexCover.from_edges(edges)
+
+ts = optopus.TabuSearch("Flip", (1, 3), stop=optopus.StopCondition(max_iteration=200))
+best = ts.run(vc, runs=3, seed=42).runs[0]
+cover = best.solution
+uncovered = [(u, v) for u, v, _ in edges if not (cover[u] or cover[v])]
+print(best.best_objective, cover, uncovered)  # 3.0 [False, True, True, False, True] []
+```
+
+The search may cross covers that miss an edge, penalized at `num_vertices + 1` per uncovered
+edge, so a reported value of at most `num_vertices` is a valid cover of that size. Check the
+edges as above before using the cover.
 
 ### Tsp
 
-Find the shortest closed tour through every city. Build it from `(x, y)` coordinates, an
-explicit distance matrix, or a TSPLIB file with `load_file`. The solution lists the cities in
-visiting order; the return to the first city is implied.
+Find the shortest closed tour through every city.
 
-A distance matrix must be symmetric, finite and non-negative, and anything else raises
-`ValueError`. The moves price a reversed segment from the edges at its ends, which is only
-right when a segment is as long in both directions.
+| Constructor | Builds |
+|---|---|
+| `Tsp.from_coordinates(coordinates, name="")` | Euclidean distances between `(x, y)` points |
+| `Tsp.from_distance_matrix(matrix, name="")` | the given distances; symmetric, finite and non-negative |
+| `Tsp.load_file(path)` | a TSPLIB instance |
+
+`num_cities()` returns the number of cities.
+
+```python
+dist = [
+    [0, 2, 9, 10],
+    [2, 0, 6, 4],
+    [9, 6, 0, 3],
+    [10, 4, 3, 0],
+]
+tsp = optopus.Tsp.from_distance_matrix(dist)
+
+best = optopus.LocalSearch("TwoOpt", stop=optopus.StopCondition(max_iteration=100)).run(
+    tsp, seed=42
+).runs[0]
+print(best.best_objective, best.solution)  # 18.0 [2, 0, 1, 3] — 9 + 2 + 4 + 3
+```
+
+The solution lists the cities in visiting order; the return to the first city is implied.
+`load_file` reads TSPLIB:
+
+```python
+from pathlib import Path
+
+Path("square.tsp").write_text(
+    "NAME: square\nTYPE: TSP\nDIMENSION: 4\nEDGE_WEIGHT_TYPE: EUC_2D\n"
+    "NODE_COORD_SECTION\n1 0 0\n2 30 0\n3 30 40\n4 0 40\nEOF\n"
+)
+square = optopus.Tsp.load_file("square.tsp")
+print(square, square.num_cities())  # Tsp(name="square", n_cities=4) 4
+```
+
+A distance matrix that is not symmetric, finite and non-negative raises `ValueError`. The moves
+price a reversed segment from the edges at its ends, which is only right when a segment is as
+long in both directions.
 
 ### JobShopScheduling
 
 Each job is a list of `(machine, duration)` operations that must run in order, and a machine
 runs one operation at a time. Minimize the makespan, the time the last operation finishes.
-`from_jobs` takes the jobs; machines are 0-indexed. A solution is a sequence in which job `j`
-appears once per operation: its `k`-th occurrence schedules the `k`-th operation of job `j`, as
-early as the machines allow.
+
+| Constructor | Builds |
+|---|---|
+| `JobShopScheduling.from_jobs(jobs, name="")` | the instance from one list of `(machine, duration)` per job, machines 0-indexed |
+
+A solution is a sequence in which job `j` appears once per operation: its `k`-th occurrence
+schedules the `k`-th operation of job `j`, as early as the machines allow.
+
+```python
+jobs = [
+    [(0, 3), (1, 2), (2, 2)],  # job 0: machine 0 for 3, then machine 1 for 2, ...
+    [(0, 2), (2, 1), (1, 4)],
+    [(1, 4), (2, 3), (0, 1)],
+]
+shop = optopus.JobShopScheduling.from_jobs(jobs)
+
+ts = optopus.TabuSearch("Swap", (2, 4), stop=optopus.StopCondition(max_iteration=300))
+best = ts.run(shop, runs=3, seed=42).runs[0]
+print(best.best_objective)  # 11.0 — the optimum over all 1,680 sequences
+print(best.solution)        # [0, 1, 1, 2, 0, 2, 0, 2, 1]
+```
 
 ### FlowShop
 
 The permutation flow shop: every job passes through the machines in the same order, and every
 machine takes the jobs in one common order, the solution. Minimize the makespan.
-`from_processing_times(times)` takes one row per machine and one time per job,
-`times[machine][job]`, the layout Taillard's instances are published in, and `load_file` reads
-that layout with an `n_jobs n_machines` header line. `makespan(sequence)` scores an order, and
-`neh()` returns the order of the NEH construction, the usual baseline.
+
+| Constructor | Builds |
+|---|---|
+| `FlowShop.from_processing_times(times, name="")` | the instance from `times[machine][job]`, one row per machine |
+| `FlowShop.load_file(path)` | Taillard's layout: `n_jobs n_machines`, then one row of times per machine |
+
+| Method | Returns |
+|---|---|
+| `makespan(sequence)` | the makespan of a job order |
+| `neh()` | the order the NEH construction builds, the usual baseline |
+| `num_jobs()`, `num_machines()` | the instance's size |
+
+```python
+from pathlib import Path
+
+Path("demo.fs").write_text("5 3\n5 9 8 10 1\n9 3 10 1 8\n9 4 5 8 6\n")
+shop = optopus.FlowShop.load_file("demo.fs")
+print(shop.num_jobs(), shop.num_machines())  # 5 3
+print(shop.neh(), shop.makespan(shop.neh()))  # [4, 0, 2, 1, 3] 45
+
+ig = optopus.IteratedGreedy(stop=optopus.StopCondition(max_iteration=200), removal_count=2)
+print(ig.run(shop, runs=3, seed=42).best_objective)  # 44.0 — one better than NEH, optimal
+```
 
 `IteratedGreedy` is the heuristic to start with: it takes a few jobs out, puts each back where
 the makespan grows least and descends by insertion, and on Taillard's instances beats
@@ -204,7 +355,27 @@ literature relies on; it has `n (n − 1)` moves, all priced in `O(n² m)`.
 ### Vrp
 
 Serve every customer once from a depot with vehicles of one capacity, minimizing the total
-distance. Index `0` is the depot and customers are `1` to `n`. Build it from coordinates and
+distance.
+
+| Constructor | Builds |
+|---|---|
+| `Vrp.from_coordinates(coordinates, demands, capacity, num_vehicles=0, name="vrp", rounded=False)` | Euclidean distances; `rounded` rounds them as CVRPLIB does |
+| `Vrp.from_distance_matrix(matrix, demands, capacity, num_vehicles=0, name="vrp")` | the given distances; symmetric, finite and non-negative |
+| `Vrp.with_fleet(coordinates, demands, vehicle_types, service_times=None, objective_mode="TotalTime", cost_weight=1.0, name="vrp", rounded=False)` | a mixed fleet, see [Mixed fleet](#vrp-mixed-fleet) |
+| `Vrp.load_file(path)` | a CVRPLIB file, or a mixed fleet from a `.toml` file |
+
+| Method | Returns |
+|---|---|
+| `evaluate_routes(routes)` | a dict with `objective`, `distance`, `overload` and `route_loads`, and for a mixed fleet every term of its objective |
+| `num_customers()`, `num_vehicles()` | the instance's size; `num_vehicles()` is the number of routes in every solution |
+| `capacity()` | the vehicle capacity; `ValueError` on a fleet of several types |
+| `penalty_weight()` | the penalty per unit of overload |
+| `vehicle_types()`, `slot_types()`, `service_times()`, `objective_mode()`, `cost_weight()` | the fleet's description, see [Mixed fleet](#vrp-mixed-fleet) |
+| `with_objective_mode(mode)` | a copy charging `"TotalTime"` or `"Makespan"` |
+
+The [Quickstart](quickstart.md#vehicle-routing) solves a four-customer instance.
+
+Index `0` is the depot and customers are `1` to `n`. Build it from coordinates and
 demands, a distance matrix, or a CVRPLIB file; a fleet of several vehicle types is described
 under [Mixed fleet](#vrp-mixed-fleet). A solution has one route per vehicle, with the
 depot implied at both ends, and a route may be empty. `evaluate_routes` reports the raw
@@ -247,7 +418,7 @@ vns = optopus.VariableNeighborhoodSearch(
     search=polish,
     shakes=[optopus.RandomWalk("Relocate", stop=optopus.StopCondition(max_iteration=k))
             for k in (2, 4, 8)],
-    stop=optopus.StopCondition(max_duration_secs=2.0),
+    stop=optopus.StopCondition(max_duration_secs=0.25),
 )
 report = vns.run(vrp, runs=3, seed=42)
 print(report.best_objective)  # ≈ 606.12, the optimum HybridGeneticSearch also reaches
@@ -350,36 +521,110 @@ service_time = 2.0             # optional
 
 ### GraphColoring
 
-Color the vertices so that no edge joins two of one color, using as few colors as possible. The
-palette defaults to `max_degree + 1` colors, which always admits a proper coloring; pass
-`num_colors` to change it. A reported value below `penalty_weight()` means the coloring is proper
-and equals the number of colors used. `evaluate_colors` reports both parts.
+Color the vertices so that no edge joins two of one color, using as few colors as possible.
 
-Expect a search to reach a proper coloring quickly and to shed colors slowly: emptying a color
-class takes every vertex in it moving away one at a time, with no reward until the last one
-leaves. To ask whether `k` colors suffice, pass `num_colors=k` and check for zero conflicts.
+| Constructor | Builds |
+|---|---|
+| `GraphColoring.from_edges(edges, num_colors=None)` | the instance over `(u, v, weight)` edges; the weights are ignored |
+| `GraphColoring.from_graph(graph, num_colors=None)` | the instance over a [`Graph`](graphs_and_instances.md#graph) |
+
+| Method | Returns |
+|---|---|
+| `num_colors()` | the palette size; `None` above makes it `max_degree + 1`, which always admits a proper coloring |
+| `penalty_weight()` | the penalty per conflicting edge, `num_vertices + 1` |
+| `evaluate_colors(colors)` | a dict with `objective`, `colors_used` and `conflicts` |
+
+```python
+# The Petersen graph: an outer 5-cycle, spokes, and an inner pentagram. It needs three colors.
+petersen = (
+    [(i, (i + 1) % 5, 1.0) for i in range(5)]
+    + [(i, i + 5, 1.0) for i in range(5)]
+    + [(5 + i, 5 + (i + 2) % 5, 1.0) for i in range(5)]
+)
+gc = optopus.GraphColoring.from_edges(petersen)
+print(gc.num_colors(), gc.penalty_weight())  # 4 11
+
+ts = optopus.TabuSearch("Recolor", (2, 5), stop=optopus.StopCondition(max_iteration=2_000))
+best = ts.run(gc, runs=3, seed=42).runs[0]
+print(gc.evaluate_colors(best.solution))
+# {'objective': 3, 'colors_used': 3, 'conflicts': 0}
+```
+
+A reported value below `penalty_weight()` means the coloring is proper and equals the number of
+colors used. Expect a search to reach a proper coloring quickly and to shed colors slowly:
+emptying a color class takes every vertex in it moving away one at a time, with no reward until
+the last one leaves. To ask whether `k` colors suffice, pass `num_colors=k` and check for zero
+conflicts:
+
+```python
+two = optopus.GraphColoring.from_edges(petersen, num_colors=2)
+best = ts.run(two, runs=3, seed=42).runs[0]
+print(two.evaluate_colors(best.solution)["conflicts"])  # 3 — two colors do not suffice
+```
 
 ### Qap
 
 The quadratic assignment problem: place `n` facilities at `n` locations, one each, minimizing
-`Σ_i Σ_j flow[i][j] · distance[p[i]][p[j]]` for the assignment `p`. Build it with
-`from_matrices(flow, distance)` or read a QAPLIB file with `load_file`; neither matrix needs to
-be symmetric. `cost(assignment)` scores an assignment. A `"Swap"` is priced in `O(n)`, and
-`TabuSearch` forbids a swap that would put both facilities back at locations they recently left,
-the rule of Taillard's robust tabu search, which makes it the usual choice.
+`Σ_i Σ_j flow[i][j] · distance[p[i]][p[j]]` for the assignment `p`.
+
+| Constructor | Builds |
+|---|---|
+| `Qap.from_matrices(flow, distance, name="")` | the instance from two `n × n` integer matrices; neither needs to be symmetric |
+| `Qap.load_file(path)` | a QAPLIB instance: `n`, then the flow matrix and the distance matrix |
+
+| Method | Returns |
+|---|---|
+| `cost(assignment)` | the cost of an assignment, `assignment[facility]` being its location |
+| `size()` | `n` |
+
+```python
+flow = [[0, 3, 0, 2], [3, 0, 0, 1], [0, 0, 0, 4], [2, 1, 4, 0]]
+distance = [[0, 22, 53, 53], [22, 0, 40, 62], [53, 40, 0, 55], [53, 62, 55, 0]]
+qap = optopus.Qap.from_matrices(flow, distance)
+
+ts = optopus.TabuSearch("Swap", (1, 2), stop=optopus.StopCondition(max_iteration=50))
+best = ts.run(qap, runs=3, seed=42).runs[0]
+print(best.best_objective, best.solution)  # 790.0 [2, 3, 0, 1]
+print(qap.cost(best.solution))             # 790 — the optimum over all 24 assignments
+```
+
+A `"Swap"` is priced in `O(n)`, and `TabuSearch` forbids a swap that would put both facilities
+back at locations they recently left, the rule of Taillard's robust tabu search, which makes it
+the usual choice.
 
 ### BinPacking
 
-Pack items into as few bins of one capacity as possible. Build it with
-`from_sizes(capacity, sizes)` or `load_file`, which reads `n capacity` followed by the sizes, the
-layout of the Falkenauer instances optopus bundles. Every packing the search visits fits.
+Pack items into as few bins of one capacity as possible.
+
+| Constructor | Builds |
+|---|---|
+| `BinPacking.from_sizes(capacity, sizes, name="")` | the instance; an item larger than a bin raises `ValueError` |
+| `BinPacking.load_file(path)` | `n capacity`, then the `n` sizes, the layout of the Falkenauer instances |
+
+| Method | Returns |
+|---|---|
+| `evaluate_bins(bins)` | a dict with `objective`, `num_bins`, `loads` and `bins` for a solution |
+| `lower_bound()` | `⌈Σ size / capacity⌉`; a packing that reaches it is optimal |
+| `capacity()`, `sizes()`, `num_items()` | the instance's data |
+
+A solution gives each item's bin, numbered from 0. Every packing the search visits fits.
+
+```python
+bins = optopus.BinPacking.from_sizes(10, [6, 4, 5, 5, 7, 3, 2, 8, 3, 7])
+print(bins.lower_bound())  # 5
+
+alns = optopus.AdaptiveLargeNeighborhoodSearch(
+    stop=optopus.StopCondition(max_iteration=500), removal_fraction=0.3
+)
+best = alns.run(bins, runs=3, seed=42).runs[0]
+print(bins.evaluate_bins(best.solution))
+# {'objective': 4.0, 'num_bins': 5, 'loads': [10, 10, 10, 10, 10], 'bins': [0, 0, 1, 1, 2, 3, 4, 4, 2, 3]}
+```
 
 Counting bins alone would make most moves ties, so the search ranks packings by
 `num_bins − mean((load / capacity)²)`. The second term lies in `(0, 1]`: fewer bins always wins,
 and among packings with as many bins the fuller ones, from which a bin can be emptied, come
-first. The number of bins of a solution is `max(solution) + 1`, and `lower_bound()` is
-`⌈Σ size / capacity⌉`, which a packing that reaches it proves optimal. `evaluate_bins` reports
-the objective, the bin count and the loads.
+first. Above, five full bins score `5 − 1 = 4.0`.
 
 A descent through `"Relocate"` stalls on a packing that only a chain of moves could empty a bin
 from. `AdaptiveLargeNeighborhoodSearch` and `GreedyRandomizedConstruction`, which rebuild a

@@ -119,6 +119,13 @@ entries below are breaking; see **Changed** and **Removed**.
   for a time budget; a `Vrp` variable neighborhood search; a one-hot assignment with
   `Formula`; the `tabu_keys` contract (`(i, j)` is one key, `[i, j]` two) and the ruin methods'
   container numbering.
+- Documentation meant to be enough without reading the code: the top page shows how to install
+  and the three steps of every use; "Running a search" covers `run`, seeds, `StopCondition` and
+  every `RunReport` and `RunResult` field; four pages give each heuristic its arguments with
+  their defaults and a runnable example (generic, composed, problem-specific, exact search);
+  "Built-in problems" builds and solves a small instance of every problem with its
+  constructors and evaluators; "Graphs and test instances" covers `Graph`, `PlantedMaxCut` and
+  `MaxCutKernel`.
 
 ### Changed
 
