@@ -343,7 +343,8 @@ def test_alns_uses_partial_objective_and_repair_around():
     ids=["alns", "grasp"],
 )
 def test_ruin_based_heuristics_name_the_missing_ruin_methods(heuristic):
-    with pytest.raises(ValueError, match=r"'to_partial', 'finish'.*'insert'"):
+    match = rf"{type(heuristic).__name__} needs .*'to_partial', 'finish'.*'insert'"
+    with pytest.raises(ValueError, match=match):
         heuristic.run(Tsp(POINTS))
 
 
