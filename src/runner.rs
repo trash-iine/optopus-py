@@ -353,31 +353,28 @@ fn build_nested<P>(
     spec: &HeuristicSpec,
     recur: BuildFn<'_, P>,
     crossover: CrossoverFn<'_, P>,
-) -> Option<Result<Box<dyn Heuristic<P>>, String>>
+) -> Result<Option<Box<dyn Heuristic<P>>>, String>
 where
     P: ProblemTrait + 'static,
     P::Solution: Distance + Evaluate + 'static,
 {
     let cond = spec.stop.to_opt();
-    let built: Result<Box<dyn Heuristic<P>>, String> = (|| match &spec.kind {
+    let built: Box<dyn Heuristic<P>> = match &spec.kind {
         HeuristicKind::VariableNeighborhoodSearch { search, shakes } => {
-            if shakes.is_empty() {
-                return Err("'shakes' must contain at least one heuristic".to_string());
-            }
             let search = recur(search)?;
             let shakes = shakes.iter().map(recur).collect::<Result<Vec<_>, _>>()?;
-            Ok(Box::new(VariableNeighborhoodSearch::new(cond, search, shakes)) as Box<_>)
+            Box::new(VariableNeighborhoodSearch::new(cond, search, shakes))
         }
         HeuristicKind::Sequential { steps } => {
             let steps = steps.iter().map(recur).collect::<Result<Vec<_>, _>>()?;
-            Ok(Box::new(Sequential::new(cond, steps)) as Box<_>)
+            Box::new(Sequential::new(cond, steps))
         }
         HeuristicKind::Iterated {
             search,
             perturbation,
-        } => Ok(Box::new(Iterated::new(cond, recur(search)?, recur(perturbation)?)) as Box<_>),
+        } => Box::new(Iterated::new(cond, recur(search)?, recur(perturbation)?)),
         HeuristicKind::Restart { inner, restart } => {
-            Ok(Box::new(Restart::new(cond, recur(inner)?, restart.to_opt())) as Box<_>)
+            Box::new(Restart::new(cond, recur(inner)?, restart.to_opt()))
         }
         HeuristicKind::GeneticAlgorithm {
             population_size,
@@ -396,10 +393,10 @@ where
                 recur(mutation)?,
                 *parent_selection,
             );
-            Ok(Box::new(match init_improvement {
+            Box::new(match init_improvement {
                 Some(op) => ga.with_init_improvement(recur(op)?),
                 None => ga,
-            }) as Box<_>)
+            })
         }
         HeuristicKind::ComposedBreakoutLocalSearch {
             tabu_tenure,
@@ -415,19 +412,16 @@ where
                 .map(|(h, share)| Ok((recur(h)?, *share)))
                 .collect::<Result<Vec<_>, String>>()?;
             let schedule = AdaptivePerturbation::new(*t, *l0, *p0, recur(random)?, directed);
-            Ok(Box::new(BreakoutLocalSearch::new(
+            Box::new(BreakoutLocalSearch::new(
                 cond,
                 *tabu_tenure,
                 recur(descent)?,
                 schedule,
-            )) as Box<_>)
+            ))
         }
-        _ => Err(String::new()),
-    })();
-    match built {
-        Err(e) if e.is_empty() => None,
-        other => Some(other),
-    }
+        _ => return Ok(None),
+    };
+    Ok(Some(built))
 }
 
 /// Makes one crossover, or one around the heuristic that solves its sub-problem.
@@ -509,6 +503,36 @@ where
     }
 }
 
+/// Builds a `BranchAndBound` pruning by the relaxation `spec` names: one written in Python on
+/// any problem, or one of the problem's own, which `native` builds and answers `None` to when
+/// it does not apply. Returns `None` when `spec` is something else.
+fn branch_and_bound<P>(
+    spec: &HeuristicSpec,
+    problem: &str,
+    maximize: bool,
+    recur: BuildFn<'_, P>,
+    native: impl FnOnce(&RelaxationSpec, Box<dyn Heuristic<P>>) -> Option<Box<dyn Heuristic<P>>>,
+) -> Option<Result<Box<dyn Heuristic<P>>, String>>
+where
+    P: BranchSpace + 'static,
+{
+    let HeuristicKind::BranchAndBound {
+        heuristic,
+        relaxation,
+    } = &spec.kind
+    else {
+        return None;
+    };
+    Some(recur(heuristic).and_then(|inner| match relaxation {
+        RelaxationSpec::Python(f) => Ok(bnb::build(
+            &spec.stop,
+            inner,
+            PyRelaxation::new(Python::attach(|py| f.clone_ref(py)), maximize),
+        )),
+        other => native(other, inner).ok_or_else(|| other.unsupported(problem)),
+    }))
+}
+
 /// Builds a `BranchAndBound` on a binary problem, pruning by `BinaryRelaxation` unless the
 /// spec names a Python relaxation. Returns `None` when `spec` is something else.
 fn branch_and_bound_binary<P>(
@@ -520,24 +544,18 @@ fn branch_and_bound_binary<P>(
 where
     P: BranchSpace + FixVariables + 'static,
 {
-    let HeuristicKind::BranchAndBound {
-        heuristic,
-        relaxation,
-    } = &spec.kind
-    else {
-        return None;
-    };
-    Some(recur(heuristic).and_then(|inner| match relaxation {
-        RelaxationSpec::Default | RelaxationSpec::Binary => {
-            Ok(bnb::build(&spec.stop, inner, BinaryRelaxation))
-        }
-        RelaxationSpec::Python(f) => Ok(bnb::build(
-            &spec.stop,
-            inner,
-            PyRelaxation::new(Python::attach(|py| f.clone_ref(py)), maximize),
-        )),
-        other => Err(other.unsupported(problem)),
-    }))
+    branch_and_bound(
+        spec,
+        problem,
+        maximize,
+        recur,
+        |relaxation, inner| match relaxation {
+            RelaxationSpec::Default | RelaxationSpec::Binary => {
+                Some(bnb::build(&spec.stop, inner, BinaryRelaxation))
+            }
+            _ => None,
+        },
+    )
 }
 
 fn crossover_max_cut(
@@ -554,18 +572,26 @@ fn crossover_max_cut(
 }
 
 fn build_max_cut(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptMaxCut>>, String> {
-    if let Some(result) = build_nested(spec, &build_max_cut, &crossover_max_cut) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_max_cut, &crossover_max_cut)? {
+        return Ok(built);
     }
-    if let HeuristicKind::BranchAndBound {
-        heuristic,
-        relaxation: RelaxationSpec::Eigenvalue,
-    } = &spec.kind
-    {
-        let inner = build_max_cut(heuristic)?;
-        return Ok(bnb::build(&spec.stop, inner, EigenvalueRelaxation::new()));
-    }
-    if let Some(result) = branch_and_bound_binary(spec, "MaxCut", true, &build_max_cut) {
+    let bnb =
+        branch_and_bound(
+            spec,
+            "MaxCut",
+            true,
+            &build_max_cut,
+            |relaxation, inner| match relaxation {
+                RelaxationSpec::Default | RelaxationSpec::Binary => {
+                    Some(bnb::build(&spec.stop, inner, BinaryRelaxation))
+                }
+                RelaxationSpec::Eigenvalue => {
+                    Some(bnb::build(&spec.stop, inner, EigenvalueRelaxation::new()))
+                }
+                _ => None,
+            },
+        );
+    if let Some(result) = bnb {
         return result;
     }
     match &spec.kind {
@@ -605,8 +631,8 @@ fn crossover_qubo(
 }
 
 fn build_qubo(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptQubo>>, String> {
-    if let Some(result) = build_nested(spec, &build_qubo, &crossover_qubo) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_qubo, &crossover_qubo)? {
+        return Ok(built);
     }
     if let Some(result) = branch_and_bound_binary(spec, "Qubo", false, &build_qubo) {
         return result;
@@ -632,8 +658,8 @@ fn crossover_sat(
 }
 
 fn build_sat(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptSat>>, String> {
-    if let Some(result) = build_nested(spec, &build_sat, &crossover_sat) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_sat, &crossover_sat)? {
+        return Ok(built);
     }
     if let Some(result) = branch_and_bound_binary(spec, "Sat", true, &build_sat) {
         return result;
@@ -666,8 +692,8 @@ fn crossover_vertex_cover(
 }
 
 fn build_vertex_cover(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVc>>, String> {
-    if let Some(result) = build_nested(spec, &build_vertex_cover, &crossover_vertex_cover) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_vertex_cover, &crossover_vertex_cover)? {
+        return Ok(built);
     }
     if let Some(result) = branch_and_bound_binary(spec, "VertexCover", false, &build_vertex_cover) {
         return result;
@@ -693,8 +719,8 @@ fn crossover_tsp(
 }
 
 fn build_tsp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptTsp>>, String> {
-    if let Some(result) = build_nested(spec, &build_tsp, &crossover_tsp) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_tsp, &crossover_tsp)? {
+        return Ok(built);
     }
     if let Some(grasp) = grasp(spec) {
         return Ok(grasp);
@@ -738,8 +764,8 @@ fn crossover_job_shop(
 }
 
 fn build_job_shop(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptJobShop>>, String> {
-    if let Some(result) = build_nested(spec, &build_job_shop, &crossover_job_shop) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_job_shop, &crossover_job_shop)? {
+        return Ok(built);
     }
     match spec.neighbor.as_str() {
         "Swap" => build_generic::<OptJobShop, JobShopSwapNeighbor>(spec),
@@ -766,8 +792,8 @@ fn crossover_vrp(
 }
 
 fn build_vrp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVrp>>, String> {
-    if let Some(result) = build_nested(spec, &build_vrp, &crossover_vrp) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_vrp, &crossover_vrp)? {
+        return Ok(built);
     }
     if let Some(grasp) = grasp(spec) {
         return Ok(grasp);
@@ -823,8 +849,8 @@ fn crossover_flow_shop(
 }
 
 fn build_flow_shop(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptFlowShop>>, String> {
-    if let Some(result) = build_nested(spec, &build_flow_shop, &crossover_flow_shop) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_flow_shop, &crossover_flow_shop)? {
+        return Ok(built);
     }
     if let Some(grasp) = grasp(spec) {
         return Ok(grasp);
@@ -869,8 +895,8 @@ fn crossover_qap(
 }
 
 fn build_qap(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptQap>>, String> {
-    if let Some(result) = build_nested(spec, &build_qap, &crossover_qap) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_qap, &crossover_qap)? {
+        return Ok(built);
     }
     match spec.neighbor.as_str() {
         "Swap" => build_generic::<OptQap, QapSwapNeighbor>(spec),
@@ -892,8 +918,8 @@ fn crossover_bin_packing(
 }
 
 fn build_bin_packing(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptBinPacking>>, String> {
-    if let Some(result) = build_nested(spec, &build_bin_packing, &crossover_bin_packing) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_bin_packing, &crossover_bin_packing)? {
+        return Ok(built);
     }
     if let Some(grasp) = grasp(spec) {
         return Ok(grasp);
@@ -937,26 +963,24 @@ fn build_formula(
     spec: &HeuristicSpec,
 ) -> Result<Box<dyn Heuristic<FormulaProblem>>, String> {
     let recur = |s: &HeuristicSpec| build_formula(maximize, s);
-    if let Some(result) = build_nested(spec, &recur, &crossover_formula) {
-        return result;
+    if let Some(built) = build_nested(spec, &recur, &crossover_formula)? {
+        return Ok(built);
     }
-    if let HeuristicKind::BranchAndBound {
-        heuristic,
-        relaxation,
-    } = &spec.kind
-    {
-        let inner = recur(heuristic)?;
-        return match relaxation {
-            RelaxationSpec::Default | RelaxationSpec::Interval => {
-                Ok(bnb::build(&spec.stop, inner, IntervalRelaxation))
-            }
-            RelaxationSpec::Python(f) => Ok(bnb::build(
-                &spec.stop,
-                inner,
-                PyRelaxation::new(Python::attach(|py| f.clone_ref(py)), maximize),
-            )),
-            other => Err(other.unsupported("Formula")),
-        };
+    let bnb =
+        branch_and_bound(
+            spec,
+            "Formula",
+            maximize,
+            &recur,
+            |relaxation, inner| match relaxation {
+                RelaxationSpec::Default | RelaxationSpec::Interval => {
+                    Some(bnb::build(&spec.stop, inner, IntervalRelaxation))
+                }
+                _ => None,
+            },
+        );
+    if let Some(result) = bnb {
+        return result;
     }
     match spec.neighbor.as_str() {
         // On a binary variable an integer change *is* a flip, which upstream says in as many
@@ -988,8 +1012,8 @@ fn crossover_graph_coloring(
 fn build_graph_coloring(
     spec: &HeuristicSpec,
 ) -> Result<Box<dyn Heuristic<OptGraphColoring>>, String> {
-    if let Some(result) = build_nested(spec, &build_graph_coloring, &crossover_graph_coloring) {
-        return result;
+    if let Some(built) = build_nested(spec, &build_graph_coloring, &crossover_graph_coloring)? {
+        return Ok(built);
     }
     match spec.neighbor.as_str() {
         "Recolor" => build_generic::<OptGraphColoring, GraphColoringRecolorNeighbor>(spec),
@@ -1016,48 +1040,40 @@ fn build_python(
         }
         Ok(Box::new(PyCrossover::new(prob)?) as Box<dyn Crossover<PyProblem>>)
     };
-    let inner = match build_nested(spec, &recur, &crossover) {
-        Some(result) => result?,
-        None if matches!(
-            spec.kind,
-            HeuristicKind::AdaptiveLargeNeighborhoodSearch { .. }
-        ) =>
-        {
-            let HeuristicKind::AdaptiveLargeNeighborhoodSearch {
+    let inner: Box<dyn Heuristic<PyProblem>> = match build_nested(spec, &recur, &crossover)? {
+        Some(built) => built,
+        None => match spec.kind {
+            HeuristicKind::AdaptiveLargeNeighborhoodSearch {
                 removal_fraction,
                 cooling_rate,
-            } = spec.kind
-            else {
-                unreachable!()
-            };
-            prob.check_ruinable()?;
-            let alns = AdaptiveLargeNeighborhoodSearch::<PyProblem>::new(
-                spec.stop.to_opt(),
-                removal_fraction,
-                cooling_rate,
-            );
-            match PyRepair::new(prob) {
-                Some(repair) => Box::new(alns.with_local_repair(Box::new(repair))),
-                None => Box::new(alns),
+            } => {
+                prob.check_ruinable()?;
+                let alns = AdaptiveLargeNeighborhoodSearch::<PyProblem>::new(
+                    spec.stop.to_opt(),
+                    removal_fraction,
+                    cooling_rate,
+                );
+                match PyRepair::new(prob) {
+                    Some(repair) => Box::new(alns.with_local_repair(Box::new(repair))),
+                    None => Box::new(alns),
+                }
             }
-        }
-        None if matches!(
-            spec.kind,
-            HeuristicKind::GreedyRandomizedConstruction { .. }
-        ) =>
-        {
-            prob.check_ruinable()?;
-            grasp(spec).expect("matched a GreedyRandomizedConstruction")
-        }
-        None => {
-            if spec.kind.only_for().is_some() {
-                return Err(unsupported(&spec.kind));
+            HeuristicKind::GreedyRandomizedConstruction { alpha } => {
+                prob.check_ruinable()?;
+                Box::new(OptGreedyRandomizedConstruction::<PyProblem>::new(
+                    spec.stop.to_opt(),
+                    alpha,
+                ))
             }
-            let k = prob.neighborhood_index(&spec.neighbor)?;
-            if matches!(spec.kind, HeuristicKind::TabuSearch { .. }) {
-                prob.enable_tabu(k)?;
-            }
-            macro_rules! by_index {
+            _ => {
+                if spec.kind.only_for().is_some() {
+                    return Err(unsupported(&spec.kind));
+                }
+                let k = prob.neighborhood_index(&spec.neighbor)?;
+                if matches!(spec.kind, HeuristicKind::TabuSearch { .. }) {
+                    prob.enable_tabu(k)?;
+                }
+                macro_rules! by_index {
                 ($($k:literal),+) => {
                     match k {
                         $($k => build_generic::<PyProblem, PyMove<$k>>(spec)?,)+
@@ -1065,9 +1081,10 @@ fn build_python(
                     }
                 };
             }
-            const _: () = assert!(MAX_NEIGHBORHOODS == 8);
-            by_index!(0, 1, 2, 3, 4, 5, 6, 7)
-        }
+                const _: () = assert!(MAX_NEIGHBORHOODS == 8);
+                by_index!(0, 1, 2, 3, 4, 5, 6, 7)
+            }
+        },
     };
     Ok(Box::new(Guarded { inner }))
 }
@@ -1141,21 +1158,13 @@ where
     Ok(RunReport::from_runs(results, minimize))
 }
 
-fn decode_bools(x: &[bool], py: Python<'_>) -> Py<PyAny> {
-    PyList::new(py, x).unwrap().into()
-}
-
-fn decode_usizes(x: &[usize], py: Python<'_>) -> Py<PyAny> {
-    PyList::new(py, x).unwrap().into()
-}
-
-fn decode_i64s(x: &[i64], py: Python<'_>) -> Py<PyAny> {
-    PyList::new(py, x).unwrap().into()
+fn decode_list<'py, T: Copy + IntoPyObject<'py>>(x: &[T], py: Python<'py>) -> Py<PyAny> {
+    PyList::new(py, x.iter().copied()).unwrap().into()
 }
 
 /// Decodes a VRP route partition into a `list[list[int]]`.
 fn decode_routes(routes: &[Vec<usize>], py: Python<'_>) -> Py<PyAny> {
-    let rows: Vec<Py<PyAny>> = routes.iter().map(|r| decode_usizes(r, py)).collect();
+    let rows: Vec<Py<PyAny>> = routes.iter().map(|r| decode_list(r, py)).collect();
     PyList::new(py, rows).unwrap().into()
 }
 
@@ -1219,169 +1228,94 @@ pub fn solve(
     bnb::take_outcome();
     bnb::take_error();
 
-    let report = if let Ok(mc) = problem.extract::<PyRef<'_, MaxCut>>() {
-        run_all(
-            &mc.inner,
-            spec,
-            build_max_cut,
-            false,
-            runs,
-            seed,
-            |s| s.objective as f64,
-            |s, py| decode_bools(&s.x, py),
-        )
-    } else if let Ok(q) = problem.extract::<PyRef<'_, Qubo>>() {
-        run_all(
-            &q.inner,
-            spec,
-            build_qubo,
-            true,
-            runs,
-            seed,
-            |s| s.objective as f64,
-            |s, py| decode_bools(&s.x, py),
-        )
-    } else if let Ok(s) = problem.extract::<PyRef<'_, Sat>>() {
-        run_all(
-            &s.inner,
-            spec,
-            build_sat,
-            false,
-            runs,
-            seed,
-            |s| s.n_satisfied as f64,
-            |s, py| decode_bools(&s.x, py),
-        )
-    } else if let Ok(v) = problem.extract::<PyRef<'_, VertexCover>>() {
-        run_all(
-            &v.inner,
-            spec,
-            build_vertex_cover,
-            true,
-            runs,
-            seed,
-            |s| s.objective as f64,
-            |s, py| decode_bools(&s.x, py),
-        )
-    } else if let Ok(t) = problem.extract::<PyRef<'_, Tsp>>() {
-        run_all(
-            &t.inner,
-            spec,
-            build_tsp,
-            true,
-            runs,
-            seed,
-            |s| s.objective,
-            |s, py| decode_usizes(&s.tour, py),
-        )
-    } else if let Ok(j) = problem.extract::<PyRef<'_, JobShopScheduling>>() {
-        run_all(
-            &j.inner,
-            spec,
-            build_job_shop,
-            true,
-            runs,
-            seed,
-            |s| s.objective as f64,
-            |s, py| decode_usizes(&s.operations, py),
-        )
-    } else if let Ok(v) = problem.extract::<PyRef<'_, Vrp>>() {
-        run_all(
-            &v.inner,
-            spec,
-            build_vrp,
-            true,
-            runs,
-            seed,
-            |s| s.objective,
-            |s, py| decode_routes(&s.routes, py),
-        )
-    } else if let Ok(g) = problem.extract::<PyRef<'_, GraphColoring>>() {
-        run_all(
-            &g.inner,
-            spec,
-            build_graph_coloring,
-            true,
-            runs,
-            seed,
-            |s| s.objective as f64,
-            |s, py| decode_usizes(&s.colors, py),
-        )
-    } else if let Ok(fs) = problem.extract::<PyRef<'_, FlowShop>>() {
-        run_all(
-            &fs.inner,
-            spec,
-            build_flow_shop,
-            true,
-            runs,
-            seed,
-            |s| f64::from(s.objective),
-            |s, py| decode_usizes(&s.sequence, py),
-        )
-    } else if let Ok(q) = problem.extract::<PyRef<'_, Qap>>() {
-        run_all(
-            &q.inner,
-            spec,
-            build_qap,
-            true,
-            runs,
-            seed,
-            |s| s.objective as f64,
-            |s, py| decode_usizes(&s.assignment, py),
-        )
-    } else if let Ok(b) = problem.extract::<PyRef<'_, BinPacking>>() {
-        run_all(
-            &b.inner,
-            spec,
-            build_bin_packing,
-            true,
-            runs,
-            seed,
-            |s| s.objective,
-            |s, py| decode_usizes(&s.bin_of, py),
-        )
-    } else if let Ok(f) = problem.extract::<PyRef<'_, Formula>>() {
+    let py = problem.py();
+    let finish = |report: Result<RunReport, String>| {
+        if let Some(err) = bnb::take_error() {
+            return Err(err);
+        }
+        report.map_err(PyValueError::new_err)
+    };
+
+    // A built-in problem never calls into Python during a run (a relaxation written in Python
+    // attaches on its own), so the run releases the GIL for other Python threads.
+    macro_rules! built_in {
+        ($($ty:ident: $build:expr, minimize = $minimize:literal, $obj:expr, $decode:expr;)+) => {
+            $(
+                if let Ok(p) = problem.extract::<PyRef<'_, $ty>>() {
+                    let inner = &p.inner;
+                    return finish(py.detach(|| {
+                        run_all(inner, spec, $build, $minimize, runs, seed, $obj, $decode)
+                    }));
+                }
+            )+
+        };
+    }
+    built_in! {
+        MaxCut: build_max_cut, minimize = false, |s| s.objective as f64,
+            |s, py| decode_list(&s.x, py);
+        Qubo: build_qubo, minimize = true, |s| s.objective as f64,
+            |s, py| decode_list(&s.x, py);
+        Sat: build_sat, minimize = false, |s| s.n_satisfied as f64,
+            |s, py| decode_list(&s.x, py);
+        VertexCover: build_vertex_cover, minimize = true, |s| s.objective as f64,
+            |s, py| decode_list(&s.x, py);
+        Tsp: build_tsp, minimize = true, |s| s.objective,
+            |s, py| decode_list(&s.tour, py);
+        JobShopScheduling: build_job_shop, minimize = true, |s| s.objective as f64,
+            |s, py| decode_list(&s.operations, py);
+        Vrp: build_vrp, minimize = true, |s| s.objective,
+            |s, py| decode_routes(&s.routes, py);
+        GraphColoring: build_graph_coloring, minimize = true, |s| s.objective as f64,
+            |s, py| decode_list(&s.colors, py);
+        FlowShop: build_flow_shop, minimize = true, |s| f64::from(s.objective),
+            |s, py| decode_list(&s.sequence, py);
+        Qap: build_qap, minimize = true, |s| s.objective as f64,
+            |s, py| decode_list(&s.assignment, py);
+        BinPacking: build_bin_packing, minimize = true, |s| s.objective,
+            |s, py| decode_list(&s.bin_of, py);
+    }
+
+    if let Ok(f) = problem.extract::<PyRef<'_, Formula>>() {
+        let (inner, maximize) = (&f.inner, f.maximize);
         // A FormulaSolution reports its objective as an `Evaluable`, whose `minimized()` is the
         // value with the direction already applied. Negating it recovers the
         // direction-corrected score the report has always published, where higher is better --
         // so the runner tracks it as a maximization whichever way the formula optimizes.
-        run_all(
-            &f.inner,
-            spec,
-            |s| build_formula(f.maximize, s),
-            false,
-            runs,
-            seed,
-            // Subtracting rather than negating keeps a zero objective reported as 0.0.
-            |s| 0.0 - s.evaluate().minimized(),
-            |s, py| decode_i64s(s.values(), py),
-        )
-    } else if !problem.hasattr("neighborhoods")? {
+        return finish(py.detach(|| {
+            run_all(
+                inner,
+                spec,
+                |s| build_formula(maximize, s),
+                false,
+                runs,
+                seed,
+                // Subtracting rather than negating keeps a zero objective reported as 0.0.
+                |s| 0.0 - s.evaluate().minimized(),
+                |s, py| decode_list(s.values(), py),
+            )
+        }));
+    }
+
+    if !problem.hasattr("neighborhoods")? {
         return Err(PyTypeError::new_err(
             "problem must be a MaxCut, Qubo, Sat, VertexCover, Tsp, JobShopScheduling, Vrp, \
              FlowShop, Qap, BinPacking, GraphColoring, or Formula instance, or a Python problem \
              with 'neighborhoods'",
         ));
-    } else {
-        let prob = PyProblem::from_py(problem)?;
-        let report = run_all(
-            &prob,
-            spec,
-            |s| build_python(&prob, s),
-            prob.minimize(),
-            runs,
-            seed,
-            |s| s.objective,
-            |s, py| s.value.clone_ref(py),
-        );
-        if let Some(err) = prob.take_error() {
-            return Err(err);
-        }
-        report
-    };
-
-    if let Some(err) = bnb::take_error() {
+    }
+    let prob = PyProblem::from_py(problem)?;
+    let report = run_all(
+        &prob,
+        spec,
+        |s| build_python(&prob, s),
+        prob.minimize(),
+        runs,
+        seed,
+        |s| s.objective,
+        |s, py| s.value.clone_ref(py),
+    );
+    if let Some(err) = prob.take_error() {
         return Err(err);
     }
-    report.map_err(PyValueError::new_err)
+    finish(report)
 }

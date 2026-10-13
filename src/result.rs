@@ -181,32 +181,32 @@ impl RunReport {
         let n = runs.len();
         let nf = n as f64;
 
-        let objectives: Vec<f64> = runs.iter().map(|r| r.best_objective).collect();
+        let mean = |f: fn(&RunResult) -> f64| runs.iter().map(f).sum::<f64>() / nf;
+        let objectives = || runs.iter().map(|r| r.best_objective);
+
+        let lowest = objectives().fold(f64::INFINITY, f64::min);
+        let highest = objectives().fold(f64::NEG_INFINITY, f64::max);
         let (best, worst) = if minimize {
-            (
-                objectives.iter().cloned().fold(f64::INFINITY, f64::min),
-                objectives.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
-            )
+            (lowest, highest)
         } else {
-            (
-                objectives.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
-                objectives.iter().cloned().fold(f64::INFINITY, f64::min),
-            )
+            (highest, lowest)
         };
-        let avg = objectives.iter().sum::<f64>() / nf;
-        let variance = objectives.iter().map(|&x| (x - avg).powi(2)).sum::<f64>() / nf;
+        let avg = mean(|r| r.best_objective);
+        let variance = objectives().map(|x| (x - avg).powi(2)).sum::<f64>() / nf;
         let std = variance.sqrt();
 
-        let times: Vec<f64> = runs.iter().map(|r| r.time_to_best_secs).collect();
-        let best_ttb = times.iter().cloned().fold(f64::INFINITY, f64::min);
-        let avg_ttb = times.iter().sum::<f64>() / nf;
-        let avg_total = runs.iter().map(|r| r.total_time_secs).sum::<f64>() / nf;
-        let avg_initial = runs.iter().map(|r| r.initial_objective).sum::<f64>() / nf;
-        let avg_improvement = runs.iter().map(|r| r.improvement).sum::<f64>() / nf;
-        let avg_iterations = runs.iter().map(|r| r.iterations as f64).sum::<f64>() / nf;
-        let avg_accepted = runs.iter().map(|r| r.n_accepted as f64).sum::<f64>() / nf;
-        let avg_rejected = runs.iter().map(|r| r.n_rejected as f64).sum::<f64>() / nf;
-        let avg_best_updates = runs.iter().map(|r| r.n_best_updates as f64).sum::<f64>() / nf;
+        let best_ttb = runs
+            .iter()
+            .map(|r| r.time_to_best_secs)
+            .fold(f64::INFINITY, f64::min);
+        let avg_ttb = mean(|r| r.time_to_best_secs);
+        let avg_total = mean(|r| r.total_time_secs);
+        let avg_initial = mean(|r| r.initial_objective);
+        let avg_improvement = mean(|r| r.improvement);
+        let avg_iterations = mean(|r| r.iterations as f64);
+        let avg_accepted = mean(|r| r.n_accepted as f64);
+        let avg_rejected = mean(|r| r.n_rejected as f64);
+        let avg_best_updates = mean(|r| r.n_best_updates as f64);
 
         let py_runs: Vec<Py<RunResult>> = Python::attach(|py| {
             runs.into_iter()
