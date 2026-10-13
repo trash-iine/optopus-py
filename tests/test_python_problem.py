@@ -6,6 +6,7 @@ import math
 import pytest
 
 import optopus
+from tests.helpers import stop
 
 # Six points on a hexagon, jittered so the optimal tour is unique up to direction.
 POINTS = [(0.0, 0.0), (2.0, 0.1), (3.1, 1.9), (2.0, 3.8), (0.1, 4.0), (-1.0, 2.0)]
@@ -79,10 +80,6 @@ class Tsp:
 
     def objective(self, tour):
         return tour_length(self.points, tour)
-
-
-def stop(iterations):
-    return optopus.StopCondition(max_iteration=iterations)
 
 
 GENERIC = [
@@ -340,9 +337,14 @@ def test_alns_uses_partial_objective_and_repair_around():
     assert calls["repair_around"] > 0
 
 
-def test_alns_names_the_missing_ruin_methods():
+@pytest.mark.parametrize(
+    "heuristic",
+    [optopus.AdaptiveLargeNeighborhoodSearch(stop(10)), optopus.GreedyRandomizedConstruction()],
+    ids=["alns", "grasp"],
+)
+def test_ruin_based_heuristics_name_the_missing_ruin_methods(heuristic):
     with pytest.raises(ValueError, match=r"'to_partial', 'finish'.*'insert'"):
-        optopus.AdaptiveLargeNeighborhoodSearch(stop(10)).run(Tsp(POINTS))
+        heuristic.run(Tsp(POINTS))
 
 
 def test_grasp_runs_on_a_python_problem_with_the_ruin_methods():
@@ -354,11 +356,6 @@ def test_grasp_runs_on_a_python_problem_with_the_ruin_methods():
     report = grasp.run(RuinTsp(POINTS), runs=2, seed=1)
     assert report.best_objective == pytest.approx(TSP_OPTIMUM)
     assert sorted(report.runs[0].solution) == list(range(6))
-
-
-def test_grasp_names_the_missing_ruin_methods():
-    with pytest.raises(ValueError, match=r"'to_partial', 'finish'.*'insert'"):
-        optopus.GreedyRandomizedConstruction().run(Tsp(POINTS))
 
 
 def test_iterated_greedy_is_for_the_flow_shop_only():

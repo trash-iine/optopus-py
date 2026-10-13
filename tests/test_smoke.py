@@ -10,12 +10,7 @@ import inspect
 import pytest
 
 import optopus
-
-# The triangle's optimum cut puts one vertex alone, cutting the two heaviest edges.
-TRIANGLE = [(0, 1, 1.0), (1, 2, 2.0), (0, 2, 3.0)]
-TRIANGLE_OPTIMUM = 5.0
-
-UNIT_SQUARE = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+from tests.helpers import TRIANGLE, TRIANGLE_OPTIMUM, UNIT_SQUARE, stop
 
 # Two customer clusters far apart on either side of the depot. Capacity leaves enough slack
 # for a 3/1 split, so Relocate can travel between partitions rather than being walled in by
@@ -28,10 +23,6 @@ VRP_OPTIMUM = 44.0
 # intra-route TwoOpt neighborhood can actually solve on its own.
 VRP_SINGLE_ROUTE = [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
 VRP_SINGLE_ROUTE_OPTIMUM = 4.0
-
-
-def stop(iterations):
-    return optopus.StopCondition(max_iteration=iterations)
 
 
 def clustered_vrp():
@@ -289,9 +280,17 @@ def test_vrp_local_search(neighbor):
     assert len(report.runs[0].solution) == vrp.num_vehicles()
 
 
-def test_vrp_tabu_search():
-    vrp = clustered_vrp()
-    report = optopus.TabuSearch("Swap", (3, 10), stop(2_000)).run(vrp, runs=4, seed=42)
+@pytest.mark.parametrize(
+    "heuristic",
+    [
+        optopus.TabuSearch("Swap", (3, 10), stop(2_000)),
+        optopus.AdaptiveLargeNeighborhoodSearch(stop(2_000)),
+        optopus.HybridGeneticSearch(stop(2_000), min_population_size=8, generation_size=8),
+    ],
+    ids=["tabu", "alns", "hgs"],
+)
+def test_vrp_reaches_the_optimum(heuristic):
+    report = heuristic.run(clustered_vrp(), runs=4, seed=42)
     assert abs(report.best_objective - VRP_OPTIMUM) < 1e-9
 
 
@@ -299,18 +298,6 @@ def test_vrp_two_opt_reorders_a_single_route():
     vrp = single_route_vrp()
     report = optopus.LocalSearch("TwoOpt", stop(2_000)).run(vrp, runs=4, seed=42)
     assert abs(report.best_objective - VRP_SINGLE_ROUTE_OPTIMUM) < 1e-9
-
-
-def test_vrp_adaptive_large_neighborhood_search():
-    vrp = clustered_vrp()
-    alns = optopus.AdaptiveLargeNeighborhoodSearch(stop(2_000))
-    assert abs(alns.run(vrp, runs=4, seed=42).best_objective - VRP_OPTIMUM) < 1e-9
-
-
-def test_vrp_hybrid_genetic_search():
-    vrp = clustered_vrp()
-    hgs = optopus.HybridGeneticSearch(stop(2_000), min_population_size=8, generation_size=8)
-    assert abs(hgs.run(vrp, runs=4, seed=42).best_objective - VRP_OPTIMUM) < 1e-9
 
 
 def test_vrp_rejects_unknown_neighbor():

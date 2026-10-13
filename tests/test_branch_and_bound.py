@@ -7,10 +7,7 @@ import random
 import pytest
 
 import optopus
-
-
-def stop(iterations):
-    return optopus.StopCondition(max_iteration=iterations)
+from tests.helpers import stop
 
 
 def flip_search():

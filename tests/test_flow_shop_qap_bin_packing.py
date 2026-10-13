@@ -5,11 +5,7 @@ import itertools
 import pytest
 
 import optopus
-
-
-def stop(iterations):
-    return optopus.StopCondition(max_iteration=iterations)
-
+from tests.helpers import stop
 
 # Three machines, four jobs: processing_times[machine][job].
 FLOW_TIMES = [[3, 2, 4, 1], [2, 5, 1, 3], [4, 1, 2, 2]]

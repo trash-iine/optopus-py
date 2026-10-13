@@ -4,18 +4,10 @@ ReinforcementLearningSearch and BreakoutLocalSearch.from_parts, on the built-in 
 import pytest
 
 import optopus
-
-TRIANGLE = [(0, 1, 1.0), (1, 2, 2.0), (0, 2, 3.0)]
-TRIANGLE_OPTIMUM = 5.0
+from tests.helpers import TRIANGLE, TRIANGLE_OPTIMUM, UNIT_SQUARE, stop
 
 # Minimize -x0 - x1 + 2 x0 x1: the optimum sets exactly one bit.
 QUBO = [(0, 0, -1), (0, 1, 2), (1, 1, -1)]
-
-UNIT_SQUARE = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
-
-
-def stop(iterations):
-    return optopus.StopCondition(max_iteration=iterations)
 
 
 def triangle():
