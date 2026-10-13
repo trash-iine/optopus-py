@@ -212,8 +212,9 @@ impl PyProblem {
         self.shared.minimize
     }
 
-    /// Fails unless the problem has every method in [`RUIN_METHODS`].
-    pub fn check_ruinable(&self) -> Result<(), String> {
+    /// Fails unless the problem has every method in [`RUIN_METHODS`], naming `heuristic` as
+    /// the one that needs them.
+    pub fn check_ruinable(&self, heuristic: &str) -> Result<(), String> {
         let missing: Vec<_> = Python::attach(|py| {
             let obj = self.shared.obj.bind(py);
             RUIN_METHODS
@@ -226,7 +227,7 @@ impl PyProblem {
             Ok(())
         } else {
             Err(format!(
-                "AdaptiveLargeNeighborhoodSearch needs these methods on the problem: {}",
+                "{heuristic} needs these methods on the problem: {}",
                 missing.join(", ")
             ))
         }

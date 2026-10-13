@@ -1047,7 +1047,7 @@ fn build_python(
                 removal_fraction,
                 cooling_rate,
             } => {
-                prob.check_ruinable()?;
+                prob.check_ruinable(spec.kind.name())?;
                 let alns = AdaptiveLargeNeighborhoodSearch::<PyProblem>::new(
                     spec.stop.to_opt(),
                     removal_fraction,
@@ -1059,7 +1059,7 @@ fn build_python(
                 }
             }
             HeuristicKind::GreedyRandomizedConstruction { alpha } => {
-                prob.check_ruinable()?;
+                prob.check_ruinable(spec.kind.name())?;
                 Box::new(OptGreedyRandomizedConstruction::<PyProblem>::new(
                     spec.stop.to_opt(),
                     alpha,
