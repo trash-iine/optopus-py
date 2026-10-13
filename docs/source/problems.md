@@ -28,9 +28,12 @@ A task can reach the search in three ways. Take the first that fits the task exa
 | `Qubo` | min x^T Q x | `list[bool]`, each variable | `"Flip"`, `"Swap"` | |
 | `Sat` | max satisfied clauses | `list[bool]`, each variable | `"Flip"`, `"Swap"` | `WalkSat` |
 | `VertexCover` | min cover size | `list[bool]`, whether each vertex is in the cover | `"Flip"`, `"Swap"` | |
-| `Tsp` | min tour length | `list[int]`, a permutation of the cities | `"TwoOpt"`, `"Relocate"` | `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch` |
+| `Tsp` | min tour length | `list[int]`, a permutation of the cities | `"TwoOpt"`, `"Relocate"` | `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch`, `GreedyRandomizedConstruction` |
 | `JobShopScheduling` | min makespan | `list[int]`, an operation sequence | `"Swap"`, `"Relocate"` | |
-| `Vrp` | min total distance, or time and cost for a mixed fleet | `list[list[int]]`, one route of customers per vehicle | `"Relocate"`, `"Swap"`, `"TwoOpt"` | `HybridGeneticSearch`, `AdaptiveLargeNeighborhoodSearch` |
+| `FlowShop` | min makespan | `list[int]`, the jobs in the order they run | `"Relocate"`, `"Swap"` | `IteratedGreedy`, `AdaptiveLargeNeighborhoodSearch`, `GreedyRandomizedConstruction` |
+| `Vrp` | min total distance, or time and cost for a mixed fleet | `list[list[int]]`, one route of customers per vehicle | `"Relocate"`, `"Swap"`, `"TwoOpt"` | `HybridGeneticSearch`, `AdaptiveLargeNeighborhoodSearch`, `GreedyRandomizedConstruction` |
+| `Qap` | min assignment cost | `list[int]`, the location of each facility | `"Swap"` | |
+| `BinPacking` | min bins used | `list[int]`, the bin of each item | `"Relocate"`, `"Swap"` | `AdaptiveLargeNeighborhoodSearch`, `GreedyRandomizedConstruction` |
 | `GraphColoring` | min colors used | `list[int]`, the color of each vertex | `"Recolor"`, `"Swap"` | |
 | `Formula` | a polynomial, either direction | `list[int]`, each variable | `"Change"` (alias `"Flip"`), `"Swap"`, `"Reverse"` | |
 
@@ -41,8 +44,9 @@ problem's crossover by name:
 |---|---|
 | `MaxCut`, `Qubo`, `Sat`, `VertexCover`, `Formula` | `"Uniform"`, `"SubProblem"` |
 | `Tsp` | `"Order"`, `"SubProblem"` |
-| `Vrp` | `"Order"` |
+| `Vrp`, `FlowShop`, `Qap` | `"Order"` |
 | `JobShopScheduling` | `"Ppx"` |
+| `BinPacking` | `"Group"` |
 | `GraphColoring` | `"Uniform"` |
 
 `BranchAndBound` proves an optimum on `MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`, see
@@ -61,6 +65,11 @@ unknown name raises `ValueError` when `run` is called.
 | | `"Relocate"` | moves one city elsewhere in the tour |
 | `JobShopScheduling` | `"Swap"` | exchanges two adjacent operations in the sequence |
 | | `"Relocate"` | moves one operation elsewhere in the sequence |
+| `FlowShop` | `"Relocate"` | moves one job elsewhere in the sequence, the insertion move |
+| | `"Swap"` | exchanges the jobs at two positions |
+| `Qap` | `"Swap"` | exchanges the locations of two facilities |
+| `BinPacking` | `"Relocate"` | moves one item into another bin with room for it, emptying its bin if it was the last |
+| | `"Swap"` | exchanges two items of different sizes in different bins, when both still fit |
 | `Vrp` | `"Relocate"` | moves one customer to a position in another route |
 | | `"Swap"` | exchanges two customers of different routes |
 | | `"TwoOpt"` | reverses a segment within one route |
@@ -86,7 +95,9 @@ search ranks solutions by. For some problems that is not the plain objective:
 | `Sat` | number of satisfied clauses | higher |
 | `VertexCover` | `cover_size + (num_vertices + 1) · uncovered_edges` | lower |
 | `Tsp` | tour length | lower |
-| `JobShopScheduling` | makespan | lower |
+| `JobShopScheduling`, `FlowShop` | makespan | lower |
+| `Qap` | assignment cost | lower |
+| `BinPacking` | `num_bins − mean((load / capacity)²)`, see [BinPacking](#binpacking) | lower |
 | `Vrp` | `distance + penalty_weight · overload`; for a mixed fleet, see [Mixed fleet](#vrp-mixed-fleet) | lower |
 | `GraphColoring` | `colors_used + (num_vertices + 1) · conflicts` | lower |
 | `Formula` | `objective − penalty`, or `−(objective + penalty)` when minimizing | higher |
@@ -125,8 +136,9 @@ solution exists. Nothing needs adding for these; check the result with the probl
 | `Formula` | the constraints you give it | the weight you give each | `eval_penalty(values) == 0` |
 
 The other built-in problems cannot express an infeasible solution: every permutation is a tour,
-every operation sequence decodes to a valid schedule, and every assignment is a cut or a MaxSAT
-assignment.
+a job order or an assignment of facilities, every operation sequence decodes to a valid
+schedule, every assignment is a cut or a MaxSAT assignment, and the `BinPacking` moves only ever
+put an item where it fits.
 
 ## Per problem
 
@@ -174,6 +186,20 @@ runs one operation at a time. Minimize the makespan, the time the last operation
 `from_jobs` takes the jobs; machines are 0-indexed. A solution is a sequence in which job `j`
 appears once per operation: its `k`-th occurrence schedules the `k`-th operation of job `j`, as
 early as the machines allow.
+
+### FlowShop
+
+The permutation flow shop: every job passes through the machines in the same order, and every
+machine takes the jobs in one common order, the solution. Minimize the makespan.
+`from_processing_times(times)` takes one row per machine and one time per job,
+`times[machine][job]`, the layout Taillard's instances are published in, and `load_file` reads
+that layout with an `n_jobs n_machines` header line. `makespan(sequence)` scores an order, and
+`neh()` returns the order of the NEH construction, the usual baseline.
+
+`IteratedGreedy` is the heuristic to start with: it takes a few jobs out, puts each back where
+the makespan grows least and descends by insertion, and on Taillard's instances beats
+`AdaptiveLargeNeighborhoodSearch`. Of the neighborhoods, `"Relocate"` is the one the flow shop
+literature relies on; it has `n (n − 1)` moves, all priced in `O(n² m)`.
 
 ### Vrp
 
@@ -332,6 +358,32 @@ and equals the number of colors used. `evaluate_colors` reports both parts.
 Expect a search to reach a proper coloring quickly and to shed colors slowly: emptying a color
 class takes every vertex in it moving away one at a time, with no reward until the last one
 leaves. To ask whether `k` colors suffice, pass `num_colors=k` and check for zero conflicts.
+
+### Qap
+
+The quadratic assignment problem: place `n` facilities at `n` locations, one each, minimizing
+`Σ_i Σ_j flow[i][j] · distance[p[i]][p[j]]` for the assignment `p`. Build it with
+`from_matrices(flow, distance)` or read a QAPLIB file with `load_file`; neither matrix needs to
+be symmetric. `cost(assignment)` scores an assignment. A `"Swap"` is priced in `O(n)`, and
+`TabuSearch` forbids a swap that would put both facilities back at locations they recently left,
+the rule of Taillard's robust tabu search, which makes it the usual choice.
+
+### BinPacking
+
+Pack items into as few bins of one capacity as possible. Build it with
+`from_sizes(capacity, sizes)` or `load_file`, which reads `n capacity` followed by the sizes, the
+layout of the Falkenauer instances optopus bundles. Every packing the search visits fits.
+
+Counting bins alone would make most moves ties, so the search ranks packings by
+`num_bins − mean((load / capacity)²)`. The second term lies in `(0, 1]`: fewer bins always wins,
+and among packings with as many bins the fuller ones, from which a bin can be emptied, come
+first. The number of bins of a solution is `max(solution) + 1`, and `lower_bound()` is
+`⌈Σ size / capacity⌉`, which a packing that reaches it proves optimal. `evaluate_bins` reports
+the objective, the bin count and the loads.
+
+A descent through `"Relocate"` stalls on a packing that only a chain of moves could empty a bin
+from. `AdaptiveLargeNeighborhoodSearch` and `GreedyRandomizedConstruction`, which rebuild a
+packing, get past that.
 
 ### Formula
 

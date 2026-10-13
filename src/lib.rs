@@ -1,18 +1,18 @@
 //! Python bindings for the optopus combinatorial optimization library.
 //!
-//! Exposes problem types (MaxCut, Qubo, Sat, VertexCover, Tsp, JobShopScheduling,
-//! Vrp with its VehicleType, GraphColoring, Formula), the Graph type behind the
-//! graph-based problems, generic heuristics (LocalSearch, SimulatedAnnealing, TabuSearch,
+//! Exposes problem types (MaxCut, Qubo, Sat, VertexCover, Tsp, JobShopScheduling, FlowShop,
+//! Vrp with its VehicleType, Qap, BinPacking, GraphColoring, Formula), the Graph type behind
+//! the graph-based problems, generic heuristics (LocalSearch, SimulatedAnnealing, TabuSearch,
 //! LateAcceptanceHillClimbing, RandomWalk, BangBangSimulatedAnnealing, BeamSearch,
 //! PopulationAnnealing, ParallelTempering, ReinforcementLearningSearch), composed ones built
 //! from other heuristics (VariableNeighborhoodSearch, Sequential, Iterated, Restart,
-//! GeneticAlgorithm, BreakoutLocalSearch.from_parts) and problem-specific ones
-//! (WalkSat, BreakoutLocalSearch, LinKernighanHelsgaun,
-//! AdaptiveLargeNeighborhoodSearch, HybridGeneticSearch) as Python classes, plus the
-//! MaxCutKernel reduction and the PlantedMaxCut instance generators. BranchAndBound searches
-//! the binary problems and Formula exactly, with another heuristic searching each node. The
-//! generic and composed heuristics, and ALNS, also run on problems written in Python.
-
+//! GeneticAlgorithm, BreakoutLocalSearch.from_parts) and problem-specific ones (WalkSat,
+//! BreakoutLocalSearch, LinKernighanHelsgaun, AdaptiveLargeNeighborhoodSearch,
+//! HybridGeneticSearch, IteratedGreedy, GreedyRandomizedConstruction) as Python classes, plus
+//! the MaxCutKernel reduction and the PlantedMaxCut instance generators. BranchAndBound
+//! searches the binary problems and Formula exactly, with another heuristic searching each
+//! node. The generic and composed heuristics, ALNS and the GRASP construction also run on
+//! problems written in Python.
 mod branch_and_bound;
 mod graph;
 mod heuristic;
@@ -41,6 +41,9 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<problem::Tsp>()?;
     m.add_class::<problem::JobShopScheduling>()?;
     m.add_class::<problem::Vrp>()?;
+    m.add_class::<problem::FlowShop>()?;
+    m.add_class::<problem::Qap>()?;
+    m.add_class::<problem::BinPacking>()?;
     m.add_class::<problem::VehicleType>()?;
     m.add_class::<problem::GraphColoring>()?;
     m.add_class::<problem::Formula>()?;
@@ -64,6 +67,8 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::LinKernighanHelsgaun>()?;
     m.add_class::<heuristic::AdaptiveLargeNeighborhoodSearch>()?;
     m.add_class::<heuristic::HybridGeneticSearch>()?;
+    m.add_class::<heuristic::IteratedGreedy>()?;
+    m.add_class::<heuristic::GreedyRandomizedConstruction>()?;
     m.add_class::<heuristic::BranchAndBound>()?;
     Ok(())
 }

@@ -12,6 +12,24 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `FlowShop`, the permutation flow shop (minimize the makespan), with the `Relocate` (insertion)
+  and `Swap` neighborhoods and the `Order` crossover. Build it from processing times or read a
+  Taillard-layout file with `load_file`; `makespan(sequence)` scores an order and `neh()`
+  returns the NEH construction's.
+- `Qap`, the quadratic assignment problem, with the `Swap` neighborhood, under which
+  `TabuSearch` applies Taillard's tabu rule, and the `Order` crossover. Build it from the flow
+  and distance matrices or read a QAPLIB file; `cost(assignment)` scores an assignment.
+- `BinPacking`, one-dimensional bin packing, with the `Relocate` and `Swap` neighborhoods and
+  the `Group` crossover. Build it from the capacity and item sizes or read an instance file;
+  `lower_bound()` and `evaluate_bins(bins)` read it back. The search ranks a packing by
+  `num_bins − mean((load / capacity)²)`, so fuller bins break ties.
+- `IteratedGreedy`, iterated greedy for `FlowShop`: a few jobs out at random, each back where
+  the makespan grows least, an insertion descent, and acceptance at a constant temperature.
+- `GreedyRandomizedConstruction`, GRASP's construction step, which builds one solution from
+  nothing by the randomized greedy rule. GRASP is `Iterated` with it as the perturbation. It
+  runs on `Tsp`, `Vrp`, `FlowShop`, `BinPacking` and Python problems with the ruin methods.
+- `AdaptiveLargeNeighborhoodSearch` runs on `FlowShop`, with an insertion descent after each
+  repair, and on `BinPacking`.
 - `ParallelTempering`, replica exchange Monte Carlo: `num_replicas` replicas on a geometric
   ladder of inverse temperatures from `beta_min` to `beta_max` run Metropolis sweeps, and
   neighbouring replicas trade places. A generic heuristic, so it takes a `neighbor` and runs on
@@ -134,8 +152,9 @@ entries below are breaking; see **Changed** and **Removed**.
   to `False` and `True`. Variables are still binary unless `bounds` says otherwise.
 - **`Formula`'s `Flip` neighborhood is now named `Change`**, matching optopus's integer moves.
   `Flip` remains accepted, because on a binary variable a change *is* a flip.
-- `AdaptiveLargeNeighborhoodSearch` now also runs on `Tsp`, so its restriction message reads
-  "only available for Vrp or Tsp".
+- `AdaptiveLargeNeighborhoodSearch` now also runs on `Tsp`, `FlowShop` and `BinPacking`, so its
+  restriction message reads "only available for Vrp, Tsp, FlowShop, BinPacking and Python
+  problems with the ruin methods".
 - `pyo3/extension-module` is now an opt-in `extension-module` cargo feature rather than being
   always on, so plain `cargo build` and `cargo test` link against libpython and succeed on macOS.
   maturin still enables it for wheels via `features` in `pyproject.toml`, so built wheels are

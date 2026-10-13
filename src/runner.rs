@@ -4,7 +4,8 @@ use optopus::building_blocks::representation::BinaryRelaxation;
 use optopus::heuristic::reinforcement_learning::feature::NUM_FEATURES;
 use optopus::heuristic::{
     AdaptiveLargeNeighborhoodSearch, AdaptivePerturbation, BreakoutLocalSearch, GeneticAlgorithm,
-    Iterated, ParallelTempering as OptParallelTempering, ParentSelection,
+    GreedyRandomizedConstruction as OptGreedyRandomizedConstruction, Iterated,
+    ParallelTempering as OptParallelTempering, ParentSelection,
     PopulationAnnealing as OptPopulationAnnealing, ReinforcementLearningSearch, Restart,
     RewardShaping, Sequential, SubProblemBasedCrossover,
 };
@@ -12,23 +13,28 @@ use optopus::prelude::{
     BangBangSimulatedAnnealing, BeamSearch, EnabledTabu, Evaluate, Heuristic,
     HybridGeneticSearchForVrp, LateAcceptanceHillClimbing, LinKernighanHelsgaunForTsp, LocalSearch,
     MoveToNeighbor, ProblemTrait, RandomWalk, Rankable, SearchState, SimulatedAnnealing,
-    TabuSearch, VariableNeighborhoodSearch, WalkSatForSat, alns_for_tsp, alns_for_vrp,
-    bls_for_max_cut,
+    TabuSearch, VariableNeighborhoodSearch, WalkSatForSat, alns_for_flow_shop, alns_for_tsp,
+    alns_for_vrp, bls_for_max_cut, iterated_greedy_for_flow_shop,
 };
-use optopus::problem::{EigenvalueRelaxation, IntervalRelaxation};
 use optopus::problem::{
-    FormulaProblem, GraphColoring as OptGraphColoring, GraphColoringRecolorNeighbor,
-    GraphColoringSwapNeighbor, GraphColoringUniformCrossover, IntChangeNeighbor, IntCrossover,
-    IntReverseNeighbor, IntSwapNeighbor, JobShopPpxCrossover, JobShopRelocateNeighbor,
-    JobShopScheduling as OptJobShop, JobShopSwapNeighbor, MaxCut as OptMaxCut, MaxCutFlipNeighbor,
-    MaxCutSwapNeighbor, MaxCutUniformCrossover, Qubo as OptQubo, QuboFlipNeighbor,
-    QuboSwapNeighbor, QuboUniformCrossover, Sat as OptSat, SatFlipNeighbor, SatSwapNeighbor,
-    SatUniformCrossover, Tsp as OptTsp, TspOrderCrossover, TspRelocateNeighbor, TspTwoOptNeighbor,
-    VertexCover as OptVc, VertexCoverFlipNeighbor, VertexCoverSwapNeighbor,
+    BinPacking as OptBinPacking, BinPackingGroupCrossover, BinPackingRelocateNeighbor,
+    BinPackingSwapNeighbor, FlowShop as OptFlowShop, FlowShopInsertNeighbor,
+    FlowShopOrderCrossover, FlowShopSwapNeighbor, FormulaProblem,
+    GraphColoring as OptGraphColoring, GraphColoringRecolorNeighbor, GraphColoringSwapNeighbor,
+    GraphColoringUniformCrossover, IntChangeNeighbor, IntCrossover, IntReverseNeighbor,
+    IntSwapNeighbor, JobShopPpxCrossover, JobShopRelocateNeighbor, JobShopScheduling as OptJobShop,
+    JobShopSwapNeighbor, MaxCut as OptMaxCut, MaxCutFlipNeighbor, MaxCutSwapNeighbor,
+    MaxCutUniformCrossover, Qap as OptQap, QapOrderCrossover, QapSwapNeighbor, Qubo as OptQubo,
+    QuboFlipNeighbor, QuboSwapNeighbor, QuboUniformCrossover, Sat as OptSat, SatFlipNeighbor,
+    SatSwapNeighbor, SatUniformCrossover, Tsp as OptTsp, TspOrderCrossover, TspRelocateNeighbor,
+    TspTwoOptNeighbor, VertexCover as OptVc, VertexCoverFlipNeighbor, VertexCoverSwapNeighbor,
     VertexCoverUniformCrossover, Vrp as OptVrp, VrpOrderCrossover, VrpRelocateNeighbor,
     VrpSwapNeighbor, VrpTwoOptNeighbor,
 };
-use optopus::trait_defs::{BranchSpace, Crossover, Distance, FixVariables, SubProblemExtractable};
+use optopus::problem::{EigenvalueRelaxation, IntervalRelaxation};
+use optopus::trait_defs::{
+    BranchSpace, Crossover, Distance, FixVariables, Ruinable, SubProblemExtractable,
+};
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
@@ -36,7 +42,8 @@ use pyo3::types::PyList;
 use crate::branch_and_bound::{self as bnb, PyRelaxation, RelaxationSpec};
 use crate::heuristic as py_heuristic;
 use crate::problem::{
-    Formula, GraphColoring, JobShopScheduling, MaxCut, Qubo, Sat, Tsp, VertexCover, Vrp,
+    BinPacking, FlowShop, Formula, GraphColoring, JobShopScheduling, MaxCut, Qap, Qubo, Sat, Tsp,
+    VertexCover, Vrp,
 };
 use crate::python_problem::{Guarded, MAX_NEIGHBORHOODS, PyCrossover, PyMove, PyProblem, PyRepair};
 use crate::result::{RunReport, RunResult};
@@ -148,6 +155,13 @@ pub enum HeuristicKind {
         removal_fraction: f64,
         cooling_rate: f64,
     },
+    IteratedGreedy {
+        removal_count: usize,
+        temperature_factor: f64,
+    },
+    GreedyRandomizedConstruction {
+        alpha: f64,
+    },
     HybridGeneticSearch {
         min_population_size: usize,
         generation_size: usize,
@@ -183,6 +197,8 @@ impl HeuristicKind {
             Self::LinKernighanHelsgaun { .. } => "LinKernighanHelsgaun",
             Self::AdaptiveLargeNeighborhoodSearch { .. } => "AdaptiveLargeNeighborhoodSearch",
             Self::HybridGeneticSearch { .. } => "HybridGeneticSearch",
+            Self::IteratedGreedy { .. } => "IteratedGreedy",
+            Self::GreedyRandomizedConstruction { .. } => "GreedyRandomizedConstruction",
         }
     }
 
@@ -193,9 +209,13 @@ impl HeuristicKind {
             Self::BreakoutLocalSearch { .. } => Some("MaxCut"),
             Self::LinKernighanHelsgaun { .. } => Some("Tsp"),
             Self::AdaptiveLargeNeighborhoodSearch { .. } => {
-                Some("Vrp, Tsp and Python problems with the ruin methods")
+                Some("Vrp, Tsp, FlowShop, BinPacking and Python problems with the ruin methods")
             }
             Self::HybridGeneticSearch { .. } => Some("Vrp"),
+            Self::IteratedGreedy { .. } => Some("FlowShop"),
+            Self::GreedyRandomizedConstruction { .. } => {
+                Some("Tsp, Vrp, FlowShop, BinPacking and Python problems with the ruin methods")
+            }
             Self::BranchAndBound { .. } => Some("MaxCut, Qubo, Sat, VertexCover and Formula"),
             _ => None,
         }
@@ -474,6 +494,21 @@ fn neighbor_error(spec: &HeuristicSpec, problem: &str, valid: &str) -> String {
     format!("invalid neighbor '{given}' for {problem} (use {valid})")
 }
 
+/// Builds a `GreedyRandomizedConstruction` on any problem that can be ruined and recreated, or
+/// returns `None` when `spec` is something else.
+fn grasp<P>(spec: &HeuristicSpec) -> Option<Box<dyn Heuristic<P>>>
+where
+    P: Ruinable + 'static,
+    P::Solution: Evaluate,
+{
+    match spec.kind {
+        HeuristicKind::GreedyRandomizedConstruction { alpha } => Some(Box::new(
+            OptGreedyRandomizedConstruction::<P>::new(spec.stop.to_opt(), alpha),
+        )),
+        _ => None,
+    }
+}
+
 /// Builds a `BranchAndBound` on a binary problem, pruning by `BinaryRelaxation` unless the
 /// spec names a Python relaxation. Returns `None` when `spec` is something else.
 fn branch_and_bound_binary<P>(
@@ -661,6 +696,9 @@ fn build_tsp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptTsp>>, String>
     if let Some(result) = build_nested(spec, &build_tsp, &crossover_tsp) {
         return result;
     }
+    if let Some(grasp) = grasp(spec) {
+        return Ok(grasp);
+    }
     match &spec.kind {
         HeuristicKind::LinKernighanHelsgaun {
             num_neighbors,
@@ -731,6 +769,9 @@ fn build_vrp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVrp>>, String>
     if let Some(result) = build_nested(spec, &build_vrp, &crossover_vrp) {
         return result;
     }
+    if let Some(grasp) = grasp(spec) {
+        return Ok(grasp);
+    }
     let cond = spec.stop.to_opt();
     match &spec.kind {
         HeuristicKind::AdaptiveLargeNeighborhoodSearch {
@@ -764,6 +805,114 @@ fn build_vrp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVrp>>, String>
                 "Vrp",
                 "'Relocate', 'Swap' or 'TwoOpt'",
             )),
+        },
+    }
+}
+
+fn crossover_flow_shop(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptFlowShop>>>,
+) -> Result<Box<dyn Crossover<OptFlowShop>>, String> {
+    pick_crossover(
+        "FlowShop",
+        kind,
+        sub,
+        &[("Order", || Box::new(FlowShopOrderCrossover))],
+        None,
+    )
+}
+
+fn build_flow_shop(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptFlowShop>>, String> {
+    if let Some(result) = build_nested(spec, &build_flow_shop, &crossover_flow_shop) {
+        return result;
+    }
+    if let Some(grasp) = grasp(spec) {
+        return Ok(grasp);
+    }
+    let cond = spec.stop.to_opt();
+    match &spec.kind {
+        HeuristicKind::IteratedGreedy {
+            removal_count,
+            temperature_factor,
+        } => Ok(Box::new(iterated_greedy_for_flow_shop(
+            cond,
+            *removal_count,
+            *temperature_factor,
+        ))),
+        HeuristicKind::AdaptiveLargeNeighborhoodSearch {
+            removal_fraction,
+            cooling_rate,
+        } => Ok(Box::new(alns_for_flow_shop(
+            cond,
+            *removal_fraction,
+            *cooling_rate,
+        ))),
+        _ => match spec.neighbor.as_str() {
+            "Relocate" => build_generic::<OptFlowShop, FlowShopInsertNeighbor>(spec),
+            "Swap" => build_generic::<OptFlowShop, FlowShopSwapNeighbor>(spec),
+            _ => Err(neighbor_error(spec, "FlowShop", "'Relocate' or 'Swap'")),
+        },
+    }
+}
+
+fn crossover_qap(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptQap>>>,
+) -> Result<Box<dyn Crossover<OptQap>>, String> {
+    pick_crossover(
+        "Qap",
+        kind,
+        sub,
+        &[("Order", || Box::new(QapOrderCrossover))],
+        None,
+    )
+}
+
+fn build_qap(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptQap>>, String> {
+    if let Some(result) = build_nested(spec, &build_qap, &crossover_qap) {
+        return result;
+    }
+    match spec.neighbor.as_str() {
+        "Swap" => build_generic::<OptQap, QapSwapNeighbor>(spec),
+        _ => Err(neighbor_error(spec, "Qap", "'Swap'")),
+    }
+}
+
+fn crossover_bin_packing(
+    kind: Option<&str>,
+    sub: Option<Box<dyn Heuristic<OptBinPacking>>>,
+) -> Result<Box<dyn Crossover<OptBinPacking>>, String> {
+    pick_crossover(
+        "BinPacking",
+        kind,
+        sub,
+        &[("Group", || Box::new(BinPackingGroupCrossover))],
+        None,
+    )
+}
+
+fn build_bin_packing(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptBinPacking>>, String> {
+    if let Some(result) = build_nested(spec, &build_bin_packing, &crossover_bin_packing) {
+        return result;
+    }
+    if let Some(grasp) = grasp(spec) {
+        return Ok(grasp);
+    }
+    match &spec.kind {
+        HeuristicKind::AdaptiveLargeNeighborhoodSearch {
+            removal_fraction,
+            cooling_rate,
+        } => Ok(Box::new(
+            AdaptiveLargeNeighborhoodSearch::<OptBinPacking>::new(
+                spec.stop.to_opt(),
+                *removal_fraction,
+                *cooling_rate,
+            ),
+        )),
+        _ => match spec.neighbor.as_str() {
+            "Relocate" => build_generic::<OptBinPacking, BinPackingRelocateNeighbor>(spec),
+            "Swap" => build_generic::<OptBinPacking, BinPackingSwapNeighbor>(spec),
+            _ => Err(neighbor_error(spec, "BinPacking", "'Relocate' or 'Swap'")),
         },
     }
 }
@@ -891,6 +1040,14 @@ fn build_python(
                 Some(repair) => Box::new(alns.with_local_repair(Box::new(repair))),
                 None => Box::new(alns),
             }
+        }
+        None if matches!(
+            spec.kind,
+            HeuristicKind::GreedyRandomizedConstruction { .. }
+        ) =>
+        {
+            prob.check_ruinable()?;
+            grasp(spec).expect("matched a GreedyRandomizedConstruction")
         }
         None => {
             if spec.kind.only_for().is_some() {
@@ -1038,6 +1195,8 @@ pub fn spec_from_py(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Heuristi
         LinKernighanHelsgaun,
         AdaptiveLargeNeighborhoodSearch,
         HybridGeneticSearch,
+        IteratedGreedy,
+        GreedyRandomizedConstruction,
         BranchAndBound,
     );
 
@@ -1148,6 +1307,39 @@ pub fn solve(
             |s| s.objective as f64,
             |s, py| decode_usizes(&s.colors, py),
         )
+    } else if let Ok(fs) = problem.extract::<PyRef<'_, FlowShop>>() {
+        run_all(
+            &fs.inner,
+            spec,
+            build_flow_shop,
+            true,
+            runs,
+            seed,
+            |s| f64::from(s.objective),
+            |s, py| decode_usizes(&s.sequence, py),
+        )
+    } else if let Ok(q) = problem.extract::<PyRef<'_, Qap>>() {
+        run_all(
+            &q.inner,
+            spec,
+            build_qap,
+            true,
+            runs,
+            seed,
+            |s| s.objective as f64,
+            |s, py| decode_usizes(&s.assignment, py),
+        )
+    } else if let Ok(b) = problem.extract::<PyRef<'_, BinPacking>>() {
+        run_all(
+            &b.inner,
+            spec,
+            build_bin_packing,
+            true,
+            runs,
+            seed,
+            |s| s.objective,
+            |s, py| decode_usizes(&s.bin_of, py),
+        )
     } else if let Ok(f) = problem.extract::<PyRef<'_, Formula>>() {
         // A FormulaSolution reports its objective as an `Evaluable`, whose `minimized()` is the
         // value with the direction already applied. Negating it recovers the
@@ -1167,7 +1359,8 @@ pub fn solve(
     } else if !problem.hasattr("neighborhoods")? {
         return Err(PyTypeError::new_err(
             "problem must be a MaxCut, Qubo, Sat, VertexCover, Tsp, JobShopScheduling, Vrp, \
-             GraphColoring, or Formula instance, or a Python problem with 'neighborhoods'",
+             FlowShop, Qap, BinPacking, GraphColoring, or Formula instance, or a Python problem \
+             with 'neighborhoods'",
         ));
     } else {
         let prob = PyProblem::from_py(problem)?;

@@ -5,8 +5,8 @@ The generic heuristics also run on a problem you define in Python. `LocalSearch`
 `LateAcceptanceHillClimbing`, `RandomWalk`, `BeamSearch`, `PopulationAnnealing`,
 `ParallelTempering` and `ReinforcementLearningSearch` accept one, and so do the composed heuristics
 (`VariableNeighborhoodSearch`, `Sequential`, `Iterated`, `Restart`, `GeneticAlgorithm`,
-`BreakoutLocalSearch.from_parts`). With the ruin methods below, so does
-`AdaptiveLargeNeighborhoodSearch`. The search loop stays in Rust and calls back into your objects for everything that
+`BreakoutLocalSearch.from_parts`). With the ruin methods below, so do
+`AdaptiveLargeNeighborhoodSearch` and `GreedyRandomizedConstruction`. The search loop stays in Rust and calls back into your objects for everything that
 depends on the problem.
 
 ## The protocol

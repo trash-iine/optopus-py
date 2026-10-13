@@ -1107,7 +1107,7 @@ def test_stop_condition_repr_reads_as_python():
         pytest.param(
             lambda: optopus.AdaptiveLargeNeighborhoodSearch(stop(10)),
             lambda: optopus.MaxCut.from_edges(TRIANGLE),
-            "AdaptiveLargeNeighborhoodSearch is only available for Vrp, Tsp and Python",
+            "AdaptiveLargeNeighborhoodSearch is only available for Vrp, Tsp, FlowShop, BinPacking",
             id="alns-on-maxcut",
         ),
         pytest.param(

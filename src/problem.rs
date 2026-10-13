@@ -1,9 +1,10 @@
 use optopus::building_blocks::instance::{Graph, seeded_rng};
 use optopus::building_blocks::representation::{IntVar, IntVars};
 use optopus::problem::{
-    Constraint, ConstraintRel, Expr, FormulaProblem, GraphColoring as OptGraphColoring,
-    JobShopScheduling as OptJobShop, MaxCut as OptMaxCut, MaxCutKernel as OptMaxCutKernel,
-    ObjectiveMode, PlantedMaxCut as OptPlantedMaxCut, Qubo as OptQubo, Sat as OptSat, TileProbs2d,
+    BinPacking as OptBinPacking, Constraint, ConstraintRel, Expr, FlowShop as OptFlowShop,
+    FormulaProblem, GraphColoring as OptGraphColoring, JobShopScheduling as OptJobShop,
+    MaxCut as OptMaxCut, MaxCutKernel as OptMaxCutKernel, ObjectiveMode,
+    PlantedMaxCut as OptPlantedMaxCut, Qap as OptQap, Qubo as OptQubo, Sat as OptSat, TileProbs2d,
     TileProbs3d, Tsp as OptTsp, VehicleType as OptVehicleType, VertexCover as OptVc, Vrp as OptVrp,
     WishartCouplers,
 };
@@ -697,6 +698,418 @@ impl Tsp {
             "Tsp(name={:?}, n_cities={})",
             self.inner.name,
             self.inner.get_n()
+        )
+    }
+}
+
+/// Rejects a list that is not a permutation of `0..n`, naming its entries `what`.
+fn check_permutation(values: &[usize], n: usize, name: &str, what: &str) -> PyResult<()> {
+    if values.len() != n {
+        return Err(PyValueError::new_err(format!(
+            "'{name}' must have {n} entries, one per {what}, got {}",
+            values.len()
+        )));
+    }
+    let mut seen = vec![false; n];
+    for &v in values {
+        if v >= n {
+            return Err(PyValueError::new_err(format!(
+                "'{name}' holds {v}, outside [0, {n})"
+            )));
+        }
+        if seen[v] {
+            return Err(PyValueError::new_err(format!(
+                "'{name}' holds {v} twice, so it is not a permutation"
+            )));
+        }
+        seen[v] = true;
+    }
+    Ok(())
+}
+
+/// The Permutation Flow Shop Scheduling problem (minimization, makespan).
+///
+/// Every job passes through every machine in the same machine order, and every machine takes
+/// the jobs in one common order, the solution. A machine runs one job at a time and a job is on
+/// one machine at a time. The makespan, when the last job leaves the last machine, is minimized.
+///
+/// A solution is encoded as a ``list[int]``, the jobs in the order they run.
+#[pyclass(module = "optopus")]
+pub struct FlowShop {
+    pub inner: OptFlowShop,
+}
+
+impl FlowShop {
+    /// Rejects an instance whose schedules the core's `u32` times cannot hold.
+    fn checked(inner: OptFlowShop) -> PyResult<Self> {
+        if inner.n_jobs == 0 || inner.n_machines == 0 {
+            return Err(PyValueError::new_err(
+                "a flow shop needs at least one machine and one job",
+            ));
+        }
+        // No schedule ends later than every operation run one after another.
+        if inner.total_processing_time() > u64::from(u32::MAX) {
+            return Err(PyValueError::new_err(format!(
+                "the processing times sum to {}, past the {} a makespan can hold",
+                inner.total_processing_time(),
+                u32::MAX
+            )));
+        }
+        Ok(Self { inner })
+    }
+}
+
+#[pymethods]
+impl FlowShop {
+    /// Build an instance from its processing times.
+    ///
+    /// Args:
+    ///     processing_times (list[list[int]]): One row per machine, in the order the jobs
+    ///         visit them, and one non-negative time per job in each row:
+    ///         ``processing_times[machine][job]``. This is the layout Taillard's instances are
+    ///         published in.
+    ///     name (str): Optional instance name (default ``""``).
+    ///
+    /// Returns:
+    ///     FlowShop: A new problem instance.
+    ///
+    /// Raises:
+    ///     ValueError: If there is no machine or no job, the rows differ in length, or the
+    ///         times sum past ``2**32 - 1``.
+    #[staticmethod]
+    #[pyo3(signature = (processing_times, name=""))]
+    fn from_processing_times(processing_times: Vec<Vec<u32>>, name: &str) -> PyResult<Self> {
+        let n_jobs = processing_times.first().map_or(0, Vec::len);
+        if let Some((i, row)) = processing_times
+            .iter()
+            .enumerate()
+            .find(|(_, row)| row.len() != n_jobs)
+        {
+            return Err(PyValueError::new_err(format!(
+                "every machine needs a time for each of the {n_jobs} jobs, machine {i} has {}",
+                row.len()
+            )));
+        }
+        Self::checked(OptFlowShop::new(name, processing_times))
+    }
+
+    /// Load an instance in Taillard's layout: ``n_jobs n_machines`` on the first line, then one
+    /// line of ``n_jobs`` processing times per machine.
+    ///
+    /// Args:
+    ///     path (str): Path to the instance file.
+    ///
+    /// Returns:
+    ///     FlowShop: The loaded problem instance.
+    ///
+    /// Raises:
+    ///     ValueError: If the file cannot be read or does not parse.
+    #[staticmethod]
+    fn load_file(path: &str) -> PyResult<Self> {
+        OptFlowShop::load_file(path)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .and_then(Self::checked)
+    }
+
+    /// Number of jobs.
+    fn num_jobs(&self) -> usize {
+        self.inner.n_jobs
+    }
+
+    /// Number of machines.
+    fn num_machines(&self) -> usize {
+        self.inner.n_machines
+    }
+
+    /// The makespan of a job order.
+    ///
+    /// Args:
+    ///     sequence (list[int]): Every job once, in the order they run.
+    ///
+    /// Returns:
+    ///     int: When the last job leaves the last machine.
+    ///
+    /// Raises:
+    ///     ValueError: If ``sequence`` is not a permutation of the jobs.
+    fn makespan(&self, sequence: Vec<usize>) -> PyResult<u32> {
+        check_permutation(&sequence, self.inner.n_jobs, "sequence", "job")?;
+        Ok(self.inner.makespan(&sequence))
+    }
+
+    /// The job order the NEH construction builds: jobs by decreasing total processing time,
+    /// each inserted where the partial order's makespan is smallest. A strong starting point,
+    /// and the usual reference a flow shop search is measured against.
+    ///
+    /// Returns:
+    ///     list[int]: Every job once, in the order they run.
+    fn neh(&self) -> Vec<usize> {
+        self.inner.neh().sequence
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "FlowShop(name={:?}, n_jobs={}, n_machines={})",
+            self.inner.name, self.inner.n_jobs, self.inner.n_machines
+        )
+    }
+}
+
+/// The Quadratic Assignment Problem (minimization), in the Koopmans and Beckmann form.
+///
+/// ``n`` facilities are placed at ``n`` locations, one each. ``flow[i][j]`` is what passes
+/// between facilities ``i`` and ``j`` and ``distance[k][l]`` how far apart locations ``k``
+/// and ``l`` are, and an assignment ``p`` costs ``Σ_i Σ_j flow[i][j] · distance[p[i]][p[j]]``.
+/// Neither matrix needs to be symmetric.
+///
+/// A solution is encoded as a ``list[int]``, the location of each facility.
+#[pyclass(module = "optopus")]
+pub struct Qap {
+    pub inner: OptQap,
+}
+
+impl Qap {
+    /// Rejects an instance whose costs could overflow the core's `i64` arithmetic.
+    fn checked(inner: OptQap) -> PyResult<Self> {
+        let n = inner.n;
+        if n == 0 {
+            return Err(PyValueError::new_err("a QAP needs at least one facility"));
+        }
+        let largest = |m: &dyn Fn(usize, usize) -> i64| {
+            (0..n)
+                .flat_map(|i| (0..n).map(move |j| (i, j)))
+                .map(|(i, j)| m(i, j).unsigned_abs())
+                .max()
+                .unwrap_or(0) as f64
+        };
+        // A cost or a swap's delta sums at most 4 n² products of one entry of each matrix.
+        let bound =
+            largest(&|i, j| inner.a(i, j)) * largest(&|k, l| inner.b(k, l)) * 4.0 * (n * n) as f64;
+        if bound >= i64::MAX as f64 {
+            return Err(PyValueError::new_err(
+                "the matrices' entries are too large: a cost could overflow a 64-bit integer",
+            ));
+        }
+        Ok(Self { inner })
+    }
+}
+
+#[pymethods]
+impl Qap {
+    /// Build an instance from its two matrices.
+    ///
+    /// Args:
+    ///     flow (list[list[int]]): ``n × n`` flows between facilities.
+    ///     distance (list[list[int]]): ``n × n`` distances between locations.
+    ///     name (str): Optional instance name (default ``""``).
+    ///
+    /// Returns:
+    ///     Qap: A new problem instance.
+    ///
+    /// Raises:
+    ///     ValueError: If the matrices are empty, not square, of different sizes, or hold
+    ///         entries large enough that a cost could overflow a 64-bit integer.
+    #[staticmethod]
+    #[pyo3(signature = (flow, distance, name=""))]
+    fn from_matrices(flow: Vec<Vec<i64>>, distance: Vec<Vec<i64>>, name: &str) -> PyResult<Self> {
+        let n = flow.len();
+        if distance.len() != n || flow.iter().chain(&distance).any(|row| row.len() != n) {
+            return Err(PyValueError::new_err(format!(
+                "'flow' and 'distance' must be square matrices of the same size, 'flow' has {n} rows"
+            )));
+        }
+        Self::checked(OptQap::new(name, flow, distance))
+    }
+
+    /// Load a QAPLIB instance: ``n``, then the flow matrix and the distance matrix, all
+    /// whitespace separated.
+    ///
+    /// Args:
+    ///     path (str): Path to the instance file.
+    ///
+    /// Returns:
+    ///     Qap: The loaded problem instance.
+    ///
+    /// Raises:
+    ///     ValueError: If the file cannot be read or does not parse.
+    #[staticmethod]
+    fn load_file(path: &str) -> PyResult<Self> {
+        OptQap::load_file(path)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .and_then(Self::checked)
+    }
+
+    /// Number of facilities, and of locations.
+    fn size(&self) -> usize {
+        self.inner.n
+    }
+
+    /// The cost of an assignment.
+    ///
+    /// Args:
+    ///     assignment (list[int]): The location of each facility, every location once.
+    ///
+    /// Returns:
+    ///     int: ``Σ_i Σ_j flow[i][j] · distance[assignment[i]][assignment[j]]``.
+    ///
+    /// Raises:
+    ///     ValueError: If ``assignment`` is not a permutation of the locations.
+    fn cost(&self, assignment: Vec<usize>) -> PyResult<i64> {
+        check_permutation(&assignment, self.inner.n, "assignment", "facility")?;
+        Ok(self.inner.cost(&assignment))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Qap(name={:?}, n={})", self.inner.name, self.inner.n)
+    }
+}
+
+/// The one-dimensional Bin Packing problem (minimization).
+///
+/// Items of given sizes are packed into bins of one capacity, as few bins as possible. The
+/// objective the search ranks by is ``num_bins − mean((load / capacity)²)``: the fill term
+/// lies in ``(0, 1]``, so fewer bins always wins, and among packings with as many bins it
+/// prefers fuller ones, from which a bin can be emptied. Every packing the search visits is
+/// feasible.
+///
+/// A solution is encoded as a ``list[int]``, the bin of each item, numbered from 0 in order of
+/// each bin's first item, so the number of bins is ``max(solution) + 1``.
+#[pyclass(module = "optopus")]
+pub struct BinPacking {
+    pub inner: OptBinPacking,
+}
+
+impl BinPacking {
+    /// Rejects an instance the core would panic on, or whose loads could overflow.
+    fn checked(capacity: u64, sizes: &[u64]) -> PyResult<()> {
+        if capacity == 0 {
+            return Err(PyValueError::new_err("'capacity' must be greater than 0"));
+        }
+        if sizes.is_empty() {
+            return Err(PyValueError::new_err("'sizes' must not be empty"));
+        }
+        if let Some((i, size)) = sizes
+            .iter()
+            .enumerate()
+            .find(|&(_, &s)| s == 0 || s > capacity)
+        {
+            return Err(PyValueError::new_err(format!(
+                "item {i} has size {size}, outside [1, {capacity}]: every item has to be \
+                 non-empty and fit in a bin"
+            )));
+        }
+        if sizes
+            .iter()
+            .try_fold(0u64, |t, &s| t.checked_add(s))
+            .is_none()
+        {
+            return Err(PyValueError::new_err(
+                "the sizes sum past what a 64-bit integer holds",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[pymethods]
+impl BinPacking {
+    /// Build an instance from the bin capacity and the item sizes.
+    ///
+    /// Args:
+    ///     capacity (int): The capacity of every bin, ``> 0``.
+    ///     sizes (list[int]): The size of every item, each in ``[1, capacity]``.
+    ///     name (str): Optional instance name (default ``""``).
+    ///
+    /// Returns:
+    ///     BinPacking: A new problem instance.
+    ///
+    /// Raises:
+    ///     ValueError: If ``capacity`` is 0, ``sizes`` is empty, or an item is empty or larger
+    ///         than a bin.
+    #[staticmethod]
+    #[pyo3(signature = (capacity, sizes, name=""))]
+    fn from_sizes(capacity: u64, sizes: Vec<u64>, name: &str) -> PyResult<Self> {
+        Self::checked(capacity, &sizes)?;
+        Ok(Self {
+            inner: OptBinPacking::new(name, capacity, sizes),
+        })
+    }
+
+    /// Load an instance: ``n capacity``, then the ``n`` item sizes, all whitespace separated.
+    /// This is the layout of the Falkenauer instances optopus bundles.
+    ///
+    /// Args:
+    ///     path (str): Path to the instance file.
+    ///
+    /// Returns:
+    ///     BinPacking: The loaded problem instance.
+    ///
+    /// Raises:
+    ///     ValueError: If the file cannot be read or does not parse, or an item does not fit.
+    #[staticmethod]
+    fn load_file(path: &str) -> PyResult<Self> {
+        let inner =
+            OptBinPacking::load_file(path).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Self::checked(inner.capacity, &inner.sizes)?;
+        Ok(Self { inner })
+    }
+
+    /// The capacity of every bin.
+    fn capacity(&self) -> u64 {
+        self.inner.capacity
+    }
+
+    /// The size of every item.
+    fn sizes(&self) -> Vec<u64> {
+        self.inner.sizes.clone()
+    }
+
+    /// Number of items.
+    fn num_items(&self) -> usize {
+        self.inner.num_items()
+    }
+
+    /// ``⌈Σ size / capacity⌉``, the bins the items need even if they could be cut. A packing
+    /// with this many bins is optimal.
+    fn lower_bound(&self) -> u64 {
+        self.inner.lower_bound()
+    }
+
+    /// Score a packing.
+    ///
+    /// Args:
+    ///     bins (list[int]): The bin of each item. Any non-negative labels do; they are
+    ///         renumbered from 0 in order of each bin's first item.
+    ///
+    /// Returns:
+    ///     dict: ``objective`` (float, what the search ranks by), ``num_bins`` (int),
+    ///     ``loads`` (list[int], the total size in each renumbered bin) and ``bins``
+    ///     (list[int], the renumbered bin of each item).
+    ///
+    /// Raises:
+    ///     ValueError: If ``bins`` does not give every item a bin, or a bin is over capacity.
+    fn evaluate_bins<'py>(
+        &self,
+        py: Python<'py>,
+        bins: Vec<usize>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let solution = self
+            .inner
+            .solution_from_bins(bins)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let dict = PyDict::new(py);
+        dict.set_item("objective", solution.objective)?;
+        dict.set_item("num_bins", solution.num_bins())?;
+        dict.set_item("loads", solution.loads.clone())?;
+        dict.set_item("bins", solution.bin_of)?;
+        Ok(dict)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "BinPacking(name={:?}, n_items={}, capacity={})",
+            self.inner.name,
+            self.inner.num_items(),
+            self.inner.capacity
         )
     }
 }

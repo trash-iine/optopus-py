@@ -1175,9 +1175,11 @@ fn check_half_open_unit(name: &str, value: f64) -> PyResult<()> {
 /// with one of three removal operators and repairs it with one of two insertion operators,
 /// reinforcing whichever pair has been paying off, under a simulated-annealing acceptance rule.
 ///
-/// Applies to ``Vrp`` and ``Tsp`` problems, and to Python problems that define the ruin
-/// methods (``to_partial``, ``finish``, ``elements``, ``remove_all``, ``removal_gain``,
-/// ``relatedness``, ``num_buckets``, ``num_places``, ``insertion_cost``, ``insert``).
+/// Applies to ``Vrp``, ``Tsp``, ``FlowShop`` and ``BinPacking`` problems, and to Python
+/// problems that define the ruin methods (``to_partial``, ``finish``, ``elements``,
+/// ``remove_all``, ``removal_gain``, ``relatedness``, ``num_buckets``, ``num_places``,
+/// ``insertion_cost``, ``insert``). On ``Vrp``, ``Tsp`` and ``FlowShop`` a descent around
+/// the reinserted elements follows every repair.
 ///
 /// Args:
 ///     stop (StopCondition): Stopping criterion.
@@ -1235,6 +1237,171 @@ impl AdaptiveLargeNeighborhoodSearch {
     /// Raises:
     ///     ValueError: If ``problem`` is not a ``Vrp``, a ``Tsp``, or a Python problem with
     ///         the ruin methods, or ``runs`` is 0.
+    #[pyo3(signature = (problem, runs=1, seed=None))]
+    fn run(
+        &self,
+        py: Python<'_>,
+        problem: &Bound<'_, PyAny>,
+        runs: usize,
+        seed: Option<u64>,
+    ) -> PyResult<RunReport> {
+        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+    }
+}
+
+/// Iterated greedy for the permutation flow shop: each iteration takes ``removal_count`` jobs
+/// out at random, puts each back where the makespan grows least, runs an insertion descent,
+/// and accepts the result if it is no worse, or otherwise with probability
+/// ``exp(-Δ / temperature)`` at a constant temperature.
+///
+/// It is ruin-and-recreate with one fixed destroy operator, one fixed repair operator and a
+/// fixed number of removals, which on the flow shop, where it was proposed, beats the adaptive
+/// choice of ``AdaptiveLargeNeighborhoodSearch``. Applies to ``FlowShop`` only.
+///
+/// Args:
+///     stop (StopCondition): Stopping criterion. One iteration is one destruction and
+///         reconstruction with its descent.
+///     removal_count (int): Jobs taken out each iteration, ``>= 1``. Defaults to 4.
+///     temperature_factor (float): Scales the acceptance temperature, which is
+///         ``temperature_factor · Σp / (n_jobs · n_machines · 10)``, a tenth of the mean
+///         processing time times the factor. Must be positive and finite. Defaults to 0.4.
+///
+/// Raises:
+///     ValueError: If ``removal_count`` is 0 or ``temperature_factor`` is not positive and
+///         finite.
+#[pyclass(module = "optopus")]
+pub struct IteratedGreedy {
+    removal_count: usize,
+    temperature_factor: f64,
+    stop: StopCondition,
+}
+
+impl IteratedGreedy {
+    pub(crate) fn to_spec(&self, _py: Python<'_>) -> PyResult<HeuristicSpec> {
+        Ok(HeuristicSpec {
+            kind: HeuristicKind::IteratedGreedy {
+                removal_count: self.removal_count,
+                temperature_factor: self.temperature_factor,
+            },
+            neighbor: String::new(),
+            stop: self.stop.clone(),
+        })
+    }
+}
+
+#[pymethods]
+impl IteratedGreedy {
+    #[new]
+    #[pyo3(signature = (stop, removal_count=4, temperature_factor=0.4))]
+    fn new(stop: StopCondition, removal_count: usize, temperature_factor: f64) -> PyResult<Self> {
+        if removal_count == 0 {
+            return Err(PyValueError::new_err("'removal_count' must be at least 1"));
+        }
+        if !(temperature_factor.is_finite() && temperature_factor > 0.0) {
+            return Err(PyValueError::new_err(format!(
+                "'temperature_factor' must be positive and finite, got {temperature_factor}"
+            )));
+        }
+        Ok(Self {
+            removal_count,
+            temperature_factor,
+            stop,
+        })
+    }
+
+    /// Run the heuristic on a problem and return an aggregated report.
+    ///
+    /// Args:
+    ///     problem: The problem instance to solve.
+    ///     runs (int): Number of independent runs to perform. Defaults to 1.
+    ///     seed (int | None): Master seed. When set, runs are deterministic
+    ///         (run 0 uses ``seed`` directly).
+    ///
+    /// Returns:
+    ///     RunReport: Aggregated statistics over all runs.
+    ///
+    /// Raises:
+    ///     ValueError: If ``problem`` is not a ``FlowShop``, or ``runs`` is 0.
+    ///     TypeError: If ``problem`` is not a problem instance.
+    #[pyo3(signature = (problem, runs=1, seed=None))]
+    fn run(
+        &self,
+        py: Python<'_>,
+        problem: &Bound<'_, PyAny>,
+        runs: usize,
+        seed: Option<u64>,
+    ) -> PyResult<RunReport> {
+        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+    }
+}
+
+/// The construction step of GRASP: builds one new solution from nothing and replaces the
+/// current one with it.
+///
+/// Every element is taken out, and the empty solution is filled again one element at a time.
+/// At each step every element left is priced at its cheapest place, and one is drawn
+/// uniformly from those whose cost is within ``alpha`` of the cheapest,
+/// ``c ≤ c_min + alpha · (c_max − c_min)``, and put there. ``alpha = 0`` is pure greedy and
+/// ``alpha = 1`` puts the elements back in a random order.
+///
+/// It is one step, not a search: a call builds exactly one solution and returns. GRASP is
+/// ``Iterated(search=LocalSearch(...), perturbation=GreedyRandomizedConstruction(), ...)``,
+/// a descent from each new construction with the best of them kept. Each step reprices every
+/// element left, so one construction of ``n`` elements costs ``O(n²)`` placements priced.
+///
+/// Applies to ``Tsp``, ``Vrp``, ``FlowShop`` and ``BinPacking``, and to Python problems that
+/// define the ruin methods (see ``AdaptiveLargeNeighborhoodSearch``).
+///
+/// Args:
+///     alpha (float): Width of the restricted candidate list, in ``[0, 1]``. Defaults to 0.2.
+///     stop (StopCondition | None): Can end a call before its construction, never make it
+///         build more. Defaults to None, no limit.
+///
+/// Raises:
+///     ValueError: If ``alpha`` is outside ``[0, 1]``.
+#[pyclass(module = "optopus")]
+pub struct GreedyRandomizedConstruction {
+    alpha: f64,
+    stop: StopCondition,
+}
+
+impl GreedyRandomizedConstruction {
+    pub(crate) fn to_spec(&self, _py: Python<'_>) -> PyResult<HeuristicSpec> {
+        Ok(HeuristicSpec {
+            kind: HeuristicKind::GreedyRandomizedConstruction { alpha: self.alpha },
+            neighbor: String::new(),
+            stop: self.stop.clone(),
+        })
+    }
+}
+
+#[pymethods]
+impl GreedyRandomizedConstruction {
+    #[new]
+    #[pyo3(signature = (alpha=0.2, stop=None))]
+    fn new(alpha: f64, stop: Option<StopCondition>) -> PyResult<Self> {
+        check_unit_interval("alpha", alpha)?;
+        Ok(Self {
+            alpha,
+            stop: stop.unwrap_or_else(StopCondition::unlimited),
+        })
+    }
+
+    /// Build one solution on a problem and return an aggregated report.
+    ///
+    /// Args:
+    ///     problem: The problem instance to solve.
+    ///     runs (int): Number of independent runs to perform. Defaults to 1.
+    ///     seed (int | None): Master seed. When set, runs are deterministic
+    ///         (run 0 uses ``seed`` directly).
+    ///
+    /// Returns:
+    ///     RunReport: Aggregated statistics over all runs, one construction each.
+    ///
+    /// Raises:
+    ///     ValueError: If ``problem`` is not one the construction applies to, or ``runs`` is
+    ///         0.
+    ///     TypeError: If ``problem`` is not a problem instance.
     #[pyo3(signature = (problem, runs=1, seed=None))]
     fn run(
         &self,

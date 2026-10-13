@@ -33,6 +33,15 @@ factory method, then handed to a heuristic.
 .. autoclass:: optopus.Vrp
    :members:
 
+.. autoclass:: optopus.FlowShop
+   :members:
+
+.. autoclass:: optopus.Qap
+   :members:
+
+.. autoclass:: optopus.BinPacking
+   :members:
+
 .. autoclass:: optopus.VehicleType
    :members:
 
@@ -160,8 +169,8 @@ what it proved in `RunResult.proven_optimal` and `RunResult.dual_bound`. See
 ### Problem-specific
 
 These exploit the structure of one problem type and take no `neighbor` argument. Running one on a
-different problem raises `ValueError`. `AdaptiveLargeNeighborhoodSearch` also runs on a Python
-problem that defines the ruin methods.
+different problem raises `ValueError`. `AdaptiveLargeNeighborhoodSearch` and
+`GreedyRandomizedConstruction` also run on a Python problem that defines the ruin methods.
 
 ```{eval-rst}
 .. autoclass:: optopus.WalkSat
@@ -174,6 +183,12 @@ problem that defines the ruin methods.
    :members:
 
 .. autoclass:: optopus.AdaptiveLargeNeighborhoodSearch
+   :members:
+
+.. autoclass:: optopus.IteratedGreedy
+   :members:
+
+.. autoclass:: optopus.GreedyRandomizedConstruction
    :members:
 
 .. autoclass:: optopus.HybridGeneticSearch

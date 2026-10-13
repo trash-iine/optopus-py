@@ -45,7 +45,8 @@ different amounts of work:
 | `PopulationAnnealing` | one temperature step: resampling plus `sweeps_per_step` sweeps of every replica |
 | `ParallelTempering` | one sweep of every replica; a round of `sweeps_per_exchange` sweeps and one exchange counts that many |
 | `GeneticAlgorithm`, `HybridGeneticSearch` | produces one offspring |
-| `AdaptiveLargeNeighborhoodSearch` | ruins and recreates the solution once |
+| `AdaptiveLargeNeighborhoodSearch`, `IteratedGreedy` | ruins and recreates the solution once |
+| `GreedyRandomizedConstruction` | builds one solution, and a call makes exactly one |
 | `Sequential`, `Iterated`, `VariableNeighborhoodSearch`, `Restart` | counts the iterations of their steps, see [Composing heuristics](#composing-heuristics) |
 | `BranchAndBound` | takes one node, on top of the iterations its `heuristic` makes there, see [Proving optimality](#proving-optimality) |
 
@@ -75,6 +76,9 @@ the problem's structure and usually wins.
 | `MaxCut` | `BreakoutLocalSearch` |
 | `Tsp` | `LinKernighanHelsgaun` |
 | `Vrp` | `HybridGeneticSearch`, or `AdaptiveLargeNeighborhoodSearch` |
+| `FlowShop` | `IteratedGreedy` |
+| `Qap` | `TabuSearch` with `"Swap"` |
+| `BinPacking` | `AdaptiveLargeNeighborhoodSearch` |
 
 Otherwise pick a generic heuristic by what the search landscape needs:
 
@@ -203,8 +207,25 @@ Their defaults are the published settings and a sensible start. The ones worth k
   short run makes, then choose `cooling_rate` from the SA formula above so that the temperature
   falls by two or three orders of magnitude over the budget.
 - For `Vrp`, `HybridGeneticSearch` and `AdaptiveLargeNeighborhoodSearch` measure level at
-  equal budgets of tens of seconds, so try both. `AdaptiveLargeNeighborhoodSearch` is also the
-  one that runs on `Tsp` and on a problem written in Python.
+  equal budgets of tens of seconds, so try both. `AdaptiveLargeNeighborhoodSearch` also runs on
+  `Tsp`, `FlowShop`, `BinPacking` and a problem written in Python.
+- `IteratedGreedy(removal_count=4, temperature_factor=0.4)` on `FlowShop` is the tuned setting
+  of its paper. It accepts a worse sequence at a fixed temperature, a tenth of the mean
+  processing time times `temperature_factor`.
+- `GreedyRandomizedConstruction` is not a search: a call builds one solution, drawing each
+  element from those within `alpha` of the cheapest to place. GRASP is that construction as the
+  perturbation of `Iterated`, with a descent as its search:
+
+  ```python
+  grasp = optopus.Iterated(
+      search=optopus.LocalSearch("Relocate", stop=optopus.StopCondition(max_iteration=1_000)),
+      perturbation=optopus.GreedyRandomizedConstruction(alpha=0.2),
+      stop=optopus.StopCondition(max_duration_secs=1.0),
+  )
+  ```
+
+  One construction prices every element left at every step, `O(n²)` placements for `n`
+  elements, which is slow on thousands of them.
 
 ## Composing heuristics
 
