@@ -796,7 +796,10 @@ impl GraphColoring {
                 self.inner.k
             )));
         }
-        let solution = self.inner.solution_from_colors(colors);
+        let solution = self
+            .inner
+            .solution_from_colors(colors)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let dict = PyDict::new(py);
         dict.set_item("objective", solution.objective)?;
         dict.set_item("colors_used", solution.colors_used)?;
@@ -1541,10 +1544,10 @@ impl Vrp {
                 routes.len()
             )));
         }
-        self.inner
-            .validate_routes(&routes)
+        let solution = self
+            .inner
+            .solution_from_routes(routes)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let solution = self.inner.solution_from_routes(routes);
         let dict = PyDict::new(py);
         dict.set_item("objective", solution.objective)?;
         dict.set_item("distance", solution.total_distance())?;

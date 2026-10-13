@@ -110,7 +110,13 @@ entries below are breaking; see **Changed** and **Removed**.
 - Wheels are built with the release settings optopus measured, fat LTO and a single codegen
   unit, which the binding had never applied. `TabuSearch` runs about 1.9x faster on a
   2000-vertex MaxCut; the other heuristics measured gain little.
-- Updated the vendored optopus to `8de6180`, and later to `2959c73`.
+- Updated the vendored optopus to `8de6180`, and later to `594f473`.
+- `AdaptiveLargeNeighborhoodSearch`'s greedy repair puts back the element whose cheapest place
+  costs least first, re-pricing the rest after each insertion, as the original paper's basic
+  greedy does; it used to insert them in a random order. Runs on `Vrp`, `Tsp` and Python
+  problems give different results for the same seed, and an iteration calls
+  `insertion_cost` about `k² · P / 2` times rather than `k · P`. Changed in optopus
+  (`6c63f1a`).
 - **`PopulationAnnealing` is now a generic heuristic**: optopus generalized it off Max Cut, so it
   runs on every problem type and takes a `neighbor` argument. It defaults to `"Flip"` and comes
   after the existing parameters, so calls that did not name it keep working. Its `cluster_moves`

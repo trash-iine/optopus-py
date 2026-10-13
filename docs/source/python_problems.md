@@ -129,11 +129,12 @@ terms of what it loses:
 - `repair_around` receives `anchors` as a list of the elements just put back, and edits the
   partial in place.
 
-Repair prices every place of every container for each element it puts back: greedy insertion
-makes about `k · P` calls to `insertion_cost` for `k` removed elements and `P` places in all,
-and regret insertion, which re-prices the remaining elements after each placement, about
-`k² · P / 2`. That is the cost of one iteration, so keep `insertion_cost` cheap and
-`removal_fraction` small on large instances; `k` is `removal_fraction · n`, at most 50.
+Repair prices every place of every container for each element it puts back, and both of its
+operators re-price the elements still left after each placement: greedy insertion puts back the
+element whose cheapest place costs least, regret insertion the one that stands to lose most.
+Each makes about `k² · P / 2` calls to `insertion_cost` for `k` removed elements and `P` places
+in all. That is the cost of one iteration, so keep `insertion_cost` cheap and `removal_fraction`
+small on large instances; `k` is `removal_fraction · n`, at most 50.
 
 ## Example
 
