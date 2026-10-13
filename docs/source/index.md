@@ -8,16 +8,19 @@ executing in native Rust.
 ## What you get
 
 - **Problems** built directly from Python data: `MaxCut`, `Qubo`, `Sat`, `VertexCover`, `Tsp`,
-  `JobShopScheduling`, `Vrp`, `GraphColoring`, and `Formula` — plus a `Graph` type with random
+  `JobShopScheduling`, `FlowShop`, `Vrp`, `Qap`, `BinPacking`, `GraphColoring`, and `Formula` —
+  plus a `Graph` type with random
   graph generators and periodic lattices to feed the graph-based ones.
 - **Generic heuristics** that work with any problem: `LocalSearch`, `SimulatedAnnealing`,
   `BangBangSimulatedAnnealing`, `TabuSearch`, `LateAcceptanceHillClimbing`, `RandomWalk`,
-  `BeamSearch`, `PopulationAnnealing`, and `ReinforcementLearningSearch`.
+  `BeamSearch`, `PopulationAnnealing`, `ParallelTempering`, and `ReinforcementLearningSearch`.
 - **Composed heuristics** built from other heuristic instances: `VariableNeighborhoodSearch`,
   `Sequential`, `Iterated`, `Restart`, `GeneticAlgorithm`, and `BreakoutLocalSearch.from_parts`.
 - **Problem-specific heuristics** that exploit one problem's structure: `WalkSat`,
-  `BreakoutLocalSearch`, `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch`, and
-  `HybridGeneticSearch`.
+  `BreakoutLocalSearch`, `LinKernighanHelsgaun`, `AdaptiveLargeNeighborhoodSearch`,
+  `HybridGeneticSearch`, `IteratedGreedy`, and `GreedyRandomizedConstruction`.
+- **Exact search**: `BranchAndBound` proves an optimum on `MaxCut`, `Qubo`, `Sat`,
+  `VertexCover` and `Formula`, with another heuristic searching each node.
 - **Instances with a known optimum**: `PlantedMaxCut` plants an optimal cut by construction, so
   "did the heuristic reach the optimum" is answerable; `MaxCutKernel` reduces an instance
   exactly and lifts the answer back.

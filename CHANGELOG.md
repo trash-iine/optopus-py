@@ -12,6 +12,34 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `FlowShop`, the permutation flow shop (minimize the makespan), with the `Relocate` (insertion)
+  and `Swap` neighborhoods and the `Order` crossover. Build it from processing times or read a
+  Taillard-layout file with `load_file`; `makespan(sequence)` scores an order and `neh()`
+  returns the NEH construction's.
+- `Qap`, the quadratic assignment problem, with the `Swap` neighborhood, under which
+  `TabuSearch` applies Taillard's tabu rule, and the `Order` crossover. Build it from the flow
+  and distance matrices or read a QAPLIB file; `cost(assignment)` scores an assignment.
+- `BinPacking`, one-dimensional bin packing, with the `Relocate` and `Swap` neighborhoods and
+  the `Group` crossover. Build it from the capacity and item sizes or read an instance file;
+  `lower_bound()` and `evaluate_bins(bins)` read it back. The search ranks a packing by
+  `num_bins − mean((load / capacity)²)`, so fuller bins break ties.
+- `IteratedGreedy`, iterated greedy for `FlowShop`: a few jobs out at random, each back where
+  the makespan grows least, an insertion descent, and acceptance at a constant temperature.
+- `GreedyRandomizedConstruction`, GRASP's construction step, which builds one solution from
+  nothing by the randomized greedy rule. GRASP is `Iterated` with it as the perturbation. It
+  runs on `Tsp`, `Vrp`, `FlowShop`, `BinPacking` and Python problems with the ruin methods.
+- `AdaptiveLargeNeighborhoodSearch` runs on `FlowShop`, with an insertion descent after each
+  repair, and on `BinPacking`.
+- `ParallelTempering`, replica exchange Monte Carlo: `num_replicas` replicas on a geometric
+  ladder of inverse temperatures from `beta_min` to `beta_max` run Metropolis sweeps, and
+  neighbouring replicas trade places. A generic heuristic, so it takes a `neighbor` and runs on
+  every problem, Python problems included.
+- `BranchAndBound`, which proves the best solution optimal on `MaxCut`, `Qubo`, `Sat`,
+  `VertexCover` and `Formula`. Another heuristic searches each node, the problem's own included
+  (`WalkSat`, `BreakoutLocalSearch`), and a relaxation prunes it: `"Binary"` on the binary
+  problems, `"Eigenvalue"` (the certified eigenvalue bound) on `MaxCut`, `"Interval"` on
+  `Formula`, or a Python callable taking the node's ranges. `RunResult` gains
+  `proven_optimal` and `dual_bound`, set on a `BranchAndBound` run and `None` otherwise.
 - `Vrp`, the capacitated vehicle routing problem, with the `Relocate`, `Swap` and `TwoOpt`
   neighborhoods. Build it from coordinates, an explicit distance matrix, or a CVRPLIB file;
   `num_vehicles=0` lets optopus pick a fleet size. `evaluate_routes` scores a route partition
@@ -104,7 +132,13 @@ entries below are breaking; see **Changed** and **Removed**.
 - Wheels are built with the release settings optopus measured, fat LTO and a single codegen
   unit, which the binding had never applied. `TabuSearch` runs about 1.9x faster on a
   2000-vertex MaxCut; the other heuristics measured gain little.
-- Updated the vendored optopus to `8de6180`.
+- Updated the vendored optopus to `8de6180`, and later to `594f473`.
+- `AdaptiveLargeNeighborhoodSearch`'s greedy repair puts back the element whose cheapest place
+  costs least first, re-pricing the rest after each insertion, as the original paper's basic
+  greedy does; it used to insert them in a random order. Runs on `Vrp`, `Tsp` and Python
+  problems give different results for the same seed, and an iteration calls
+  `insertion_cost` about `k² · P / 2` times rather than `k · P`. Changed in optopus
+  (`6c63f1a`).
 - **`PopulationAnnealing` is now a generic heuristic**: optopus generalized it off Max Cut, so it
   runs on every problem type and takes a `neighbor` argument. It defaults to `"Flip"` and comes
   after the existing parameters, so calls that did not name it keep working. Its `cluster_moves`
@@ -118,8 +152,9 @@ entries below are breaking; see **Changed** and **Removed**.
   to `False` and `True`. Variables are still binary unless `bounds` says otherwise.
 - **`Formula`'s `Flip` neighborhood is now named `Change`**, matching optopus's integer moves.
   `Flip` remains accepted, because on a binary variable a change *is* a flip.
-- `AdaptiveLargeNeighborhoodSearch` now also runs on `Tsp`, so its restriction message reads
-  "only available for Vrp or Tsp".
+- `AdaptiveLargeNeighborhoodSearch` now also runs on `Tsp`, `FlowShop` and `BinPacking`, so its
+  restriction message reads "only available for Vrp, Tsp, FlowShop, BinPacking and Python
+  problems with the ruin methods".
 - `pyo3/extension-module` is now an opt-in `extension-module` cargo feature rather than being
   always on, so plain `cargo build` and `cargo test` link against libpython and succeed on macOS.
   maturin still enables it for wheels via `features` in `pyproject.toml`, so built wheels are
@@ -146,6 +181,13 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Fixed
 
+- The guide to problems written in Python said `PopulationAnnealing` ends the run when
+  `random_neighbor` returns `None`. It skips that proposal and carries on, as
+  `ParallelTempering` does.
+- `Sat` counts a clause that holds a variable twice, repeated as in `[2, 2]` or negated as in
+  `[1, -1]`, as one clause. Moves priced such a clause wrongly, so a run on one could report
+  an objective other than the number of clauses its solution satisfies. Fixed in optopus
+  (`a45ed19`).
 - The signatures of `Tsp.from_coordinates`, `Tsp.from_distance_matrix`,
   `JobShopScheduling.from_jobs`, `Vrp.from_coordinates`, `Vrp.from_distance_matrix` and
   `PlantedMaxCut.wishart` show their string defaults (`name=''`, `name='vrp'`,

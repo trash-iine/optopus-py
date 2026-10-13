@@ -345,6 +345,27 @@ def test_alns_names_the_missing_ruin_methods():
         optopus.AdaptiveLargeNeighborhoodSearch(stop(10)).run(Tsp(POINTS))
 
 
+def test_grasp_runs_on_a_python_problem_with_the_ruin_methods():
+    grasp = optopus.Iterated(
+        search=optopus.LocalSearch("TwoOpt", stop(100)),
+        perturbation=optopus.GreedyRandomizedConstruction(alpha=0.3),
+        stop=stop(300),
+    )
+    report = grasp.run(RuinTsp(POINTS), runs=2, seed=1)
+    assert report.best_objective == pytest.approx(TSP_OPTIMUM)
+    assert sorted(report.runs[0].solution) == list(range(6))
+
+
+def test_grasp_names_the_missing_ruin_methods():
+    with pytest.raises(ValueError, match=r"'to_partial', 'finish'.*'insert'"):
+        optopus.GreedyRandomizedConstruction().run(Tsp(POINTS))
+
+
+def test_iterated_greedy_is_for_the_flow_shop_only():
+    with pytest.raises(ValueError, match="IteratedGreedy is only available for FlowShop"):
+        optopus.IteratedGreedy(stop(10)).run(RuinTsp(POINTS))
+
+
 def test_ga_uses_the_problems_crossover():
     ga = optopus.GeneticAlgorithm(
         population_size=6, mutation=optopus.LocalSearch("TwoOpt", stop(50)), stop=stop(20)

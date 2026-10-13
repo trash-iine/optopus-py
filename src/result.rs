@@ -8,8 +8,9 @@ pub struct RunResult {
     /// Best objective value found during the run, on the scale the search ranks solutions by.
     ///
     /// For ``VertexCover``, ``Vrp``, ``GraphColoring`` and ``Formula`` it includes the
-    /// constraint penalty, for ``Sat`` it counts the satisfied clauses, and a ``Formula`` reports
-    /// it higher-is-better, negated when the formula minimizes.
+    /// constraint penalty, for ``Sat`` it counts the satisfied clauses, for ``BinPacking`` it is
+    /// the bin count less a fill term in ``(0, 1]``, and a ``Formula`` reports it
+    /// higher-is-better, negated when the formula minimizes.
     #[pyo3(get)]
     pub best_objective: f64,
     /// Best solution found during the run.
@@ -20,6 +21,10 @@ pub struct RunResult {
     ///   *number of variables/vertices*.
     /// - ``Tsp`` → ``list[int]`` permutation of city indices.
     /// - ``JobShopScheduling`` → ``list[int]`` operation sequence.
+    /// - ``FlowShop`` → ``list[int]``, the jobs in the order they run.
+    /// - ``Qap`` → ``list[int]``, the location of each facility.
+    /// - ``BinPacking`` → ``list[int]``, the bin of each item, numbered from 0 in order of each
+    ///   bin's first item.
     /// - ``Vrp`` → ``list[list[int]]``, one route of customer indices per vehicle. The list
     ///   has ``Vrp.num_vehicles()`` entries, route ``i`` is driven by vehicle type
     ///   ``Vrp.slot_types()[i]``, the depot is implicit at both ends of each route, and empty
@@ -70,6 +75,21 @@ pub struct RunResult {
     /// Seed actually used for the run, if one was provided.
     #[pyo3(get)]
     pub seed: Option<u64>,
+    /// Whether the run proved its best solution optimal, as far as the relaxation is a bound.
+    ///
+    /// Set only when the heuristic run is a ``BranchAndBound``, and ``None`` otherwise. It is
+    /// ``True`` when the search emptied its open nodes before its stop condition.
+    #[pyo3(get)]
+    pub proven_optimal: Option<bool>,
+    /// The best objective a solution not yet ruled out could reach, on the same scale as
+    /// ``best_objective``.
+    ///
+    /// Set only when the heuristic run is a ``BranchAndBound``, and ``None`` otherwise. It equals
+    /// ``best_objective`` once ``proven_optimal`` is ``True``, and the gap between the two bounds
+    /// how far a stopped search can be from the optimum. It is infinite when the search stopped
+    /// before the whole problem had been split once.
+    #[pyo3(get)]
+    pub dual_bound: Option<f64>,
 }
 
 #[pymethods]

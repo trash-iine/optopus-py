@@ -43,9 +43,12 @@ different amounts of work:
 | `SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `LateAcceptanceHillClimbing`, `RandomWalk` | scores one random move |
 | `BeamSearch` | expands the whole neighborhood of every candidate in the beam |
 | `PopulationAnnealing` | one temperature step: resampling plus `sweeps_per_step` sweeps of every replica |
+| `ParallelTempering` | one sweep of every replica; a round of `sweeps_per_exchange` sweeps and one exchange counts that many |
 | `GeneticAlgorithm`, `HybridGeneticSearch` | produces one offspring |
-| `AdaptiveLargeNeighborhoodSearch` | ruins and recreates the solution once |
+| `AdaptiveLargeNeighborhoodSearch`, `IteratedGreedy` | ruins and recreates the solution once |
+| `GreedyRandomizedConstruction` | builds one solution, and a call makes exactly one |
 | `Sequential`, `Iterated`, `VariableNeighborhoodSearch`, `Restart` | counts the iterations of their steps, see [Composing heuristics](#composing-heuristics) |
+| `BranchAndBound` | takes one node, on top of the iterations its `heuristic` makes there, see [Proving optimality](#proving-optimality) |
 
 A limit is checked between units of work, never inside one, so the smallest unit a heuristic
 has always runs to completion and a run can overshoot a time limit by up to one unit. For most
@@ -73,6 +76,9 @@ the problem's structure and usually wins.
 | `MaxCut` | `BreakoutLocalSearch` |
 | `Tsp` | `LinKernighanHelsgaun` |
 | `Vrp` | `HybridGeneticSearch`, or `AdaptiveLargeNeighborhoodSearch` |
+| `FlowShop` | `IteratedGreedy` |
+| `Qap` | `TabuSearch` with `"Swap"` |
+| `BinPacking` | `AdaptiveLargeNeighborhoodSearch` |
 
 Otherwise pick a generic heuristic by what the search landscape needs:
 
@@ -83,7 +89,7 @@ Otherwise pick a generic heuristic by what the search landscape needs:
 | As `SimulatedAnnealing`, with one parameter instead of a temperature schedule | `LateAcceptanceHillClimbing` |
 | Small neighborhoods, or a landscape where every good move goes through a worse solution (for instance `Formula` with `"Eq"` constraints) | `TabuSearch` |
 | A search that stalls in one basin | `Iterated` or `VariableNeighborhoodSearch` around one of the above |
-| Diversity across many candidates | `PopulationAnnealing`, `GeneticAlgorithm` |
+| Diversity across many candidates | `PopulationAnnealing`, `ParallelTempering`, `GeneticAlgorithm` |
 
 `LocalSearch` and `TabuSearch` score every move of the neighborhood at each step. That is cheap
 for a flip over a few thousand variables and expensive for a pairwise move such as `"TwoOpt"` or
@@ -167,6 +173,17 @@ Keeps `population_size` replicas and raises the inverse temperature β from `ini
 move such as `"TwoOpt"`, set `sweep_length`, because the default counts the whole neighborhood
 once per run.
 
+### ParallelTempering
+
+Keeps `num_replicas` replicas on a fixed ladder of inverse temperatures, geometric from
+`beta_min` (hottest) to `beta_max` (coldest), and lets neighbouring replicas trade places after
+every `sweeps_per_exchange` sweeps. Nothing cools, which is the difference from
+`PopulationAnnealing`. The temperatures are in the units of the objective: `beta_max` should
+make the coldest replica a descent, `beta_min` let the hottest move freely, and the replicas
+should be close enough that neighbours overlap in energy, or a good configuration never travels
+down the ladder. When widening the range, add replicas with it. `neighbor` and `sweep_length`
+work as in `PopulationAnnealing`.
+
 ### Problem-specific heuristics
 
 Their defaults are the published settings and a sensible start. The ones worth knowing:
@@ -190,8 +207,25 @@ Their defaults are the published settings and a sensible start. The ones worth k
   short run makes, then choose `cooling_rate` from the SA formula above so that the temperature
   falls by two or three orders of magnitude over the budget.
 - For `Vrp`, `HybridGeneticSearch` and `AdaptiveLargeNeighborhoodSearch` measure level at
-  equal budgets of tens of seconds, so try both. `AdaptiveLargeNeighborhoodSearch` is also the
-  one that runs on `Tsp` and on a problem written in Python.
+  equal budgets of tens of seconds, so try both. `AdaptiveLargeNeighborhoodSearch` also runs on
+  `Tsp`, `FlowShop`, `BinPacking` and a problem written in Python.
+- `IteratedGreedy(removal_count=4, temperature_factor=0.4)` on `FlowShop` is the tuned setting
+  of its paper. It accepts a worse sequence at a fixed temperature, a tenth of the mean
+  processing time times `temperature_factor`.
+- `GreedyRandomizedConstruction` is not a search: a call builds one solution, drawing each
+  element from those within `alpha` of the cheapest to place. GRASP is that construction as the
+  perturbation of `Iterated`, with a descent as its search:
+
+  ```python
+  grasp = optopus.Iterated(
+      search=optopus.LocalSearch("Relocate", stop=optopus.StopCondition(max_iteration=1_000)),
+      perturbation=optopus.GreedyRandomizedConstruction(alpha=0.2),
+      stop=optopus.StopCondition(max_duration_secs=1.0),
+  )
+  ```
+
+  One construction prices every element left at every step, `O(n²)` placements for `n`
+  elements, which is slow on thousands of them.
 
 ## Composing heuristics
 
@@ -257,6 +291,85 @@ ils = optopus.Iterated(
 mc = optopus.MaxCut.from_graph(optopus.Graph.erdos_renyi(200, 0.05, seed=1))
 print(ils.run(mc, runs=2, seed=42).best_objective)
 ```
+
+## Proving optimality
+
+Every heuristic above returns the best solution it found, and none can say whether a better one
+exists. `BranchAndBound` can, on `MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`. It splits
+the problem into nodes, each with some variables' ranges narrowed, searches each node with
+another heuristic, and drops a node once a bound, the *relaxation*, shows that nothing in it beats
+the best solution so far. When no node is left, the best solution is optimal.
+
+```python
+import optopus
+
+mc = optopus.MaxCut.from_graph(optopus.Graph.erdos_renyi(30, 0.3, seed=1))
+bnb = optopus.BranchAndBound(
+    heuristic=optopus.TabuSearch("Flip", (2, 5), stop=optopus.StopCondition(max_iteration=100)),
+    stop=optopus.StopCondition(max_duration_secs=10.0),
+    relaxation="Eigenvalue",
+)
+run = bnb.run(mc, seed=42).runs[0]
+print(run.best_objective, run.proven_optimal)  # 93.0 True
+```
+
+Two fields of the `RunResult` say what the search proved; on every other heuristic they are
+`None`:
+
+- `proven_optimal` is `True` when the search ran out of nodes before its `stop`.
+- `dual_bound` is the best objective a solution not yet ruled out could reach. It equals
+  `best_objective` once the optimum is proven, and the gap between the two bounds how far a
+  search stopped by `stop` can be from the optimum.
+
+`heuristic` searches each node, so its stop condition is a budget per node; a short `LocalSearch`
+or `TabuSearch` is the usual choice. A binary problem folds the variables a node fixes into a
+smaller instance of itself, so its own heuristics, `WalkSat` and `BreakoutLocalSearch` included,
+search a node as they search the whole problem. `stop` defaults to no limit, which on a large
+instance means a run that never ends; give it a time limit there.
+
+The relaxation decides how many nodes are searched. Each problem has a default:
+
+| `relaxation` | Problems | Bound |
+|---|---|---|
+| `"Binary"` (default) | `MaxCut`, `Qubo`, `Sat`, `VertexCover` | the fixed variables folded away and a simple bound of what is left, such as the sum of the positive weights on `MaxCut` |
+| `"Eigenvalue"` | `MaxCut` | the eigenvalue bound of Delorme and Poljak, much tighter; its cost per node grows with the cube of the free vertices |
+| `"Interval"` (default) | `Formula` | every term bounded by interval arithmetic over the ranges, valid on every formula and weak on most |
+
+On the 30-vertex graph above, `"Binary"` proves the same optimum with about 2,500 times as many
+iterations as `"Eigenvalue"`. The built-in bounds suit instances of a few dozen variables.
+
+A bound that knows the problem is written as a function. It takes the node's ranges, one
+inclusive `(lower, upper)` pair per variable, and returns a number no assignment within them
+beats: at least the best objective on a maximized problem, at most it on a minimized one. The
+objective is the one the search ranks by, penalty included and, on a `Formula`, not negated.
+On the knapsack of [Modeling with Formula](formula.md#knapsack), the items held at 1
+plus the free ones filling the room left, best value per weight first and the last one in part,
+is such a bound:
+
+```python
+def fractional_fill(ranges):
+    taken = [i for i, (lower, _) in enumerate(ranges) if lower == 1]
+    free = [i for i, (lower, upper) in enumerate(ranges) if lower < upper]
+    bound = float(sum(values[i] for i in taken))
+    room = max(budget - sum(weights[i] for i in taken), 0)
+    for i in sorted(free, key=lambda i: values[i] / weights[i], reverse=True):
+        part = min(1.0, room / weights[i])
+        bound += part * values[i]
+        room -= part * weights[i]
+    return bound
+
+bnb = optopus.BranchAndBound(
+    heuristic=optopus.LocalSearch("Change", stop=optopus.StopCondition(max_iteration=100)),
+    relaxation=fractional_fill,
+)
+run = bnb.run(knapsack, seed=42).runs[0]
+print(run.best_objective, run.solution, run.proven_optimal)  # 9.0 [0, 1, 1, 0] True
+```
+
+A function that is not a bound prunes the optimum without an error, and the run then reports
+`proven_optimal=True` for a solution that is not optimal. Check a new bound against enumeration
+on instances small enough to enumerate. A function that raises stops the run, and `run` raises
+the exception.
 
 ## Problems written in Python
 

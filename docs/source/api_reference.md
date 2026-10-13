@@ -33,6 +33,15 @@ factory method, then handed to a heuristic.
 .. autoclass:: optopus.Vrp
    :members:
 
+.. autoclass:: optopus.FlowShop
+   :members:
+
+.. autoclass:: optopus.Qap
+   :members:
+
+.. autoclass:: optopus.BinPacking
+   :members:
+
 .. autoclass:: optopus.VehicleType
    :members:
 
@@ -112,6 +121,9 @@ the `neighbor` argument.
 .. autoclass:: optopus.PopulationAnnealing
    :members:
 
+.. autoclass:: optopus.ParallelTempering
+   :members:
+
 .. autoclass:: optopus.ReinforcementLearningSearch
    :members:
 ```
@@ -142,11 +154,23 @@ provides as a method.
 `BreakoutLocalSearch.from_parts` builds breakout local search from other heuristics the same way,
 see `BreakoutLocalSearch` below.
 
+### Exact search
+
+`BranchAndBound` takes another heuristic too, and searches with it until the best solution is
+proven optimal. It runs on `MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`, and reports
+what it proved in `RunResult.proven_optimal` and `RunResult.dual_bound`. See
+[Proving optimality](heuristics.md#proving-optimality).
+
+```{eval-rst}
+.. autoclass:: optopus.BranchAndBound
+   :members:
+```
+
 ### Problem-specific
 
 These exploit the structure of one problem type and take no `neighbor` argument. Running one on a
-different problem raises `ValueError`. `AdaptiveLargeNeighborhoodSearch` also runs on a Python
-problem that defines the ruin methods.
+different problem raises `ValueError`. `AdaptiveLargeNeighborhoodSearch` and
+`GreedyRandomizedConstruction` also run on a Python problem that defines the ruin methods.
 
 ```{eval-rst}
 .. autoclass:: optopus.WalkSat
@@ -159,6 +183,12 @@ problem that defines the ruin methods.
    :members:
 
 .. autoclass:: optopus.AdaptiveLargeNeighborhoodSearch
+   :members:
+
+.. autoclass:: optopus.IteratedGreedy
+   :members:
+
+.. autoclass:: optopus.GreedyRandomizedConstruction
    :members:
 
 .. autoclass:: optopus.HybridGeneticSearch

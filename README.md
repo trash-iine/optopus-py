@@ -16,9 +16,12 @@ optimization library for combinatorial problems written in Rust.
 - `VertexCover` — minimum vertex cover
 - `Tsp` — traveling salesperson, from 2D coordinates, a distance matrix, or a TSPLIB file
 - `JobShopScheduling` — job shop scheduling
+- `FlowShop` — permutation flow shop scheduling, from processing times or a Taillard file
 - `Vrp` — capacitated vehicle routing, from coordinates, a distance matrix, or a CVRPLIB file,
   and a mixed fleet of `VehicleType`s with service times and route-time limits, from
   `Vrp.with_fleet` or a TOML file
+- `Qap` — quadratic assignment, from flow and distance matrices or a QAPLIB file
+- `BinPacking` — one-dimensional bin packing, from item sizes or an instance file
 - `GraphColoring` — minimum proper coloring
 - `Formula` — custom objectives over bounded integer variables (binary by default)
 
@@ -40,6 +43,7 @@ so any heuristic runs on it and `lift` maps the answer back.
 - `RandomWalk`
 - `BeamSearch`
 - `PopulationAnnealing` — replica population along an annealing schedule
+- `ParallelTempering` — replicas on a fixed temperature ladder that trade places
 - `ReinforcementLearningSearch` — a softmax policy over move features, learned online
 
 **Composed heuristics** — built from other heuristic instances, for every problem:
@@ -49,14 +53,24 @@ so any heuristic runs on it and `lift` maps the answer back.
 - `GeneticAlgorithm` — steady-state GA over the problem's crossover, with a mutation heuristic
 - `BreakoutLocalSearch.from_parts` — breakout local search from a descent and perturbations
 
+**Exact search** — proves the best solution optimal, with another heuristic searching each node:
+
+- `BranchAndBound` — branch-and-bound with a built-in or Python-written bound (`MaxCut`, `Qubo`,
+  `Sat`, `VertexCover`, `Formula`)
+
 **Problem-specific heuristics** — exploit one problem's structure, no `neighbor` argument:
 
 - `WalkSat` — WalkSAT/SKC with optional adaptive noise (`Sat`)
 - `BreakoutLocalSearch` — tabu descent with adaptive perturbations (`MaxCut`)
 - `LinKernighanHelsgaun` — variable-depth edge exchange (`Tsp`)
 - `AdaptiveLargeNeighborhoodSearch` — ruin-and-recreate with adaptive operator weights
-  (`Vrp`, `Tsp`, and Python problems with the ruin methods)
+  (`Vrp`, `Tsp`, `FlowShop`, `BinPacking`, and Python problems with the ruin methods)
 - `HybridGeneticSearch` — Vidal's genetic search over giant tours (`Vrp`)
+- `IteratedGreedy` — destruction and greedy reconstruction with an insertion descent
+  (`FlowShop`)
+- `GreedyRandomizedConstruction` — GRASP's randomized greedy construction, one solution per
+  call, to use as the perturbation of `Iterated` (`Tsp`, `Vrp`, `FlowShop`, `BinPacking`, and
+  Python problems with the ruin methods)
 
 The generic and composed heuristics also accept problems written in Python, see
 [Problems written in Python](docs/source/python_problems.md).

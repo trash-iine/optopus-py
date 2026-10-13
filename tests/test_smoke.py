@@ -177,6 +177,32 @@ def test_walksat_adaptive_noise():
     assert report.best_objective == 3.0
 
 
+# Clauses that hold a variable twice: a tautology, a repeated literal, and a tautology with a
+# third literal. The incremental count used to drift on them, so the reported objective stopped
+# matching the clauses the solution satisfies.
+SAT_REPEATED = [[1, -1], [2, 2], [-2, -2, 3], [1, -1, -3], [-1, 2], [3, -2]]
+
+
+def count_satisfied(clauses, x):
+    return sum(any(x[abs(lit) - 1] == (lit > 0) for lit in clause) for clause in clauses)
+
+
+@pytest.mark.parametrize(
+    "heuristic",
+    [
+        optopus.SimulatedAnnealing("Flip", 1.0, 0.999, stop(2_000)),
+        optopus.WalkSat(stop=stop(2_000)),
+    ],
+    ids=["SimulatedAnnealing", "WalkSat"],
+)
+def test_sat_counts_a_clause_with_a_repeated_variable_once(heuristic):
+    sat = optopus.Sat.from_clauses(3, SAT_REPEATED)
+    report = heuristic.run(sat, runs=3, seed=7)
+    for run in report.runs:
+        assert run.best_objective == count_satisfied(SAT_REPEATED, run.solution)
+    assert report.best_objective == len(SAT_REPEATED)
+
+
 def test_population_annealing():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
     pa = optopus.PopulationAnnealing(population_size=10, stop=stop(50), sweeps_per_step=5)
@@ -195,6 +221,44 @@ def test_population_annealing_is_no_longer_maxcut_only():
         population_size=10, stop=stop(50), sweeps_per_step=5, neighbor="TwoOpt", sweep_length=4
     )
     assert abs(pa.run(tsp, seed=42).best_objective - 4.0) < 1e-9
+
+
+def test_parallel_tempering():
+    mc = optopus.MaxCut.from_edges(TRIANGLE)
+    pt = optopus.ParallelTempering(num_replicas=4, stop=stop(50))
+    assert pt.run(mc, runs=2, seed=42).best_objective == TRIANGLE_OPTIMUM
+
+
+def test_parallel_tempering_runs_on_other_problems():
+    qubo = optopus.Qubo.from_entries([(0, 0, -1), (1, 1, -1), (0, 1, 2)])
+    pt = optopus.ParallelTempering(num_replicas=3, stop=stop(50), beta_min=0.5, beta_max=4.0)
+    assert pt.run(qubo, runs=2, seed=42).best_objective == -1.0
+
+    tsp = optopus.Tsp.from_coordinates(UNIT_SQUARE)
+    pt = optopus.ParallelTempering(
+        num_replicas=4, stop=stop(50), sweeps_per_exchange=2, neighbor="TwoOpt", sweep_length=4
+    )
+    report = pt.run(tsp, seed=42)
+    assert abs(report.best_objective - 4.0) < 1e-9
+    # One iteration is one sweep of every replica, two per round here.
+    assert report.runs[0].iterations % 2 == 0
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"num_replicas": 1},
+        {"beta_min": 0.0},
+        {"beta_min": 2.0, "beta_max": 1.0},
+        {"beta_max": float("inf")},
+        {"sweeps_per_exchange": 0},
+        {"sweep_length": 0},
+    ],
+)
+def test_parallel_tempering_rejects_bad_parameters(kwargs):
+    args = {"num_replicas": 4, "stop": stop(10), **kwargs}
+    with pytest.raises(ValueError):
+        optopus.ParallelTempering(**args)
 
 
 def test_breakout_local_search():
@@ -1043,7 +1107,7 @@ def test_stop_condition_repr_reads_as_python():
         pytest.param(
             lambda: optopus.AdaptiveLargeNeighborhoodSearch(stop(10)),
             lambda: optopus.MaxCut.from_edges(TRIANGLE),
-            "AdaptiveLargeNeighborhoodSearch is only available for Vrp, Tsp and Python",
+            "AdaptiveLargeNeighborhoodSearch is only available for Vrp, Tsp, FlowShop, BinPacking",
             id="alns-on-maxcut",
         ),
         pytest.param(

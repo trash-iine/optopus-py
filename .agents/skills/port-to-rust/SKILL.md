@@ -16,6 +16,7 @@ time, so the port follows whatever optopus the binding builds against today.
 | a heuristic's parameters and their defaults | its `#[pyo3(signature = ...)]` in `src/heuristic.rs` |
 | the Rust move type behind a `neighbor` name, a problem-specific heuristic, a GA crossover | `build_<problem>` and `crossover_<problem>` in `src/runner.rs` |
 | the upstream constructor call and argument order for each heuristic | `build_generic` and `build_nested` in `src/runner.rs` |
+| `BranchAndBound`'s relaxation by name, and the `proven_optimal` / `dual_bound` a run reports | `branch_and_bound_binary` and `build_formula` in `src/runner.rs`, and `src/branch_and_bound.rs`; upstream's `is_proven_optimal` and `dual_bound` are methods of the search, read after its run |
 | how a string argument becomes an enum (e.g. `parent_selection`) | the body of its `#[new]` in `src/heuristic.rs` |
 | where a type is imported from (crossovers, for one, are not in `optopus::prelude`) | the `use` block at the top of `src/runner.rs` |
 | `minimize`, the reported objective and the solution's Python form, per problem | the `run_all(...)` call for that problem in `solve`, `src/runner.rs` |

@@ -63,6 +63,15 @@ impl StopCondition {
 }
 
 impl StopCondition {
+    /// No limit at all, for a search that ends on its own.
+    pub fn unlimited() -> Self {
+        Self {
+            max_iteration: None,
+            max_duration_secs: None,
+            max_failed_update: None,
+        }
+    }
+
     pub fn to_opt(&self) -> OptStopCondition {
         OptStopCondition::new(
             self.max_iteration,

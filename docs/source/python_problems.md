@@ -2,11 +2,11 @@
 
 The generic heuristics also run on a problem you define in Python. `LocalSearch`,
 `SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `TabuSearch`,
-`LateAcceptanceHillClimbing`, `RandomWalk`, `BeamSearch`, `PopulationAnnealing` and
-`ReinforcementLearningSearch` accept one, and so do the composed heuristics
+`LateAcceptanceHillClimbing`, `RandomWalk`, `BeamSearch`, `PopulationAnnealing`,
+`ParallelTempering` and `ReinforcementLearningSearch` accept one, and so do the composed heuristics
 (`VariableNeighborhoodSearch`, `Sequential`, `Iterated`, `Restart`, `GeneticAlgorithm`,
-`BreakoutLocalSearch.from_parts`). With the ruin methods below, so does
-`AdaptiveLargeNeighborhoodSearch`. The search loop stays in Rust and calls back into your objects for everything that
+`BreakoutLocalSearch.from_parts`). With the ruin methods below, so do
+`AdaptiveLargeNeighborhoodSearch` and `GreedyRandomizedConstruction`. The search loop stays in Rust and calls back into your objects for everything that
 depends on the problem.
 
 ## The protocol
@@ -61,9 +61,9 @@ rejected and makes no move, and `LocalSearch` stops as at a local optimum. A ten
 the neighborhood leaves the search idle until prohibitions expire.
 
 `random_neighbor` returning `None` means the solution has no move in that neighborhood.
-`SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `LateAcceptanceHillClimbing` and
-`PopulationAnnealing` end the run there, and `RandomWalk` counts the step as rejected and tries
-again. Return `None` only when there truly is no move; a neighborhood that is empty only
+`SimulatedAnnealing`, `BangBangSimulatedAnnealing` and `LateAcceptanceHillClimbing` end the run
+there, `PopulationAnnealing` and `ParallelTempering` skip the proposal and carry on with the next,
+and `RandomWalk` counts the step as rejected and tries again. Return `None` only when there truly is no move; a neighborhood that is empty only
 sometimes, such as a swap between bins when every item shares one, is better merged with one
 that always has a move.
 
@@ -129,11 +129,12 @@ terms of what it loses:
 - `repair_around` receives `anchors` as a list of the elements just put back, and edits the
   partial in place.
 
-Repair prices every place of every container for each element it puts back: greedy insertion
-makes about `k · P` calls to `insertion_cost` for `k` removed elements and `P` places in all,
-and regret insertion, which re-prices the remaining elements after each placement, about
-`k² · P / 2`. That is the cost of one iteration, so keep `insertion_cost` cheap and
-`removal_fraction` small on large instances; `k` is `removal_fraction · n`, at most 50.
+Repair prices every place of every container for each element it puts back, and both of its
+operators re-price the elements still left after each placement: greedy insertion puts back the
+element whose cheapest place costs least, regret insertion the one that stands to lose most.
+Each makes about `k² · P / 2` calls to `insertion_cost` for `k` removed elements and `P` places
+in all. That is the cost of one iteration, so keep `insertion_cost` cheap and `removal_fraction`
+small on large instances; `k` is `removal_fraction · n`, at most 50.
 
 ## Example
 

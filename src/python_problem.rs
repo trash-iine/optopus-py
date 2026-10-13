@@ -40,7 +40,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use optopus::common::{TabuKey, TabuMemory};
+use optopus::building_blocks::search::{TabuKey, TabuMemory};
 use optopus::error::OptError;
 use optopus::prelude::{
     EnabledTabu, Evaluable, Evaluate, Heuristic, MoveToNeighbor, ProblemTrait, SearchState,
