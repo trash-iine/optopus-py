@@ -8,26 +8,7 @@ use crate::branch_and_bound::RelaxationSpec;
 use crate::result::RunReport;
 use crate::runner::{self, HeuristicKind, HeuristicSpec};
 use crate::stop_condition::StopCondition;
-
-/// Rejects a parameter that must lie within `[0, 1]`.
-fn check_unit_interval(name: &str, value: f64) -> PyResult<()> {
-    if !(0.0..=1.0).contains(&value) {
-        return Err(PyValueError::new_err(format!(
-            "'{name}' must be within [0.0, 1.0], got {value}"
-        )));
-    }
-    Ok(())
-}
-
-/// Rejects a parameter that must be strictly positive.
-fn check_positive(name: &str, value: f64) -> PyResult<()> {
-    if value <= 0.0 || value.is_nan() {
-        return Err(PyValueError::new_err(format!(
-            "'{name}' must be greater than 0, got {value}"
-        )));
-    }
-    Ok(())
-}
+use crate::validate::{check_at_least, check_half_open_unit, check_positive, check_unit_interval};
 
 /// Greedy best-improving local search; halts at a local optimum.
 ///
@@ -439,9 +420,7 @@ impl BeamSearch {
 impl BeamSearch {
     #[new]
     fn new(neighbor: String, beam_width: usize, stop: StopCondition) -> PyResult<Self> {
-        if beam_width == 0 {
-            return Err(PyValueError::new_err("'beam_width' must be at least 1"));
-        }
+        check_at_least("beam_width", beam_width, 1)?;
         Ok(Self {
             neighbor,
             beam_width,
@@ -692,20 +671,12 @@ impl PopulationAnnealing {
         neighbor: &str,
         sweep_length: Option<usize>,
     ) -> PyResult<Self> {
-        if population_size < 2 {
-            return Err(PyValueError::new_err(
-                "'population_size' must be at least 2",
-            ));
-        }
+        check_at_least("population_size", population_size, 2)?;
         check_positive("initial_beta", initial_beta)?;
         check_positive("delta_beta", delta_beta)?;
-        if sweeps_per_step == 0 {
-            return Err(PyValueError::new_err(
-                "'sweeps_per_step' must be at least 1",
-            ));
-        }
-        if sweep_length == Some(0) {
-            return Err(PyValueError::new_err("'sweep_length' must be at least 1"));
+        check_at_least("sweeps_per_step", sweeps_per_step, 1)?;
+        if let Some(sweep_length) = sweep_length {
+            check_at_least("sweep_length", sweep_length, 1)?;
         }
         Ok(Self {
             population_size,
@@ -830,22 +801,16 @@ impl ParallelTempering {
         neighbor: &str,
         sweep_length: Option<usize>,
     ) -> PyResult<Self> {
-        if num_replicas < 2 {
-            return Err(PyValueError::new_err("'num_replicas' must be at least 2"));
-        }
+        check_at_least("num_replicas", num_replicas, 2)?;
         // `ParallelTempering::new` asserts this ladder, so a bad one would panic.
         if !(beta_min > 0.0 && beta_min < beta_max && beta_max.is_finite()) {
             return Err(PyValueError::new_err(format!(
                 "need 0 < beta_min < beta_max < inf, got {beta_min} and {beta_max}"
             )));
         }
-        if sweeps_per_exchange == 0 {
-            return Err(PyValueError::new_err(
-                "'sweeps_per_exchange' must be at least 1",
-            ));
-        }
-        if sweep_length == Some(0) {
-            return Err(PyValueError::new_err("'sweep_length' must be at least 1"));
+        check_at_least("sweeps_per_exchange", sweeps_per_exchange, 1)?;
+        if let Some(sweep_length) = sweep_length {
+            check_at_least("sweep_length", sweep_length, 1)?;
         }
         Ok(Self {
             num_replicas,
@@ -965,9 +930,7 @@ fn check_bls(tabu_tenure: (u64, u64), l0: u64, p0: f64) -> PyResult<()> {
             "'tabu_tenure' must satisfy min <= max, got {tabu_tenure:?}"
         )));
     }
-    if l0 == 0 {
-        return Err(PyValueError::new_err("'l0' must be at least 1"));
-    }
+    check_at_least("l0", l0, 1)?;
     check_unit_interval("p0", p0)
 }
 
@@ -1123,12 +1086,8 @@ impl LinKernighanHelsgaun {
     #[new]
     #[pyo3(signature = (stop, num_neighbors=5, max_depth=5))]
     fn new(stop: StopCondition, num_neighbors: usize, max_depth: usize) -> PyResult<Self> {
-        if num_neighbors == 0 {
-            return Err(PyValueError::new_err("'num_neighbors' must be at least 1"));
-        }
-        if max_depth == 0 {
-            return Err(PyValueError::new_err("'max_depth' must be at least 1"));
-        }
+        check_at_least("num_neighbors", num_neighbors, 1)?;
+        check_at_least("max_depth", max_depth, 1)?;
         Ok(Self {
             num_neighbors,
             max_depth,
@@ -1159,16 +1118,6 @@ impl LinKernighanHelsgaun {
     ) -> PyResult<RunReport> {
         runner::solve(problem, &self.to_spec(py)?, runs, seed)
     }
-}
-
-/// Rejects a parameter that must lie within the half-open interval ``(0, 1]``.
-fn check_half_open_unit(name: &str, value: f64) -> PyResult<()> {
-    if !(value > 0.0 && value <= 1.0) {
-        return Err(PyValueError::new_err(format!(
-            "'{name}' must be within (0.0, 1.0], got {value}"
-        )));
-    }
-    Ok(())
 }
 
 /// Adaptive large neighborhood search: each iteration destroys part of the incumbent
@@ -1294,9 +1243,7 @@ impl IteratedGreedy {
     #[new]
     #[pyo3(signature = (stop, removal_count=4, temperature_factor=0.4))]
     fn new(stop: StopCondition, removal_count: usize, temperature_factor: f64) -> PyResult<Self> {
-        if removal_count == 0 {
-            return Err(PyValueError::new_err("'removal_count' must be at least 1"));
-        }
+        check_at_least("removal_count", removal_count, 1)?;
         if !(temperature_factor.is_finite() && temperature_factor > 0.0) {
             return Err(PyValueError::new_err(format!(
                 "'temperature_factor' must be positive and finite, got {temperature_factor}"
@@ -1483,19 +1430,9 @@ impl HybridGeneticSearch {
         target_feasible: f64,
         restart_generations: Option<u64>,
     ) -> PyResult<Self> {
-        if min_population_size < 4 {
-            return Err(PyValueError::new_err(
-                "'min_population_size' must be at least 4",
-            ));
-        }
-        if generation_size == 0 {
-            return Err(PyValueError::new_err(
-                "'generation_size' must be at least 1",
-            ));
-        }
-        if granularity == 0 {
-            return Err(PyValueError::new_err("'granularity' must be at least 1"));
-        }
+        check_at_least("min_population_size", min_population_size, 4)?;
+        check_at_least("generation_size", generation_size, 1)?;
+        check_at_least("granularity", granularity, 1)?;
         if !(target_feasible > 0.0 && target_feasible < 1.0) {
             return Err(PyValueError::new_err(format!(
                 "'target_feasible' must be within (0.0, 1.0), got {target_feasible}"
@@ -1938,11 +1875,7 @@ impl GeneticAlgorithm {
         n_elite: usize,
         n_closest: usize,
     ) -> PyResult<Self> {
-        if population_size < 2 {
-            return Err(PyValueError::new_err(
-                "'population_size' must be at least 2",
-            ));
-        }
+        check_at_least("population_size", population_size, 2)?;
         let parent_selection = match parent_selection {
             "Tournament" => ParentSelection::Tournament,
             "DistantTopK" => match parent_top_k {
@@ -2078,8 +2011,8 @@ impl ReinforcementLearningSearch {
             )));
         }
         check_positive("softmax_temperature", softmax_temperature)?;
-        if max_candidates == Some(0) {
-            return Err(PyValueError::new_err("'max_candidates' must be at least 1"));
+        if let Some(max_candidates) = max_candidates {
+            check_at_least("max_candidates", max_candidates, 1)?;
         }
         let reward_shaping = match reward_shaping {
             "Normalized" => RewardShaping::Normalized,

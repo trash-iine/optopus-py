@@ -4,6 +4,8 @@ use optopus::prelude::{Graph as OptGraph, seeded_rng};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+use crate::validate::{check_at_least, check_unit_interval};
+
 /// Largest integer magnitude that survives a round trip through `f32`, matching
 /// the bound `Graph::with_random_weights` enforces on its weight range.
 const MAX_EXACT_F32_INT: u64 = 1 << 24;
@@ -76,14 +78,8 @@ impl Graph {
     #[staticmethod]
     #[pyo3(signature = (n, p, seed=None))]
     fn erdos_renyi(n: usize, p: f64, seed: Option<u64>) -> PyResult<Self> {
-        if n == 0 {
-            return Err(PyValueError::new_err("'n' must be at least 1"));
-        }
-        if !(0.0..=1.0).contains(&p) {
-            return Err(PyValueError::new_err(format!(
-                "'p' must be within [0.0, 1.0], got {p}"
-            )));
-        }
+        check_at_least("n", n, 1)?;
+        check_unit_interval("p", p)?;
         let mut rng = seeded_rng(resolve_seed(seed));
         Ok(Self {
             inner: OptGraph::erdos_renyi(n, p, &mut rng),
@@ -108,9 +104,7 @@ impl Graph {
     #[staticmethod]
     #[pyo3(signature = (n, m, seed=None))]
     fn barabasi_albert(n: usize, m: usize, seed: Option<u64>) -> PyResult<Self> {
-        if m == 0 {
-            return Err(PyValueError::new_err("'m' must be at least 1"));
-        }
+        check_at_least("m", m, 1)?;
         if m >= n {
             return Err(PyValueError::new_err(format!(
                 "'m' must be less than 'n', got m={m}, n={n}"
@@ -141,9 +135,7 @@ impl Graph {
     #[staticmethod]
     #[pyo3(signature = (n, k, beta, seed=None))]
     fn watts_strogatz(n: usize, k: usize, beta: f64, seed: Option<u64>) -> PyResult<Self> {
-        if k == 0 {
-            return Err(PyValueError::new_err("'k' must be at least 1"));
-        }
+        check_at_least("k", k, 1)?;
         if !k.is_multiple_of(2) {
             return Err(PyValueError::new_err(format!("'k' must be even, got {k}")));
         }
@@ -152,11 +144,7 @@ impl Graph {
                 "'k' must be less than 'n', got k={k}, n={n}"
             )));
         }
-        if !(0.0..=1.0).contains(&beta) {
-            return Err(PyValueError::new_err(format!(
-                "'beta' must be within [0.0, 1.0], got {beta}"
-            )));
-        }
+        check_unit_interval("beta", beta)?;
         let mut rng = seeded_rng(resolve_seed(seed));
         Ok(Self {
             inner: OptGraph::watts_strogatz(n, k, beta, &mut rng),
