@@ -223,6 +223,44 @@ def test_population_annealing_is_no_longer_maxcut_only():
     assert abs(pa.run(tsp, seed=42).best_objective - 4.0) < 1e-9
 
 
+def test_parallel_tempering():
+    mc = optopus.MaxCut.from_edges(TRIANGLE)
+    pt = optopus.ParallelTempering(num_replicas=4, stop=stop(50))
+    assert pt.run(mc, runs=2, seed=42).best_objective == TRIANGLE_OPTIMUM
+
+
+def test_parallel_tempering_runs_on_other_problems():
+    qubo = optopus.Qubo.from_entries([(0, 0, -1), (1, 1, -1), (0, 1, 2)])
+    pt = optopus.ParallelTempering(num_replicas=3, stop=stop(50), beta_min=0.5, beta_max=4.0)
+    assert pt.run(qubo, runs=2, seed=42).best_objective == -1.0
+
+    tsp = optopus.Tsp.from_coordinates(UNIT_SQUARE)
+    pt = optopus.ParallelTempering(
+        num_replicas=4, stop=stop(50), sweeps_per_exchange=2, neighbor="TwoOpt", sweep_length=4
+    )
+    report = pt.run(tsp, seed=42)
+    assert abs(report.best_objective - 4.0) < 1e-9
+    # One iteration is one sweep of every replica, two per round here.
+    assert report.runs[0].iterations % 2 == 0
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"num_replicas": 1},
+        {"beta_min": 0.0},
+        {"beta_min": 2.0, "beta_max": 1.0},
+        {"beta_max": float("inf")},
+        {"sweeps_per_exchange": 0},
+        {"sweep_length": 0},
+    ],
+)
+def test_parallel_tempering_rejects_bad_parameters(kwargs):
+    args = {"num_replicas": 4, "stop": stop(10), **kwargs}
+    with pytest.raises(ValueError):
+        optopus.ParallelTempering(**args)
+
+
 def test_breakout_local_search():
     mc = optopus.MaxCut.from_edges(TRIANGLE)
     bls = optopus.BreakoutLocalSearch((6, 100), 1_000, 20, 0.8, 0.5, stop(1_000))

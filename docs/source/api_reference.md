@@ -112,6 +112,9 @@ the `neighbor` argument.
 .. autoclass:: optopus.PopulationAnnealing
    :members:
 
+.. autoclass:: optopus.ParallelTempering
+   :members:
+
 .. autoclass:: optopus.ReinforcementLearningSearch
    :members:
 ```

@@ -4,8 +4,9 @@ use optopus::building_blocks::representation::BinaryRelaxation;
 use optopus::heuristic::reinforcement_learning::feature::NUM_FEATURES;
 use optopus::heuristic::{
     AdaptiveLargeNeighborhoodSearch, AdaptivePerturbation, BreakoutLocalSearch, GeneticAlgorithm,
-    Iterated, ParentSelection, PopulationAnnealing as OptPopulationAnnealing,
-    ReinforcementLearningSearch, Restart, RewardShaping, Sequential, SubProblemBasedCrossover,
+    Iterated, ParallelTempering as OptParallelTempering, ParentSelection,
+    PopulationAnnealing as OptPopulationAnnealing, ReinforcementLearningSearch, Restart,
+    RewardShaping, Sequential, SubProblemBasedCrossover,
 };
 use optopus::prelude::{
     BangBangSimulatedAnnealing, BeamSearch, EnabledTabu, Evaluate, Heuristic,
@@ -125,6 +126,13 @@ pub enum HeuristicKind {
         reset_period: Option<usize>,
         sweep_length: Option<usize>,
     },
+    ParallelTempering {
+        num_replicas: usize,
+        beta_min: f64,
+        beta_max: f64,
+        sweeps_per_exchange: usize,
+        sweep_length: Option<usize>,
+    },
     BreakoutLocalSearch {
         tabu_tenure: (u64, u64),
         t: u64,
@@ -170,6 +178,7 @@ impl HeuristicKind {
             Self::ComposedBreakoutLocalSearch { .. } => "BreakoutLocalSearch",
             Self::WalkSat { .. } => "WalkSat",
             Self::PopulationAnnealing { .. } => "PopulationAnnealing",
+            Self::ParallelTempering { .. } => "ParallelTempering",
             Self::BreakoutLocalSearch { .. } => "BreakoutLocalSearch",
             Self::LinKernighanHelsgaun { .. } => "LinKernighanHelsgaun",
             Self::AdaptiveLargeNeighborhoodSearch { .. } => "AdaptiveLargeNeighborhoodSearch",
@@ -292,6 +301,25 @@ where
             Ok(Box::new(match sweep_length {
                 Some(length) => pa.with_sweep_length(*length),
                 None => pa,
+            }))
+        }
+        HeuristicKind::ParallelTempering {
+            num_replicas,
+            beta_min,
+            beta_max,
+            sweeps_per_exchange,
+            sweep_length,
+        } => {
+            let pt = OptParallelTempering::<P, N>::new(
+                cond,
+                *num_replicas,
+                *beta_min,
+                *beta_max,
+                *sweeps_per_exchange,
+            );
+            Ok(Box::new(match sweep_length {
+                Some(length) => pt.with_sweep_length(*length),
+                None => pt,
             }))
         }
         other => Err(unsupported(other)),
@@ -1005,6 +1033,7 @@ pub fn spec_from_py(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Heuristi
         ReinforcementLearningSearch,
         WalkSat,
         PopulationAnnealing,
+        ParallelTempering,
         BreakoutLocalSearch,
         LinKernighanHelsgaun,
         AdaptiveLargeNeighborhoodSearch,

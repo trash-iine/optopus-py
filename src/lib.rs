@@ -4,8 +4,8 @@
 //! Vrp with its VehicleType, GraphColoring, Formula), the Graph type behind the
 //! graph-based problems, generic heuristics (LocalSearch, SimulatedAnnealing, TabuSearch,
 //! LateAcceptanceHillClimbing, RandomWalk, BangBangSimulatedAnnealing, BeamSearch,
-//! PopulationAnnealing, ReinforcementLearningSearch), composed ones built from other
-//! heuristics (VariableNeighborhoodSearch, Sequential, Iterated, Restart,
+//! PopulationAnnealing, ParallelTempering, ReinforcementLearningSearch), composed ones built
+//! from other heuristics (VariableNeighborhoodSearch, Sequential, Iterated, Restart,
 //! GeneticAlgorithm, BreakoutLocalSearch.from_parts) and problem-specific ones
 //! (WalkSat, BreakoutLocalSearch, LinKernighanHelsgaun,
 //! AdaptiveLargeNeighborhoodSearch, HybridGeneticSearch) as Python classes, plus the
@@ -59,6 +59,7 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::ReinforcementLearningSearch>()?;
     m.add_class::<heuristic::WalkSat>()?;
     m.add_class::<heuristic::PopulationAnnealing>()?;
+    m.add_class::<heuristic::ParallelTempering>()?;
     m.add_class::<heuristic::BreakoutLocalSearch>()?;
     m.add_class::<heuristic::LinKernighanHelsgaun>()?;
     m.add_class::<heuristic::AdaptiveLargeNeighborhoodSearch>()?;

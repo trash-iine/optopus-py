@@ -2,8 +2,8 @@
 
 The generic heuristics also run on a problem you define in Python. `LocalSearch`,
 `SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `TabuSearch`,
-`LateAcceptanceHillClimbing`, `RandomWalk`, `BeamSearch`, `PopulationAnnealing` and
-`ReinforcementLearningSearch` accept one, and so do the composed heuristics
+`LateAcceptanceHillClimbing`, `RandomWalk`, `BeamSearch`, `PopulationAnnealing`,
+`ParallelTempering` and `ReinforcementLearningSearch` accept one, and so do the composed heuristics
 (`VariableNeighborhoodSearch`, `Sequential`, `Iterated`, `Restart`, `GeneticAlgorithm`,
 `BreakoutLocalSearch.from_parts`). With the ruin methods below, so does
 `AdaptiveLargeNeighborhoodSearch`. The search loop stays in Rust and calls back into your objects for everything that
@@ -61,9 +61,9 @@ rejected and makes no move, and `LocalSearch` stops as at a local optimum. A ten
 the neighborhood leaves the search idle until prohibitions expire.
 
 `random_neighbor` returning `None` means the solution has no move in that neighborhood.
-`SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `LateAcceptanceHillClimbing` and
-`PopulationAnnealing` end the run there, and `RandomWalk` counts the step as rejected and tries
-again. Return `None` only when there truly is no move; a neighborhood that is empty only
+`SimulatedAnnealing`, `BangBangSimulatedAnnealing` and `LateAcceptanceHillClimbing` end the run
+there, `PopulationAnnealing` and `ParallelTempering` skip the proposal and carry on with the next,
+and `RandomWalk` counts the step as rejected and tries again. Return `None` only when there truly is no move; a neighborhood that is empty only
 sometimes, such as a swap between bins when every item shares one, is better merged with one
 that always has a move.
 

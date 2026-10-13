@@ -12,6 +12,10 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `ParallelTempering`, replica exchange Monte Carlo: `num_replicas` replicas on a geometric
+  ladder of inverse temperatures from `beta_min` to `beta_max` run Metropolis sweeps, and
+  neighbouring replicas trade places. A generic heuristic, so it takes a `neighbor` and runs on
+  every problem, Python problems included.
 - `BranchAndBound`, which proves the best solution optimal on `MaxCut`, `Qubo`, `Sat`,
   `VertexCover` and `Formula`. Another heuristic searches each node, the problem's own included
   (`WalkSat`, `BreakoutLocalSearch`), and a relaxation prunes it: `"Binary"` on the binary
@@ -158,6 +162,9 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Fixed
 
+- The guide to problems written in Python said `PopulationAnnealing` ends the run when
+  `random_neighbor` returns `None`. It skips that proposal and carries on, as
+  `ParallelTempering` does.
 - `Sat` counts a clause that holds a variable twice, repeated as in `[2, 2]` or negated as in
   `[1, -1]`, as one clause. Moves priced such a clause wrongly, so a run on one could report
   an objective other than the number of clauses its solution satisfies. Fixed in optopus

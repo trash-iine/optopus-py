@@ -12,7 +12,7 @@ executing in native Rust.
   graph generators and periodic lattices to feed the graph-based ones.
 - **Generic heuristics** that work with any problem: `LocalSearch`, `SimulatedAnnealing`,
   `BangBangSimulatedAnnealing`, `TabuSearch`, `LateAcceptanceHillClimbing`, `RandomWalk`,
-  `BeamSearch`, `PopulationAnnealing`, and `ReinforcementLearningSearch`.
+  `BeamSearch`, `PopulationAnnealing`, `ParallelTempering`, and `ReinforcementLearningSearch`.
 - **Composed heuristics** built from other heuristic instances: `VariableNeighborhoodSearch`,
   `Sequential`, `Iterated`, `Restart`, `GeneticAlgorithm`, and `BreakoutLocalSearch.from_parts`.
 - **Problem-specific heuristics** that exploit one problem's structure: `WalkSat`,

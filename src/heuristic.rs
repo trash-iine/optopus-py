@@ -745,6 +745,145 @@ impl PopulationAnnealing {
     }
 }
 
+/// Parallel tempering (replica exchange Monte Carlo): replicas at fixed temperatures run
+/// Metropolis sweeps, and replicas at neighbouring temperatures trade places.
+///
+/// The inverse temperatures form a geometric ladder from ``beta_min`` (hottest) to
+/// ``beta_max`` (coldest), and nothing cools. Each round sweeps every replica
+/// ``sweeps_per_exchange`` times at its own temperature, then tries to exchange the replicas
+/// at temperatures ``k`` and ``k + 1`` with probability
+/// ``min(1, exp((β_k − β_{k+1})(E_k − E_{k+1})))``, the even pairs on one round and the odd
+/// pairs on the next. A configuration a hot replica finds in a good basin walks down the
+/// ladder to where it is refined, and one stuck at the cold end walks up to where it can
+/// leave. Works with every problem type; the neighborhood drives the sweeps.
+///
+/// The temperatures are in the units of the objective. ``beta_max`` should be cold enough that
+/// the coldest replica is a descent, ``beta_min`` hot enough that the hottest moves freely,
+/// and the ladder dense enough that neighbouring replicas overlap in energy, or a configuration
+/// never crosses it.
+///
+/// Args:
+///     num_replicas (int): Number of replicas on the ladder (``>= 2``).
+///     stop (StopCondition): Stopping criterion. One iteration is one sweep of every
+///         replica, so a round counts ``sweeps_per_exchange`` iterations.
+///     beta_min (float): Inverse temperature of the hottest replica (``> 0``). Defaults to
+///         0.1.
+///     beta_max (float): Inverse temperature of the coldest replica, finite and above
+///         ``beta_min``. Defaults to 5.0.
+///     sweeps_per_exchange (int): Metropolis sweeps per replica between two exchange
+///         attempts (``>= 1``). Defaults to 1.
+///     neighbor (str): Neighborhood move driving the Metropolis sweeps. Defaults to
+///         ``"Flip"``, the binary problems' move.
+///     sweep_length (int | None): Proposals per sweep. Defaults to None, which counts the
+///         neighborhood once per run -- O(n) for a single-variable move, but O(n²) for a
+///         pairwise one such as ``"TwoOpt"``, where pinning a length is worth it.
+///
+/// Raises:
+///     ValueError: If ``num_replicas`` is below 2, the betas are not
+///         ``0 < beta_min < beta_max < inf``, or ``sweeps_per_exchange`` or ``sweep_length``
+///         is 0.
+#[pyclass(module = "optopus")]
+pub struct ParallelTempering {
+    num_replicas: usize,
+    beta_min: f64,
+    beta_max: f64,
+    sweeps_per_exchange: usize,
+    neighbor: String,
+    sweep_length: Option<usize>,
+    stop: StopCondition,
+}
+
+impl ParallelTempering {
+    pub(crate) fn to_spec(&self, _py: Python<'_>) -> PyResult<HeuristicSpec> {
+        Ok(HeuristicSpec {
+            kind: HeuristicKind::ParallelTempering {
+                num_replicas: self.num_replicas,
+                beta_min: self.beta_min,
+                beta_max: self.beta_max,
+                sweeps_per_exchange: self.sweeps_per_exchange,
+                sweep_length: self.sweep_length,
+            },
+            neighbor: self.neighbor.clone(),
+            stop: self.stop.clone(),
+        })
+    }
+}
+
+#[pymethods]
+impl ParallelTempering {
+    #[new]
+    #[pyo3(signature = (
+        num_replicas,
+        stop,
+        beta_min=0.1,
+        beta_max=5.0,
+        sweeps_per_exchange=1,
+        neighbor="Flip",
+        sweep_length=None,
+    ))]
+    fn new(
+        num_replicas: usize,
+        stop: StopCondition,
+        beta_min: f64,
+        beta_max: f64,
+        sweeps_per_exchange: usize,
+        neighbor: &str,
+        sweep_length: Option<usize>,
+    ) -> PyResult<Self> {
+        if num_replicas < 2 {
+            return Err(PyValueError::new_err("'num_replicas' must be at least 2"));
+        }
+        // `ParallelTempering::new` asserts this ladder, so a bad one would panic.
+        if !(beta_min > 0.0 && beta_min < beta_max && beta_max.is_finite()) {
+            return Err(PyValueError::new_err(format!(
+                "need 0 < beta_min < beta_max < inf, got {beta_min} and {beta_max}"
+            )));
+        }
+        if sweeps_per_exchange == 0 {
+            return Err(PyValueError::new_err(
+                "'sweeps_per_exchange' must be at least 1",
+            ));
+        }
+        if sweep_length == Some(0) {
+            return Err(PyValueError::new_err("'sweep_length' must be at least 1"));
+        }
+        Ok(Self {
+            num_replicas,
+            beta_min,
+            beta_max,
+            sweeps_per_exchange,
+            neighbor: neighbor.to_string(),
+            sweep_length,
+            stop,
+        })
+    }
+
+    /// Run the heuristic on a problem and return an aggregated report.
+    ///
+    /// Args:
+    ///     problem: The problem instance to solve.
+    ///     runs (int): Number of independent runs to perform. Defaults to 1.
+    ///     seed (int | None): Master seed. When set, runs are deterministic
+    ///         (run 0 uses ``seed`` directly).
+    ///
+    /// Returns:
+    ///     RunReport: Aggregated statistics over all runs.
+    ///
+    /// Raises:
+    ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
+    ///     TypeError: If ``problem`` is not a problem instance.
+    #[pyo3(signature = (problem, runs=1, seed=None))]
+    fn run(
+        &self,
+        py: Python<'_>,
+        problem: &Bound<'_, PyAny>,
+        runs: usize,
+        seed: Option<u64>,
+    ) -> PyResult<RunReport> {
+        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+    }
+}
+
 /// Breakout local search: a descent to a local optimum interleaved with adaptive
 /// perturbations whose strength grows the longer the search stagnates.
 ///

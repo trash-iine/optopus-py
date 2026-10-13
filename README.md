@@ -40,6 +40,7 @@ so any heuristic runs on it and `lift` maps the answer back.
 - `RandomWalk`
 - `BeamSearch`
 - `PopulationAnnealing` — replica population along an annealing schedule
+- `ParallelTempering` — replicas on a fixed temperature ladder that trade places
 - `ReinforcementLearningSearch` — a softmax policy over move features, learned online
 
 **Composed heuristics** — built from other heuristic instances, for every problem:

@@ -43,6 +43,7 @@ different amounts of work:
 | `SimulatedAnnealing`, `BangBangSimulatedAnnealing`, `LateAcceptanceHillClimbing`, `RandomWalk` | scores one random move |
 | `BeamSearch` | expands the whole neighborhood of every candidate in the beam |
 | `PopulationAnnealing` | one temperature step: resampling plus `sweeps_per_step` sweeps of every replica |
+| `ParallelTempering` | one sweep of every replica; a round of `sweeps_per_exchange` sweeps and one exchange counts that many |
 | `GeneticAlgorithm`, `HybridGeneticSearch` | produces one offspring |
 | `AdaptiveLargeNeighborhoodSearch` | ruins and recreates the solution once |
 | `Sequential`, `Iterated`, `VariableNeighborhoodSearch`, `Restart` | counts the iterations of their steps, see [Composing heuristics](#composing-heuristics) |
@@ -84,7 +85,7 @@ Otherwise pick a generic heuristic by what the search landscape needs:
 | As `SimulatedAnnealing`, with one parameter instead of a temperature schedule | `LateAcceptanceHillClimbing` |
 | Small neighborhoods, or a landscape where every good move goes through a worse solution (for instance `Formula` with `"Eq"` constraints) | `TabuSearch` |
 | A search that stalls in one basin | `Iterated` or `VariableNeighborhoodSearch` around one of the above |
-| Diversity across many candidates | `PopulationAnnealing`, `GeneticAlgorithm` |
+| Diversity across many candidates | `PopulationAnnealing`, `ParallelTempering`, `GeneticAlgorithm` |
 
 `LocalSearch` and `TabuSearch` score every move of the neighborhood at each step. That is cheap
 for a flip over a few thousand variables and expensive for a pairwise move such as `"TwoOpt"` or
@@ -167,6 +168,17 @@ Keeps `population_size` replicas and raises the inverse temperature β from `ini
 `"Flip"`, which suits the binary problems; pass the problem's own move otherwise. With a pairwise
 move such as `"TwoOpt"`, set `sweep_length`, because the default counts the whole neighborhood
 once per run.
+
+### ParallelTempering
+
+Keeps `num_replicas` replicas on a fixed ladder of inverse temperatures, geometric from
+`beta_min` (hottest) to `beta_max` (coldest), and lets neighbouring replicas trade places after
+every `sweeps_per_exchange` sweeps. Nothing cools, which is the difference from
+`PopulationAnnealing`. The temperatures are in the units of the objective: `beta_max` should
+make the coldest replica a descent, `beta_min` let the hottest move freely, and the replicas
+should be close enough that neighbours overlap in energy, or a good configuration never travels
+down the ladder. When widening the range, add replicas with it. `neighbor` and `sweep_length`
+work as in `PopulationAnnealing`.
 
 ### Problem-specific heuristics
 
