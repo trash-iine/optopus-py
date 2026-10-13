@@ -240,8 +240,9 @@ lkh = optopus.LinKernighanHelsgaun(stop=optopus.StopCondition(max_iteration=1_00
 print(lkh.run(tsp, seed=42).best_objective)       # 4.0 — the square's perimeter
 ```
 
-`AdaptiveLargeNeighborhoodSearch` also runs on `Tsp` and `Vrp`, and `HybridGeneticSearch` on
-`Vrp`; see the [API reference](api_reference.md) for their parameters.
+`AdaptiveLargeNeighborhoodSearch` also runs on `Tsp`, `Vrp`, `FlowShop` and `BinPacking`, and
+`HybridGeneticSearch` on `Vrp`; [Problem-specific heuristics](heuristics_specific.md) has every
+one's parameters and an example.
 
 ```{note}
 `BreakoutLocalSearch`'s `tabu_tenure` means the same prohibition length it does under
@@ -251,8 +252,12 @@ print(lkh.run(tsp, seed=42).best_objective)       # 4.0 — the square's perimet
 
 ## Next steps
 
-- [Built-in problems](problems.md) — choosing a problem, its constraints, and what a run reports.
+- [Running a search](running.md) — runs, seeds, stop conditions, and every result field.
+- [Built-in problems](problems.md) — choosing a problem, its constraints, and an example of each.
 - [Modeling with Formula](formula.md) — polynomials, constraints and penalty weights.
-- [Choosing a heuristic](heuristics.md) — which heuristic to use and how to set it.
-- [API reference](api_reference.md) — every class, method, parameter, and result field.
-- [Examples](examples.md) — multi-run statistics, comparing heuristics, reproducibility.
+- [Choosing a heuristic](heuristics.md) — which heuristic to use and how to set it, with a page
+  per kind: [generic](heuristics_generic.md), [composed](heuristics_composed.md),
+  [problem-specific](heuristics_specific.md) and [exact](heuristics_exact.md).
+- [Graphs and test instances](graphs_and_instances.md) — random graphs, planted optima, kernels.
+- [Examples](examples.md) — multi-run statistics and comparing heuristics.
+- [API reference](api_reference.md) — every class, method and parameter.

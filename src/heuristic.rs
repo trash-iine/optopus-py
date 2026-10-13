@@ -605,8 +605,8 @@ impl WalkSat {
 ///
 /// Args:
 ///     population_size (int): Number of replicas (``>= 2``).
-///     stop (StopCondition): Stopping criterion. One iteration advances the whole
-///         population by ``sweeps_per_step`` sweeps.
+///     stop (StopCondition): Stopping criterion. One iteration is one sweep of every
+///         replica, so a step counts ``sweeps_per_step`` iterations.
 ///     initial_beta (float): Starting inverse temperature ``β`` (``> 0``). Defaults to 0.1.
 ///     delta_beta (float): Increment added to ``β`` at each step (``> 0``). Defaults to 0.02.
 ///     sweeps_per_step (int): Metropolis sweeps per replica per step (``>= 1``).
@@ -864,7 +864,8 @@ impl ParallelTempering {
 ///     t (int): Stagnation threshold; beyond it the perturbation turns strongly diversifying.
 ///     l0 (int): Base perturbation strength (number of moves), ``>= 1``.
 ///     p0 (float): Floor on the probability of a directed (rather than random) perturbation.
-///     q (float): Decay rate of that probability as stagnation grows.
+///     q (float): Share of the directed perturbations that flip a vertex rather than swap
+///         two, in ``[0, 1]``.
 ///     stop (StopCondition): Stopping criterion.
 #[pyclass(module = "optopus")]
 pub struct BreakoutLocalSearch {
@@ -1803,8 +1804,9 @@ impl BranchAndBound {
 ///         ``RandomWalk``).
 ///     stop (StopCondition): Stopping criterion.
 ///     crossover (str | None): The problem's crossover by name. ``None`` picks the problem's
-///         default, ``"Uniform"`` for the binary problems, ``"Order"`` for
-///         ``Tsp`` and ``Vrp``, ``"Ppx"`` for ``JobShopScheduling``.
+///         default: ``"Uniform"`` for the binary problems, ``Formula`` and
+///         ``GraphColoring``, ``"Order"`` for ``Tsp``, ``Vrp``, ``FlowShop`` and ``Qap``,
+///         ``"Ppx"`` for ``JobShopScheduling``, ``"Group"`` for ``BinPacking``.
 ///         ``"SubProblem"`` solves the sub-problem the parents disagree on with
 ///         ``sub_heuristic``, on ``MaxCut``, ``Qubo``, ``Sat``, ``VertexCover``,
 ///         ``Tsp`` and ``Formula``. A Python problem has one crossover, its

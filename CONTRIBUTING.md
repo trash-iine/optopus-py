@@ -86,7 +86,14 @@ is a digest of this document for AI agents; where the two disagree, this documen
 - Sphinx + MyST (Markdown) + furo. Build with `uv run invoke docs`, which rebuilds the extension
   first because the API reference is generated from it. `--strict` turns warnings into errors,
   `--clean` rebuilds from scratch, `--open` opens the result.
-- New pages go in `docs/source/` and must be added to the `{toctree}` in `docs/source/index.md`.
+- New pages go in `docs/source/` and must be added to one of the `{toctree}`s in
+  `docs/source/index.md`.
+- `tests/test_docs.py` runs every `python` code block of a page, in order and in one namespace,
+  from a temporary directory (ADR 0007). A block may use an earlier block of the same page, never
+  another page's, and writes any file it reads. The test does not compare printed values: run a
+  new example and check the values its comments claim.
+- Versioned wheel URLs appear only in `README.md` and `installation.md`, the files
+  `invoke set-version` rewrites; the top page installs from Git without a version.
 - Pushes to `main` deploy the docs to GitHub Pages; pull requests only build them.
 
 ## Architecture decision records (ADRs)

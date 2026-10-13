@@ -2,7 +2,8 @@
 
 This reference is generated automatically from the docstrings of the compiled `optopus` extension
 (authored as Rust `///` doc comments). For a narrative introduction, see
-[Quickstart](quickstart.md) and [Examples](examples.md).
+[Quickstart](quickstart.md); every class below also has a section with an example on the guide
+pages linked from each heading.
 
 `optopus.__version__` is the installed package's version, as a string such as `"0.1.0"`.
 
@@ -79,7 +80,8 @@ Problems written in Python are plain objects, see [Problems written in Python](p
 `MaxCut`, `VertexCover` and `GraphColoring` are defined over an undirected weighted graph. Build
 one explicitly from an edge list, draw one from a random graph model (Erdős-Rényi,
 Barabási-Albert, Watts-Strogatz), or take a periodic lattice (`grid_torus_2d`, `grid_torus_3d`),
-then hand it to the problem's `from_graph`.
+then hand it to the problem's `from_graph`. Examples:
+[Graphs and test instances](graphs_and_instances.md).
 
 ```{eval-rst}
 .. autoclass:: optopus.Graph
@@ -94,7 +96,7 @@ A *heuristic* describes **how** to search. Every heuristic exposes the same
 ### Generic
 
 These work with every problem type, Python problems included. The neighborhood is selected with
-the `neighbor` argument.
+the `neighbor` argument. Examples: [Generic heuristics](heuristics_generic.md).
 
 ```{eval-rst}
 .. autoclass:: optopus.LocalSearch
@@ -132,7 +134,7 @@ the `neighbor` argument.
 
 These take other heuristic instances as their steps and run on every problem the steps fit.
 `GeneticAlgorithm` also needs a crossover, which each built-in problem has and a Python problem
-provides as a method.
+provides as a method. Examples: [Composed heuristics](heuristics_composed.md).
 
 ```{eval-rst}
 .. autoclass:: optopus.VariableNeighborhoodSearch
@@ -159,7 +161,7 @@ see `BreakoutLocalSearch` below.
 `BranchAndBound` takes another heuristic too, and searches with it until the best solution is
 proven optimal. It runs on `MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`, and reports
 what it proved in `RunResult.proven_optimal` and `RunResult.dual_bound`. See
-[Proving optimality](heuristics.md#proving-optimality).
+[Exact search](heuristics_exact.md).
 
 ```{eval-rst}
 .. autoclass:: optopus.BranchAndBound
@@ -171,6 +173,7 @@ what it proved in `RunResult.proven_optimal` and `RunResult.dual_bound`. See
 These exploit the structure of one problem type and take no `neighbor` argument. Running one on a
 different problem raises `ValueError`. `AdaptiveLargeNeighborhoodSearch` and
 `GreedyRandomizedConstruction` also run on a Python problem that defines the ruin methods.
+Examples: [Problem-specific heuristics](heuristics_specific.md).
 
 ```{eval-rst}
 .. autoclass:: optopus.WalkSat
@@ -202,6 +205,9 @@ does are listed per problem in [Neighborhoods](problems.md#neighborhoods).
 
 ## Stop condition
 
+How the limits combine and what one iteration is for each heuristic:
+[Stopping](running.md#stopping).
+
 ```{eval-rst}
 .. autoclass:: optopus.StopCondition
    :members:
@@ -211,7 +217,8 @@ does are listed per problem in [Neighborhoods](problems.md#neighborhoods).
 
 Every `run` call returns a `RunReport` aggregating one or more `RunResult` entries. What the
 objective values mean for each problem, penalties included, is in
-[What a run reports](problems.md#what-a-run-reports).
+[What a run reports](problems.md#what-a-run-reports), and every field with an example in
+[The report](running.md#the-report).
 
 ```{eval-rst}
 .. autoclass:: optopus.RunReport

@@ -59,6 +59,8 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
   commented `# noqa: <RULE>`.
 - Tests: tiny instances with known optima, `pytest.mark.parametrize` for variants and error paths,
   hermetic (no network, writes only under `tmp_path`).
-- Docs: new pages must be added to the toctree in `docs/source/index.md`.
+- Docs: new pages must be added to a toctree in `docs/source/index.md`. Every `python` block in
+  `docs/source/` runs under `tests/test_docs.py`, so a page's examples must run on their own
+  (ADR 0007).
 - Decisions about conventions, tooling, dependencies or architecture get an ADR in the same PR.
   Accepted ADRs are superseded by new ones, never rewritten.

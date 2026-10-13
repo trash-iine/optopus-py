@@ -23,11 +23,13 @@ Do every item that applies:
 ## 2. Add a page
 
 - Write it as Markdown (MyST) in `docs/source/`.
-- Add it to the `{toctree}` in `docs/source/index.md`. A missing entry shows up in step 3 as
-  "document isn't included in any toctree".
+- Add it to the matching `{toctree}` in `docs/source/index.md`. A missing entry shows up in
+  step 3 as "document isn't included in any toctree".
 - Setup and installation steps belong in `README.md` / `installation.md`; do not duplicate them
-  elsewhere.
-- Code examples should run as shown and print what their comments claim.
+  elsewhere (CONTRIBUTING.md, "Documentation", on the top page's unversioned install).
+- Code examples should run as shown and print what their comments claim. Follow the rules for
+  them in CONTRIBUTING.md, "Documentation", and run `uv run --no-sync pytest tests/test_docs.py`
+  after a build.
 
 ## 3. Build
 
