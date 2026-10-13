@@ -184,6 +184,12 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Fixed
 
+- The docs said one `PopulationAnnealing` iteration is a whole temperature step. It is one
+  sweep of every replica, so a step counts `sweeps_per_step` iterations and a short run with the
+  defaults stays hot.
+- `BreakoutLocalSearch`'s `q` was documented as a decay rate. It is the share of directed
+  perturbations that flip a vertex rather than swap two. `GeneticAlgorithm`'s docstring now
+  lists the default crossover of every problem.
 - The guide to problems written in Python said `PopulationAnnealing` ends the run when
   `random_neighbor` returns `None`. It skips that proposal and carries on, as
   `ParallelTempering` does.
