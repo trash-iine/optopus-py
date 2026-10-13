@@ -21,6 +21,7 @@ mod python_problem;
 mod result;
 mod runner;
 mod stop_condition;
+mod validate;
 
 use pyo3::prelude::*;
 

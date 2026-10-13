@@ -30,19 +30,11 @@ CI_CHECKS = (
     ("pytest", "pytest"),
 )
 
-# The wheel filenames release.yml produces. MACOSX_DEPLOYMENT_TARGET is pinned
-# there so these platform tags stay predictable, because README.md and the
-# installation page spell them out in full rather than linking a "latest" URL
+# Files carrying v-prefixed tags and versioned wheel filenames. They spell the
+# filenames release.yml produces out in full rather than linking a "latest" URL
 # (GitHub's /releases/latest/download/ still needs the exact filename, and ours
-# carries the version).
-ASSET_TEMPLATES = (
-    "optopus-{v}-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-    "optopus-{v}-cp39-abi3-macosx_11_0_arm64.whl",
-    "optopus-{v}-cp39-abi3-macosx_11_0_x86_64.whl",
-    "optopus-{v}.tar.gz",
-)
-
-# Files carrying v-prefixed tags and versioned wheel filenames.
+# carries the version); MACOSX_DEPLOYMENT_TARGET is pinned there so the platform
+# tags stay predictable.
 URL_FILES = ("README.md", "docs/source/installation.md")
 
 
@@ -191,9 +183,8 @@ def set_version(c, version, date=None):
         path = ROOT / rel
         before = path.read_text()
         after = before.replace(f"v{old}", f"v{version}")
-        for template in ASSET_TEMPLATES:
-            after = after.replace(template.format(v=old), template.format(v=version))
-        after = after.replace(f"optopus-{old}-", f"optopus-{version}-")
+        # Every wheel ("optopus-X.Y.Z-cp39-...") and the sdist ("optopus-X.Y.Z.tar.gz").
+        after = re.sub(rf"optopus-{re.escape(old)}(?=[-.])", f"optopus-{version}", after)
         path.write_text(after)
         changed = sum(1 for a, b in zip(before.splitlines(), after.splitlines()) if a != b)
         print(f"  {rel:17} {changed} line(s) retargeted")

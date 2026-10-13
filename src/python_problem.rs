@@ -48,7 +48,9 @@ use optopus::prelude::{
 };
 use optopus::trait_defs::{Crossover, Distance};
 use optopus::trait_defs::{LocalRepair, Ruinable};
+use pyo3::call::PyCallArgs;
 use pyo3::exceptions::{PyTypeError, PyValueError};
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyMapping, PyTuple};
 use rand::Rng;
@@ -110,23 +112,25 @@ struct Shared {
 impl Shared {
     /// Runs `f`, recording its exception and returning `None` in its place.
     fn call<T>(&self, f: impl FnOnce(Python<'_>) -> PyResult<T>) -> Option<T> {
-        if self.error.lock().unwrap().is_some() {
+        if self.failed() {
             return None;
         }
-        Python::attach(f)
-            .map_err(|e| {
-                let mut slot = self.error.lock().unwrap();
-                if slot.is_none() {
-                    *slot = Some(e);
-                }
-            })
-            .ok()
+        Python::attach(f).map_err(|e| self.record(e)).ok()
+    }
+
+    fn failed(&self) -> bool {
+        self.error.lock().unwrap().is_some()
+    }
+
+    /// Keeps the first exception of a run and drops later ones, which are
+    /// usually consequences of it.
+    fn record(&self, err: PyErr) {
+        self.error.lock().unwrap().get_or_insert(err);
     }
 }
 
 /// A problem implemented in Python.
 pub struct PyProblem {
-    obj: Py<PyAny>,
     shared: Arc<Shared>,
     neighborhoods: Vec<Neighborhood>,
     has_crossover: bool,
@@ -189,7 +193,6 @@ impl PyProblem {
         }
 
         Ok(Self {
-            obj: obj.clone().unbind(),
             shared: Arc::new(Shared {
                 obj: obj.clone().unbind(),
                 minimize,
@@ -212,7 +215,7 @@ impl PyProblem {
     /// Fails unless the problem has every method in [`RUIN_METHODS`].
     pub fn check_ruinable(&self) -> Result<(), String> {
         let missing: Vec<_> = Python::attach(|py| {
-            let obj = self.obj.bind(py);
+            let obj = self.shared.obj.bind(py);
             RUIN_METHODS
                 .iter()
                 .filter(|m| !obj.hasattr(**m).unwrap_or(false))
@@ -267,19 +270,6 @@ impl PyProblem {
         self.shared.error.lock().unwrap().take()
     }
 
-    fn failed(&self) -> bool {
-        self.shared.error.lock().unwrap().is_some()
-    }
-
-    /// Keeps the first exception of a run and drops later ones, which are
-    /// usually consequences of it.
-    fn record(&self, err: PyErr) {
-        let mut slot = self.shared.error.lock().unwrap();
-        if slot.is_none() {
-            *slot = Some(err);
-        }
-    }
-
     /// Runs `f`, recording its exception and returning `None` in its place.
     fn call<T>(&self, f: impl FnOnce(Python<'_>) -> PyResult<T>) -> Option<T> {
         self.shared.call(f)
@@ -290,12 +280,12 @@ impl PyProblem {
     fn call_method<T: for<'a, 'py> FromPyObject<'a, 'py>>(
         &self,
         name: &str,
-        args: impl for<'py> FnOnce(Python<'py>) -> Vec<Bound<'py, PyAny>>,
+        args: impl for<'py> PyCallArgs<'py>,
         fallback: T,
     ) -> T {
         self.call(|py| {
-            let args = PyTuple::new(py, args(py))?;
-            self.obj
+            self.shared
+                .obj
                 .bind(py)
                 .call_method1(name, args)?
                 .extract()
@@ -325,9 +315,10 @@ impl PyProblem {
     }
 
     fn objective(&self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<f64> {
-        self.obj
+        self.shared
+            .obj
             .bind(py)
-            .call_method1("objective", (value,))?
+            .call_method1(intern!(py, "objective"), (value,))?
             .extract()
     }
 
@@ -400,7 +391,11 @@ impl ProblemTrait for PyProblem {
         let made = self.call(|py| {
             let py_rng = py.import("random")?.getattr("Random")?.call1((seed,))?;
             *self.rng.lock().unwrap() = Some(py_rng.clone().unbind());
-            let value = self.obj.bind(py).call_method1("new_solution", (py_rng,))?;
+            let value = self
+                .shared
+                .obj
+                .bind(py)
+                .call_method1("new_solution", (py_rng,))?;
             self.solution(py, value)
         });
         made.unwrap_or_else(|| self.placeholder())
@@ -443,21 +438,24 @@ impl<const K: usize> PyMove<K> {
         mv: Bound<'_, PyAny>,
     ) -> PyResult<Self> {
         let nb = &prob.neighborhoods[K];
-        let problem = prob.obj.bind(py);
+        let problem = prob.shared.obj.bind(py);
         let delta = if nb.has_delta {
             nb.obj
                 .bind(py)
-                .call_method1("delta", (problem, sol.value.bind(py), &mv))?
+                .call_method1(intern!(py, "delta"), (problem, sol.value.bind(py), &mv))?
                 .extract()?
         } else {
             let next = nb
                 .obj
                 .bind(py)
-                .call_method1("apply", (problem, sol.value.bind(py), &mv))?;
+                .call_method1(intern!(py, "apply"), (problem, sol.value.bind(py), &mv))?;
             prob.objective(py, &next)? - sol.objective
         };
         let tabu_keys = if nb.has_tabu_keys && prob.record_tabu.load(Ordering::Relaxed) {
-            let keys = nb.obj.bind(py).call_method1("tabu_keys", (problem, &mv))?;
+            let keys = nb
+                .obj
+                .bind(py)
+                .call_method1(intern!(py, "tabu_keys"), (problem, &mv))?;
             // One key, or a list of them.
             if keys.cast::<PyList>().is_ok() {
                 keys.try_iter()?
@@ -504,8 +502,12 @@ impl<const K: usize> MoveToNeighbor<PyProblem> for PyMove<K> {
     fn apply_to_solution(&self, prob: &PyProblem, sol: &mut PySolution) -> Result<(), OptError> {
         let next = prob.call(|py| {
             let value = prob.neighborhoods[K].obj.bind(py).call_method1(
-                "apply",
-                (prob.obj.bind(py), sol.value.bind(py), self.mv.bind(py)),
+                intern!(py, "apply"),
+                (
+                    prob.shared.obj.bind(py),
+                    sol.value.bind(py),
+                    self.mv.bind(py),
+                ),
             )?;
             prob.solution(py, value)
         });
@@ -525,7 +527,10 @@ impl<const K: usize> MoveToNeighbor<PyProblem> for PyMove<K> {
             prob.neighborhoods[K]
                 .obj
                 .bind(py)
-                .call_method1("neighbors", (prob.obj.bind(py), sol.value.bind(py)))?
+                .call_method1(
+                    intern!(py, "neighbors"),
+                    (prob.shared.obj.bind(py), sol.value.bind(py)),
+                )?
                 .try_iter()?
                 .map(|mv| Self::priced(prob, py, sol, mv?))
                 .collect::<PyResult<Vec<_>>>()
@@ -537,13 +542,13 @@ impl<const K: usize> MoveToNeighbor<PyProblem> for PyMove<K> {
     fn random_neighbor(prob: &PyProblem, sol: &PySolution, rng: &mut SmallRng) -> Option<Self> {
         let nb = &prob.neighborhoods[K];
         prob.call(|py| {
-            let problem = prob.obj.bind(py);
+            let problem = prob.shared.obj.bind(py);
             let value = sol.value.bind(py);
             let mv = if nb.has_random_neighbor {
-                let mv = nb
-                    .obj
-                    .bind(py)
-                    .call_method1("random_neighbor", (problem, value, prob.py_rng(py)))?;
+                let mv = nb.obj.bind(py).call_method1(
+                    intern!(py, "random_neighbor"),
+                    (problem, value, prob.py_rng(py)),
+                )?;
                 if mv.is_none() {
                     return Ok(None);
                 }
@@ -553,7 +558,7 @@ impl<const K: usize> MoveToNeighbor<PyProblem> for PyMove<K> {
                 let moves: Vec<_> = nb
                     .obj
                     .bind(py)
-                    .call_method1("neighbors", (problem, value))?
+                    .call_method1(intern!(py, "neighbors"), (problem, value))?
                     .try_iter()?
                     .collect::<PyResult<_>>()?;
                 if moves.is_empty() {
@@ -619,7 +624,7 @@ impl Crossover<PyProblem> for PyCrossover {
         _rng: &mut SmallRng,
     ) -> Result<PySolution, OptError> {
         prob.call(|py| {
-            let child = prob.obj.bind(py).call_method1(
+            let child = prob.shared.obj.bind(py).call_method1(
                 "crossover",
                 (sol1.value.bind(py), sol2.value.bind(py), prob.py_rng(py)),
             )?;
@@ -640,6 +645,7 @@ impl Ruinable for PyProblem {
     fn to_partial(&self, sol: &PySolution) -> Py<PyAny> {
         self.call(|py| {
             let p = self
+                .shared
                 .obj
                 .bind(py)
                 .call_method1("to_partial", (sol.value.bind(py),))?;
@@ -651,6 +657,7 @@ impl Ruinable for PyProblem {
     fn finish(&self, partial: &Py<PyAny>) -> PySolution {
         self.call(|py| {
             let value = self
+                .shared
                 .obj
                 .bind(py)
                 .call_method1("finish", (partial.bind(py),))?;
@@ -662,7 +669,8 @@ impl Ruinable for PyProblem {
     fn elements(&self, partial: &Py<PyAny>, out: &mut Vec<usize>) {
         out.clear();
         if let Some(elements) = self.call(|py| {
-            self.obj
+            self.shared
+                .obj
                 .bind(py)
                 .call_method1("elements", (partial.bind(py),))?
                 .try_iter()?
@@ -675,54 +683,28 @@ impl Ruinable for PyProblem {
 
     fn remove_all(&self, partial: &mut Py<PyAny>, set: &[usize]) {
         self.call(|py| {
-            self.obj
+            self.shared
+                .obj
                 .bind(py)
-                .call_method1("remove_all", (partial.bind(py), set.to_vec()))
+                .call_method1("remove_all", (partial.bind(py), set))
                 .map(drop)
         });
     }
 
     fn removal_gain(&self, partial: &Py<PyAny>, element: usize) -> f64 {
-        self.call_method(
-            "removal_gain",
-            |py| {
-                vec![
-                    partial.bind(py).clone(),
-                    element.into_pyobject(py).unwrap().into_any(),
-                ]
-            },
-            0.0,
-        )
+        self.call_method("removal_gain", (partial, element), 0.0)
     }
 
     fn relatedness(&self, a: usize, b: usize) -> f64 {
-        self.call_method(
-            "relatedness",
-            |py| {
-                vec![
-                    a.into_pyobject(py).unwrap().into_any(),
-                    b.into_pyobject(py).unwrap().into_any(),
-                ]
-            },
-            0.0,
-        )
+        self.call_method("relatedness", (a, b), 0.0)
     }
 
     fn num_buckets(&self, partial: &Py<PyAny>) -> usize {
-        self.call_method("num_buckets", |py| vec![partial.bind(py).clone()], 1)
+        self.call_method("num_buckets", (partial,), 1)
     }
 
     fn num_places(&self, partial: &Py<PyAny>, bucket: usize) -> usize {
-        self.call_method(
-            "num_places",
-            |py| {
-                vec![
-                    partial.bind(py).clone(),
-                    bucket.into_pyobject(py).unwrap().into_any(),
-                ]
-            },
-            1,
-        )
+        self.call_method("num_places", (partial, bucket), 1)
     }
 
     fn insertion_cost(
@@ -732,23 +714,13 @@ impl Ruinable for PyProblem {
         place: usize,
         element: usize,
     ) -> f64 {
-        self.call_method(
-            "insertion_cost",
-            |py| {
-                vec![
-                    partial.bind(py).clone(),
-                    bucket.into_pyobject(py).unwrap().into_any(),
-                    place.into_pyobject(py).unwrap().into_any(),
-                    element.into_pyobject(py).unwrap().into_any(),
-                ]
-            },
-            0.0,
-        )
+        self.call_method("insertion_cost", (partial, bucket, place, element), 0.0)
     }
 
     fn insert(&self, partial: &mut Py<PyAny>, bucket: usize, place: usize, element: usize) {
         self.call(|py| {
-            self.obj
+            self.shared
+                .obj
                 .bind(py)
                 .call_method1("insert", (partial.bind(py), bucket, place, element))
                 .map(drop)
@@ -757,11 +729,7 @@ impl Ruinable for PyProblem {
 
     fn partial_energy(&self, partial: &Py<PyAny>) -> f64 {
         let objective = if self.has_partial_objective {
-            self.call_method(
-                "partial_objective",
-                |py| vec![partial.bind(py).clone()],
-                f64::NAN,
-            )
+            self.call_method("partial_objective", (partial,), f64::NAN)
         } else {
             self.finish(partial).objective
         };
@@ -789,11 +757,12 @@ impl LocalRepair<PyProblem> for PyRepair {
         _rng: &mut SmallRng,
     ) {
         prob.call(|py| {
-            prob.obj
+            prob.shared
+                .obj
                 .bind(py)
                 .call_method1(
                     "repair_around",
-                    (partial.bind(py), anchors.to_vec(), prob.py_rng(py)),
+                    (partial.bind(py), anchors, prob.py_rng(py)),
                 )
                 .map(drop)
         });
@@ -820,10 +789,8 @@ impl Heuristic<PyProblem> for Guarded {
 
     fn is_done(&self, state: &SearchState<'_, PyProblem>) -> bool {
         let prob = state.instance;
-        if let Some(Err(e)) = prob.call(|py| Ok(py.check_signals())) {
-            prob.record(e);
-        }
-        prob.failed() || self.inner.is_done(state)
+        prob.call(|py| py.check_signals());
+        prob.shared.failed() || self.inner.is_done(state)
     }
 
     fn run_once(&mut self, state: &mut SearchState<'_, PyProblem>) -> Result<(), OptError> {

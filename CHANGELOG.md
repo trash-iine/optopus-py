@@ -169,6 +169,9 @@ entries below are breaking; see **Changed** and **Removed**.
   `Formula` `penalty_weight` or a `Clamp` range with `lo` above `hi`. Symmetrize an
   asymmetric matrix, for example with `(d[i][j] + d[j][i]) / 2`, and state a reward as a
   positive weight on the opposite constraint instead of a negative weight.
+- `run` on a built-in problem releases the GIL while it searches, so other Python threads keep
+  running, and several runs started from a thread pool proceed in parallel. A problem written
+  in Python still holds it, since every step calls back into Python.
 
 ### Removed
 

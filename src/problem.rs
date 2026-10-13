@@ -13,6 +13,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::graph::{Graph as PyGraph, resolve_seed};
+use crate::validate::check_at_least;
 
 /// A polynomial term used by Python-side `Formula` construction:
 /// `(variable_indices, coefficient)`. An empty `variable_indices` list means a constant term.
@@ -1236,9 +1237,7 @@ impl GraphColoring {
     fn build(graph: Graph, num_colors: Option<usize>) -> PyResult<Self> {
         let mut inner = OptGraphColoring::new(graph);
         if let Some(k) = num_colors {
-            if k == 0 {
-                return Err(PyValueError::new_err("'num_colors' must be at least 1"));
-            }
+            check_at_least("num_colors", k, 1)?;
             inner.k = k;
         }
         Ok(Self { inner })
@@ -1549,13 +1548,12 @@ fn check_coordinates(coordinates: &[(f64, f64)]) -> PyResult<()> {
     }
 }
 
-/// Rejects a coordinate/demand pair that upstream would assert on.
-fn check_vrp_instance(coordinates: &[(f64, f64)], demands: &[i64], capacity: i64) -> PyResult<()> {
-    check_coordinates(coordinates)?;
-    if coordinates.len() != demands.len() {
+/// Rejects demands and a capacity that upstream would assert on, for the `n` nodes the
+/// argument `nodes` gives.
+fn check_vrp_instance(nodes: &str, n: usize, demands: &[i64], capacity: i64) -> PyResult<()> {
+    if n != demands.len() {
         return Err(PyValueError::new_err(format!(
-            "'coordinates' and 'demands' must have the same length, got {} and {}",
-            coordinates.len(),
+            "'{nodes}' and 'demands' must have the same length, got {n} and {}",
             demands.len()
         )));
     }
@@ -1637,7 +1635,8 @@ impl Vrp {
         rounded: bool,
     ) -> PyResult<Self> {
         let name = name.to_string();
-        check_vrp_instance(&coordinates, &demands, capacity)?;
+        check_coordinates(&coordinates)?;
+        check_vrp_instance("coordinates", coordinates.len(), &demands, capacity)?;
         let inner = if rounded {
             OptVrp::with_rounding(name, coordinates, demands, capacity, num_vehicles)
         } else {
@@ -1802,19 +1801,7 @@ impl Vrp {
         name: &str,
     ) -> PyResult<Self> {
         let name = name.to_string();
-        if matrix.len() != demands.len() {
-            return Err(PyValueError::new_err(format!(
-                "'matrix' and 'demands' must have the same length, got {} and {}",
-                matrix.len(),
-                demands.len()
-            )));
-        }
-        if capacity <= 0 {
-            return Err(PyValueError::new_err(format!(
-                "'capacity' must be greater than 0, got {capacity}"
-            )));
-        }
-        check_demands(&demands)?;
+        check_vrp_instance("matrix", matrix.len(), &demands, capacity)?;
         check_distance_matrix(&matrix)?;
         OptVrp::from_distance_matrix(name, matrix, demands, capacity, num_vehicles)
             .map(|inner| Self { inner })
@@ -2065,9 +2052,7 @@ impl Formula {
         constraints: Vec<Bound<'_, PyAny>>,
         bounds: Option<Vec<(i64, i64)>>,
     ) -> PyResult<Self> {
-        if n_vars == 0 {
-            return Err(PyValueError::new_err("'n_vars' must be at least 1"));
-        }
+        check_at_least("n_vars", n_vars, 1)?;
         let maximize = parse_direction(&direction)?;
         let vars = build_int_vars(n_vars, bounds)?;
 

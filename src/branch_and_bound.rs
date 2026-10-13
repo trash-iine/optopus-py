@@ -4,7 +4,7 @@
 //! `run_all` only sees a `Box<dyn Heuristic<P>>`, so the search's own answers (whether it
 //! proved its best optimal, and the bound still open) cannot be read off the box after a run.
 //! [`Reported`] records them in a thread-local when its run returns, and the runner takes them
-//! from there. A run is single-threaded and holds the GIL, so the slot is never shared.
+//! from there. A run stays on the thread that started it, so the slot is never shared.
 
 use std::cell::RefCell;
 
@@ -199,11 +199,10 @@ impl<P> Relaxation<P> for PyRelaxation {
     fn bound(&mut self, _prob: &P, vars: &IntVars) -> Evaluable<f64> {
         // After an error every node is pruned, so the search ends at once and the error is
         // raised.
-        match (self.call(vars), self.maximize) {
-            (Some(v), true) => Evaluable::Maximize(v),
-            (Some(v), false) => Evaluable::Minimize(v),
-            (None, true) => Evaluable::Maximize(f64::NEG_INFINITY),
-            (None, false) => Evaluable::Minimize(f64::INFINITY),
+        if self.maximize {
+            Evaluable::Maximize(self.call(vars).unwrap_or(f64::NEG_INFINITY))
+        } else {
+            Evaluable::Minimize(self.call(vars).unwrap_or(f64::INFINITY))
         }
     }
 }
