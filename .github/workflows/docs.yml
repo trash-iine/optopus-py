@@ -50,6 +50,11 @@ jobs:
       # build `maturin develop` just installed (same reason as docs/Makefile).
       - name: Build the docs
         run: uv run --no-sync sphinx-build -M html docs/source docs/build
+      # The Japanese edition is published under ja/ inside the English one (ADR 0008).
+      - name: Build the Japanese docs
+        run: >-
+          uv run --no-sync sphinx-build -b html docs/source-ja docs/build/html/ja
+          -d docs/build/doctrees-ja
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/build/html

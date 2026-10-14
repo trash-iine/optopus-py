@@ -35,7 +35,7 @@ CI_CHECKS = (
 # (GitHub's /releases/latest/download/ still needs the exact filename, and ours
 # carries the version); MACOSX_DEPLOYMENT_TARGET is pinned there so the platform
 # tags stay predictable.
-URL_FILES = ("README.md", "docs/source/installation.md")
+URL_FILES = ("README.md", "docs/source/installation.md", "docs/source-ja/installation.md")
 
 
 def package_version():
@@ -113,6 +113,14 @@ def docs(c, output="html", clean=False, strict=False, open=False):
         c.run("make -C docs clean")
     sphinxopts = ' SPHINXOPTS="-W --keep-going"' if strict else ""
     c.run(f"make -C docs {output}{sphinxopts}", pty=True)
+    # The Japanese edition is published under ja/ inside the English one (ADR 0008).
+    # Bare like the CI checks: a uv sync here would undo the build above.
+    strict_flags = " -W --keep-going" if strict else ""
+    c.run(
+        f"sphinx-build -b {output} docs/source-ja docs/build/{output}/ja"
+        f" -d docs/build/doctrees-ja{strict_flags}",
+        pty=True,
+    )
     if open:
         webbrowser.open((DOCS_BUILD / output / "index.html").resolve().as_uri())
 
@@ -143,7 +151,7 @@ def adr(c, slug, title=""):
 def set_version(c, version, date=None):
     """Move every version-pinned reference to a new version, for a release PR.
 
-    The version reaches four files, and three of them embed it in wheel download
+    The version reaches five files, and four of them embed it in wheel download
     URLs that docs.yml publishes to GitHub Pages. A typo in one of those
     filenames is a 404 no test catches, which is why this is a task rather than
     a hand edit.

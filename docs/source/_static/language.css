@@ -1,0 +1,6 @@
+/* The language link under the sidebar brand (sidebar/language.html). */
+.sidebar-language {
+  margin: 0 var(--sidebar-item-spacing-horizontal) var(--sidebar-item-spacing-vertical);
+  text-align: center;
+  font-size: var(--sidebar-item-font-size);
+}
