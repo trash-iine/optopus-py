@@ -64,10 +64,10 @@ print(report.runs[0].solution)  # [True, True, False] — 各頂点がどちら�
 |---|---|
 | いくつかの問題を最初から最後まで解いてみる | [クイックスタート](quickstart.md) |
 | 実行回数・シード・時間制限を制御し、結果の全フィールドを読む | [探索の実行と結果の読み方](running.md) |
-| 用途に合う問題を選び、それぞれの解き方を見る | [Built-in problems](https://trash-iine.github.io/optopus-py/problems.html) (英語) |
-| 目的関数と制約を多項式で書く | [Modeling with Formula](https://trash-iine.github.io/optopus-py/formula.html) (英語) |
-| 問題を Python のクラスとして書く | [Problems written in Python](https://trash-iine.github.io/optopus-py/python_problems.html) (英語) |
-| グラフや、最適値が分かっているインスタンスを生成する | [Graphs and test instances](https://trash-iine.github.io/optopus-py/graphs_and_instances.html) (英語) |
+| 用途に合う問題を選び、それぞれの解き方を見る | [組み込みの問題](problems.md) |
+| 目的関数と制約を多項式で書く | [Formula によるモデル化](formula.md) |
+| 問題を Python のクラスとして書く | [Python で書いた問題](python_problems.md) |
+| グラフや、最適値が分かっているインスタンスを生成する | [グラフとテスト用インスタンス](graphs_and_instances.md) |
 | ヒューリスティックを選んで調整する | [Choosing a heuristic](https://trash-iine.github.io/optopus-py/heuristics.html) (英語) |
 | 個々のヒューリスティックの引数と例を調べる | [Generic](https://trash-iine.github.io/optopus-py/heuristics_generic.html)、[composed](https://trash-iine.github.io/optopus-py/heuristics_composed.html)、[problem-specific](https://trash-iine.github.io/optopus-py/heuristics_specific.html)、[exact](https://trash-iine.github.io/optopus-py/heuristics_exact.html) (英語) |
 | シグネチャを確認する | [API reference](https://trash-iine.github.io/optopus-py/api_reference.html) (英語) |
@@ -76,19 +76,19 @@ print(report.runs[0].solution)  # [True, True, False] — 各頂点がどちら�
 ## 提供しているもの
 
 - Python のデータから直接作れる**問題**:
-  [`MaxCut`](https://trash-iine.github.io/optopus-py/problems.html#maxcut)、
-  [`Qubo`](https://trash-iine.github.io/optopus-py/problems.html#qubo)、
-  [`Sat`](https://trash-iine.github.io/optopus-py/problems.html#sat)、
-  [`VertexCover`](https://trash-iine.github.io/optopus-py/problems.html#vertexcover)、
-  [`Tsp`](https://trash-iine.github.io/optopus-py/problems.html#tsp)、
-  [`JobShopScheduling`](https://trash-iine.github.io/optopus-py/problems.html#jobshopscheduling)、
-  [`FlowShop`](https://trash-iine.github.io/optopus-py/problems.html#flowshop)、
-  [`Vrp`](https://trash-iine.github.io/optopus-py/problems.html#vrp)、
-  [`Qap`](https://trash-iine.github.io/optopus-py/problems.html#qap)、
-  [`BinPacking`](https://trash-iine.github.io/optopus-py/problems.html#binpacking)、
-  [`GraphColoring`](https://trash-iine.github.io/optopus-py/problems.html#graphcoloring)、
-  [`Formula`](https://trash-iine.github.io/optopus-py/formula.html)。グラフ上の問題に渡すための
-  [`Graph`](https://trash-iine.github.io/optopus-py/graphs_and_instances.html#graph) 型もあり、
+  [`MaxCut`](problems.md#maxcut)、
+  [`Qubo`](problems.md#qubo)、
+  [`Sat`](problems.md#sat)、
+  [`VertexCover`](problems.md#vertexcover)、
+  [`Tsp`](problems.md#tsp)、
+  [`JobShopScheduling`](problems.md#jobshopscheduling)、
+  [`FlowShop`](problems.md#flowshop)、
+  [`Vrp`](problems.md#vrp)、
+  [`Qap`](problems.md#qap)、
+  [`BinPacking`](problems.md#binpacking)、
+  [`GraphColoring`](problems.md#graphcoloring)、
+  [`Formula`](formula.md)。グラフ上の問題に渡すための
+  [`Graph`](graphs_and_instances.md#graph) 型もあり、
   ランダムグラフの生成器と周期境界の格子を備えています。
 - どの問題にも使える**[汎用ヒューリスティック](https://trash-iine.github.io/optopus-py/heuristics_generic.html)**:
   `LocalSearch`、`SimulatedAnnealing`、`BangBangSimulatedAnnealing`、`TabuSearch`、
@@ -104,11 +104,11 @@ print(report.runs[0].solution)  # [True, True, False] — 各頂点がどちら�
 - **[厳密解法](https://trash-iine.github.io/optopus-py/heuristics_exact.html)**: `BranchAndBound` は
   `MaxCut`、`Qubo`、`Sat`、`VertexCover`、`Formula` で最適性を証明します。各ノードの探索には別の
   ヒューリスティックを使います。
-- **[最適値が分かっているインスタンス](https://trash-iine.github.io/optopus-py/graphs_and_instances.html#plantedmaxcut)**:
+- **[最適値が分かっているインスタンス](graphs_and_instances.md#plantedmaxcut)**:
   `PlantedMaxCut` は構成上最適なカットを埋め込むので、「ヒューリスティックが最適値に到達したか」を
-  判定できます。[`MaxCutKernel`](https://trash-iine.github.io/optopus-py/graphs_and_instances.html#maxcutkernel)
+  判定できます。[`MaxCutKernel`](graphs_and_instances.md#maxcutkernel)
   はインスタンスを厳密に縮約し、得られた解を元のインスタンスに戻します。
-- **[自作の問題](https://trash-iine.github.io/optopus-py/python_problems.html)**: 初期解・目的関数・
+- **[自作の問題](python_problems.md)**: 初期解・目的関数・
   近傍を提供する Python オブジェクトなら、汎用ヒューリスティックと合成ヒューリスティックで解けます。
   ruin 系のメソッドを定義すれば ALNS でも解けます。
 - **[実行結果の統計](#the-report)**: `run` はどれも `RunReport` を返し、1 回以上の実行に
@@ -123,4 +123,16 @@ caption: はじめに
 installation
 quickstart
 running
+```
+
+```{toctree}
+---
+maxdepth: 1
+caption: 問題
+---
+
+problems
+formula
+python_problems
+graphs_and_instances
 ```

@@ -29,7 +29,7 @@ print(report)
 
 | 引数 | 既定値 | 意味 |
 |---|---|---|
-| `problem` | | 組み込みの問題、`Formula`、または [Python で書いた問題](https://trash-iine.github.io/optopus-py/python_problems.html) (英語) |
+| `problem` | | 組み込みの問題、`Formula`、または [Python で書いた問題](python_problems.md) |
 | `runs` | `1` | 独立な実行の回数。各実行はそれぞれのランダムな初期解から始まる。`0` は `ValueError` |
 | `seed` | `None` | マスターシード。実行 0 はこれをそのまま使い、残りの実行はこれから自分のシードを導く。そのため同じ呼び出しは同じレポートを再現する。`None` なら呼び出しごとに新しいシードを取る |
 
@@ -140,8 +140,8 @@ print(run.iterations, run.best_objective)  # 746 89.0 — 冷えるずっと前�
 
 | `RunResult` の属性 | 意味 |
 |---|---|
-| `solution` | その実行の最良解。問題ごとの形は [Built-in problems](https://trash-iine.github.io/optopus-py/problems.html#at-a-glance) (英語) にある |
-| `best_objective` | その目的関数値。探索が順位付けに使う尺度で表す。[What a run reports](https://trash-iine.github.io/optopus-py/problems.html#what-a-run-reports) (英語) を参照 |
+| `solution` | その実行の最良解。問題ごとの形は [組み込みの問題](#at-a-glance)にある |
+| `best_objective` | その目的関数値。探索が順位付けに使う尺度で表す。[実行が報告する値](#what-a-run-reports)を参照 |
 | `initial_objective` | ランダムな初期解の目的関数値 |
 | `improvement` | `initial_objective` から `best_objective` への改善量。最適化の向きによらず、良くなれば正 |
 | `best_iteration` | 最良解が見つかった反復 |
@@ -172,5 +172,4 @@ print(best.solution)  # 頂点ごとの bool: その頂点がどちら側か
 ```
 
 各問題がどちらの向きで値を報告するか、また報告された値を改めて評価した値と末尾の桁が食い違うことが
-ある理由は、[What a run reports](https://trash-iine.github.io/optopus-py/problems.html#what-a-run-reports)
-(英語) にあります。
+ある理由は、[実行が報告する値](#what-a-run-reports)にあります。

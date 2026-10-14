@@ -126,7 +126,9 @@ written in Japanese.
   ## 停止条件
   ```
 
-  Link to it with `[停止条件](#stopping)`, from any page.
+  Link to it with `[停止条件](#stopping)`, from any page. Targets are global to the edition, so
+  a name another page already uses gets the page name as a prefix, `(formula-neighborhoods)=`;
+  the strict build reports the duplicate otherwise.
 - Write in the polite form (です・ます). Code, argument values and names stay in their original
   form. Translate recurring terms consistently:
 

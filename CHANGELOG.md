@@ -128,8 +128,9 @@ entries below are breaking; see **Changed** and **Removed**.
   `MaxCutKernel`.
 - A Japanese edition of the documentation at
   [trash-iine.github.io/optopus-py/ja/](https://trash-iine.github.io/optopus-py/ja/), linked
-  from every page's sidebar. It translates the top page, installation, the quickstart and
-  "Running a search" so far, and links the rest to the English pages.
+  from every page's sidebar. It translates the top page, installation, the quickstart,
+  "Running a search" and the four pages on problems so far, and links the rest to the English
+  pages.
 
 ### Changed
 

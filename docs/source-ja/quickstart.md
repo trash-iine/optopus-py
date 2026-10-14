@@ -260,18 +260,15 @@ Hao の γ はアルゴリズム内部で 2 回数えられるので、G-set で
 ## 次のステップ
 
 - [探索の実行と結果の読み方](running.md) — 実行回数、シード、停止条件、結果の全フィールド。
-- [Built-in problems](https://trash-iine.github.io/optopus-py/problems.html) (英語) — 問題の選び方、
-  制約、各問題の例。
-- [Modeling with Formula](https://trash-iine.github.io/optopus-py/formula.html) (英語) — 多項式、
-  制約、ペナルティの重み。
+- [組み込みの問題](problems.md) — 問題の選び方、制約、各問題の例。
+- [Formula によるモデル化](formula.md) — 多項式、制約、ペナルティの重み。
 - [Choosing a heuristic](https://trash-iine.github.io/optopus-py/heuristics.html) (英語) —
   どのヒューリスティックをどう設定するか。種類ごとのページ:
   [generic](https://trash-iine.github.io/optopus-py/heuristics_generic.html)、
   [composed](https://trash-iine.github.io/optopus-py/heuristics_composed.html)、
   [problem-specific](https://trash-iine.github.io/optopus-py/heuristics_specific.html)、
   [exact](https://trash-iine.github.io/optopus-py/heuristics_exact.html)。
-- [Graphs and test instances](https://trash-iine.github.io/optopus-py/graphs_and_instances.html)
-  (英語) — ランダムグラフ、最適解を埋め込んだインスタンス、カーネル化。
+- [グラフとテスト用インスタンス](graphs_and_instances.md) — ランダムグラフ、最適解を埋め込んだインスタンス、カーネル化。
 - [Examples](https://trash-iine.github.io/optopus-py/examples.html) (英語) — 複数実行の統計と
   ヒューリスティックの比較。
 - [API reference](https://trash-iine.github.io/optopus-py/api_reference.html) (英語) — すべての
