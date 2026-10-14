@@ -242,8 +242,7 @@ objective = bins_used − Σ min(load, C)² / (C · T + 1)
 は、`Σ load² ≤ C · T` なので引く和が 1 未満に収まったまま、よく詰まった箱に報います。`min` は、
 すでにペナルティを課している容量超過の箱が余分に得をしないようにします。意味のある差分はこの項の
 大きさ、つまり箱 1 つの小さな割合になり、`SimulatedAnnealing` の温度はこの尺度に合わせて設定します
-([SimulatedAnnealing](https://trash-iine.github.io/optopus-py/heuristics.html#simulatedannealing)
-(英語) を参照)。箱の間で 2 つの品物を交換するような、数を変えられない近傍は、数を変えられる近傍と
+([SimulatedAnnealing](heuristics.md#simulatedannealing)を参照)。箱の間で 2 つの品物を交換するような、数を変えられない近傍は、数を変えられる近傍と
 組み合わせる必要があります。
 
 (errors)=

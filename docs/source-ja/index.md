@@ -10,8 +10,8 @@ source_sha256: f7a0e0e9f78a
 自体はネイティブの Rust で実行されます。
 
 ```{note}
-これは日本語版です。英語版が原文で、日本語版はそれに追従して更新します。まだ翻訳していないページは
-英語版にリンクしています。
+これは日本語版です。英語版が原文で、日本語版はそれに追従して更新します。API リファレンスの docstring
+は英語のままです。
 ```
 
 (install)=
@@ -68,9 +68,9 @@ print(report.runs[0].solution)  # [True, True, False] — 各頂点がどちら�
 | 目的関数と制約を多項式で書く | [Formula によるモデル化](formula.md) |
 | 問題を Python のクラスとして書く | [Python で書いた問題](python_problems.md) |
 | グラフや、最適値が分かっているインスタンスを生成する | [グラフとテスト用インスタンス](graphs_and_instances.md) |
-| ヒューリスティックを選んで調整する | [Choosing a heuristic](https://trash-iine.github.io/optopus-py/heuristics.html) (英語) |
-| 個々のヒューリスティックの引数と例を調べる | [Generic](https://trash-iine.github.io/optopus-py/heuristics_generic.html)、[composed](https://trash-iine.github.io/optopus-py/heuristics_composed.html)、[problem-specific](https://trash-iine.github.io/optopus-py/heuristics_specific.html)、[exact](https://trash-iine.github.io/optopus-py/heuristics_exact.html) (英語) |
-| シグネチャを確認する | [API reference](https://trash-iine.github.io/optopus-py/api_reference.html) (英語) |
+| ヒューリスティックを選んで調整する | [ヒューリスティックの選び方](heuristics.md) |
+| 個々のヒューリスティックの引数と例を調べる | [汎用](heuristics_generic.md)、[合成](heuristics_composed.md)、[問題専用](heuristics_specific.md)、[厳密解法](heuristics_exact.md) |
+| シグネチャを確認する | [API リファレンス](api_reference.md) |
 
 (what-you-get)=
 ## 提供しているもの
@@ -90,18 +90,18 @@ print(report.runs[0].solution)  # [True, True, False] — 各頂点がどちら�
   [`Formula`](formula.md)。グラフ上の問題に渡すための
   [`Graph`](graphs_and_instances.md#graph) 型もあり、
   ランダムグラフの生成器と周期境界の格子を備えています。
-- どの問題にも使える**[汎用ヒューリスティック](https://trash-iine.github.io/optopus-py/heuristics_generic.html)**:
+- どの問題にも使える**[汎用ヒューリスティック](heuristics_generic.md)**:
   `LocalSearch`、`SimulatedAnnealing`、`BangBangSimulatedAnnealing`、`TabuSearch`、
   `LateAcceptanceHillClimbing`、`RandomWalk`、`BeamSearch`、`PopulationAnnealing`、
   `ParallelTempering`、`ReinforcementLearningSearch`。
-- 他のヒューリスティックのインスタンスを組み合わせて作る**[合成ヒューリスティック](https://trash-iine.github.io/optopus-py/heuristics_composed.html)**:
+- 他のヒューリスティックのインスタンスを組み合わせて作る**[合成ヒューリスティック](heuristics_composed.md)**:
   `VariableNeighborhoodSearch`、`Sequential`、`Iterated`、`Restart`、`GeneticAlgorithm`、
   `BreakoutLocalSearch.from_parts`。
-- 特定の問題の構造を利用する**[問題専用ヒューリスティック](https://trash-iine.github.io/optopus-py/heuristics_specific.html)**:
+- 特定の問題の構造を利用する**[問題専用ヒューリスティック](heuristics_specific.md)**:
   `WalkSat`、`BreakoutLocalSearch`、`LinKernighanHelsgaun`、
   `AdaptiveLargeNeighborhoodSearch`、`HybridGeneticSearch`、`IteratedGreedy`、
   `GreedyRandomizedConstruction`。
-- **[厳密解法](https://trash-iine.github.io/optopus-py/heuristics_exact.html)**: `BranchAndBound` は
+- **[厳密解法](heuristics_exact.md)**: `BranchAndBound` は
   `MaxCut`、`Qubo`、`Sat`、`VertexCover`、`Formula` で最適性を証明します。各ノードの探索には別の
   ヒューリスティックを使います。
 - **[最適値が分かっているインスタンス](graphs_and_instances.md#plantedmaxcut)**:
@@ -135,4 +135,27 @@ problems
 formula
 python_problems
 graphs_and_instances
+```
+
+```{toctree}
+---
+maxdepth: 1
+caption: ヒューリスティック
+---
+
+heuristics
+heuristics_generic
+heuristics_composed
+heuristics_specific
+heuristics_exact
+```
+
+```{toctree}
+---
+maxdepth: 1
+caption: リファレンス
+---
+
+api_reference
+examples
 ```
