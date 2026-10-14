@@ -130,6 +130,8 @@ entries below are breaking; see **Changed** and **Removed**.
   [trash-iine.github.io/optopus-py/ja/](https://trash-iine.github.io/optopus-py/ja/), linked
   from every page's sidebar. It translates every page; the API reference lists the same
   classes with their English docstrings.
+- `RunResult.trajectory`, every improvement of the run's best solution as
+  `(elapsed_secs, iteration, objective)`, for plotting how a run converged.
 
 ### Changed
 

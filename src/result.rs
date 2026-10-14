@@ -90,6 +90,15 @@ pub struct RunResult {
     /// before the whole problem had been split once.
     #[pyo3(get)]
     pub dual_bound: Option<f64>,
+    /// Every improvement of the best solution, as ``(elapsed_secs, iteration, objective)``
+    /// tuples in the order they happened.
+    ///
+    /// ``elapsed_secs`` is measured on the clock ``time_to_best_secs`` uses and ``objective`` is
+    /// on the scale of ``best_objective``, so the last entry, if any, carries the run's best.
+    /// Each entry is strictly better than the one before it. The list is empty when the run
+    /// never improved on its initial solution.
+    #[pyo3(get)]
+    pub trajectory: Vec<(f64, u64, f64)>,
 }
 
 #[pymethods]

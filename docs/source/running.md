@@ -142,6 +142,7 @@ them. Every attribute is read-only.
 | `n_accepted`, `n_rejected` | moves applied, and iterations that applied none |
 | `n_best_updates` | how often the best solution strictly improved |
 | `seed` | the seed this run used; `None` when `run` got no seed |
+| `trajectory` | every improvement of the best solution, as `(elapsed_secs, iteration, objective)`; see below |
 | `proven_optimal`, `dual_bound` | what `BranchAndBound` proved, see [Exact search](heuristics_exact.md); `None` for every other heuristic |
 
 ```python
@@ -151,6 +152,23 @@ print(run)
 print(run.seed, run.iterations, run.n_accepted, run.n_rejected)  # 7 10000 729 9271
 print(run.initial_objective, run.best_objective, run.improvement)  # 60.0 93.0 33.0
 ```
+
+### How a run converged
+
+`trajectory` lists every improvement of the run's best solution, in the order it happened, as
+`(elapsed_secs, iteration, objective)` tuples. `elapsed_secs` is on the clock
+`time_to_best_secs` uses and `objective` on the scale of `best_objective`. Each entry is strictly
+better than the one before, so the last one carries the run's best, found at `best_iteration`.
+The list is empty when the run never improved on its starting solution.
+
+```python
+for elapsed, iteration, objective in run.trajectory[-3:]:
+    print(f"{elapsed * 1e3:7.3f} ms  iteration {iteration:5}  {objective}")
+assert run.trajectory[-1][1:] == (run.best_iteration, run.best_objective)
+```
+
+The times differ from machine to machine. A seeded run under an iteration limit repeats its
+iterations and objectives exactly, which makes them the axis to compare two runs on.
 
 ### Picking the best solution
 

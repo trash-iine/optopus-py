@@ -1,5 +1,5 @@
 ---
-source_sha256: af0830283f56
+source_sha256: fadbe3426a8a
 ---
 
 # 探索の実行と結果の読み方
@@ -149,6 +149,7 @@ print(run.iterations, run.best_objective)  # 746 89.0 — 冷えるずっと前�
 | `n_accepted`、`n_rejected` | 適用した移動の数と、何も適用しなかった反復の数 |
 | `n_best_updates` | 最良解が真に改善した回数 |
 | `seed` | その実行が使ったシード。`run` にシードを渡さなかった場合は `None` |
+| `trajectory` | 最良解の改善のすべてを `(elapsed_secs, iteration, objective)` で並べたもの。下記を参照 |
 | `proven_optimal`、`dual_bound` | `BranchAndBound` が証明した内容。[厳密解法](heuristics_exact.md)を参照。他のヒューリスティックでは `None` |
 
 ```python
@@ -160,6 +161,22 @@ print(run.initial_objective, run.best_objective, run.improvement)  # 60.0 93.0 3
 ```
 
 (picking-the-best-solution)=
+### 実行の収束の様子
+
+`trajectory` は、実行の最良解が改善したときをすべて、起きた順に `(elapsed_secs, iteration, objective)`
+のタプルで並べたものです。`elapsed_secs` は `time_to_best_secs` と同じ時計で測り、`objective` は
+`best_objective` と同じ尺度です。各要素は直前の要素より真に良いので、最後の要素がその実行の最良値で、
+`best_iteration` で見つかったものです。実行が初期解から一度も改善しなかったときは空のリストです。
+
+```python
+for elapsed, iteration, objective in run.trajectory[-3:]:
+    print(f"{elapsed * 1e3:7.3f} ms  iteration {iteration:5}  {objective}")
+assert run.trajectory[-1][1:] == (run.best_iteration, run.best_objective)
+```
+
+時間はマシンごとに変わります。seed を与え反復回数で止めた実行は、反復回数と目的関数値を正確に再現する
+ので、2つの実行を比べるときはそちらを軸にします。
+
 ### 最良解を取り出す
 
 レポート自体は最良解を持っていません。`best_objective` がレポートのものと一致する実行を選び、その
