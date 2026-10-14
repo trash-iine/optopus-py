@@ -1,5 +1,5 @@
 ---
-source_sha256: fadbe3426a8a
+source_sha256: e469e2e345ca
 ---
 
 # 探索の実行と結果の読み方
@@ -176,6 +176,28 @@ assert run.trajectory[-1][1:] == (run.best_iteration, run.best_objective)
 
 時間はマシンごとに変わります。seed を与え反復回数で止めた実行は、反復回数と目的関数値を正確に再現する
 ので、2つの実行を比べるときはそちらを軸にします。
+
+### 実行中の様子を見る
+
+`trajectory` はレポートと一緒に届きます。実行中に改善を見たいときは、`run` に `on_improvement`
+を渡します。これは `on_improvement(run, elapsed_secs, objective)` の形で呼ばれる呼び出し可能
+オブジェクトです。各実行の最初の改善はすぐに届き、その後は最新の改善が最大で 0.1 秒ごとに届きます。
+そのため、速い探索が Python 側で時間を費やすことはなく、探索が落ち着いたときに改善が届かないまま
+残ることもありません。`objective` は `best_objective` と同じ尺度で、同じ実行の中では毎回前回より
+良い値です。
+
+```python
+def show(run, elapsed, objective):
+    print(f"run {run}: {objective} after {elapsed:.3f} s")
+
+report = optopus.SimulatedAnnealing(
+    "Flip", 5.0, 0.999, optopus.StopCondition(max_iteration=5_000)
+).run(mc, runs=2, seed=1, on_improvement=show)
+```
+
+コールバックは別のスレッドから呼ばれることがあるので、短く保ち、受け取った値を記録するか渡すだけに
+してください。コールバックが送出した例外は、実行中の run が終わった時点で `run` から送出され、
+それ以降の run は始まりません。
 
 ### 最良解を取り出す
 

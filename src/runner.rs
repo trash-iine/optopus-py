@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Instant;
 
 use optopus::building_blocks::representation::BinaryRelaxation;
@@ -46,6 +47,7 @@ use crate::problem::{
     BinPacking, FlowShop, Formula, GraphColoring, JobShopScheduling, MaxCut, Qap, Qubo, Sat, Tsp,
     VertexCover, Vrp,
 };
+use crate::progress::{self, Reported};
 use crate::python_problem::{Guarded, MAX_NEIGHBORHOODS, PyCrossover, PyMove, PyProblem, PyRepair};
 use crate::result::{RunReport, RunResult};
 use crate::stop_condition::StopCondition;
@@ -1105,11 +1107,12 @@ fn run_all<P>(
     minimize: bool,
     runs: usize,
     seed: Option<u64>,
-    obj: fn(&P::Solution) -> f64,
+    on_improvement: Option<&Arc<Py<PyAny>>>,
     decode: impl Fn(&P::Solution, Python<'_>) -> Py<PyAny>,
 ) -> Result<RunReport, String>
 where
     P: ProblemTrait + 'static,
+    P::Solution: Reported,
 {
     let mut results = Vec::with_capacity(runs);
     for run_index in 0..runs {
@@ -1121,16 +1124,24 @@ where
             Some(s) => SearchState::new_with_seed(instance, s),
             None => SearchState::new(instance),
         };
-        state.set_objective_probe(obj);
-        let initial_objective = obj(&state.initial_solution);
+        state.set_objective_probe(progress::probe::<P::Solution>);
+        let initial_objective = state.initial_solution.reported();
+        let watch = on_improvement.map(|callback| {
+            progress::Watch::start(Arc::clone(callback), run_index, start, minimize)
+        });
         let _ = heuristic.run(&mut state);
+        if let Some(watch) = watch
+            && !watch.finish()
+        {
+            return Err("the on_improvement callback raised an exception".to_string());
+        }
         let total_time = start.elapsed();
         // Only a top-level search proves anything about the run's best solution; a nested one
         // searched a part of the run.
         let outcome = bnb::take_outcome()
             .filter(|_| matches!(spec.kind, HeuristicKind::BranchAndBound { .. }));
 
-        let best_objective = obj(&state.best_solution);
+        let best_objective = state.best_solution.reported();
         let raw_diff = best_objective - initial_objective;
         let improvement = if minimize { -raw_diff } else { raw_diff };
 
@@ -1248,10 +1259,19 @@ pub fn solve(
     spec: &HeuristicSpec,
     runs: usize,
     seed: Option<u64>,
+    on_improvement: Option<Py<PyAny>>,
 ) -> PyResult<RunReport> {
     if runs == 0 {
         return Err(PyValueError::new_err("'runs' must be at least 1"));
     }
+    if let Some(callback) = &on_improvement
+        && !callback.bind(problem.py()).is_callable()
+    {
+        return Err(PyTypeError::new_err("'on_improvement' must be callable"));
+    }
+    let on_improvement = on_improvement.map(Arc::new);
+    let on_improvement = on_improvement.as_ref();
+    progress::take_error();
     // Drop what an earlier call left behind, should it have stopped before taking it.
     bnb::take_outcome();
     bnb::take_error();
@@ -1261,54 +1281,55 @@ pub fn solve(
         if let Some(err) = bnb::take_error() {
             return Err(err);
         }
+        if let Some(err) = progress::take_error() {
+            return Err(err);
+        }
         report.map_err(PyValueError::new_err)
     };
 
     // A built-in problem never calls into Python during a run (a relaxation written in Python
     // attaches on its own), so the run releases the GIL for other Python threads.
     macro_rules! built_in {
-        ($($ty:ident: $build:expr, minimize = $minimize:literal, $obj:expr, $decode:expr;)+) => {
+        ($($ty:ident: $build:expr, minimize = $minimize:literal, $decode:expr;)+) => {
             $(
                 if let Ok(p) = problem.extract::<PyRef<'_, $ty>>() {
                     let inner = &p.inner;
                     return finish(py.detach(|| {
-                        run_all(inner, spec, $build, $minimize, runs, seed, $obj, $decode)
+                        run_all(inner, spec, $build, $minimize, runs, seed, on_improvement, $decode)
                     }));
                 }
             )+
         };
     }
     built_in! {
-        MaxCut: build_max_cut, minimize = false, |s| s.objective as f64,
+        MaxCut: build_max_cut, minimize = false,
             |s, py| decode_list(&s.x, py);
-        Qubo: build_qubo, minimize = true, |s| s.objective as f64,
+        Qubo: build_qubo, minimize = true,
             |s, py| decode_list(&s.x, py);
-        Sat: build_sat, minimize = false, |s| s.n_satisfied as f64,
+        Sat: build_sat, minimize = false,
             |s, py| decode_list(&s.x, py);
-        VertexCover: build_vertex_cover, minimize = true, |s| s.objective as f64,
+        VertexCover: build_vertex_cover, minimize = true,
             |s, py| decode_list(&s.x, py);
-        Tsp: build_tsp, minimize = true, |s| s.objective,
+        Tsp: build_tsp, minimize = true,
             |s, py| decode_list(&s.tour, py);
-        JobShopScheduling: build_job_shop, minimize = true, |s| s.objective as f64,
+        JobShopScheduling: build_job_shop, minimize = true,
             |s, py| decode_list(&s.operations, py);
-        Vrp: build_vrp, minimize = true, |s| s.objective,
+        Vrp: build_vrp, minimize = true,
             |s, py| decode_routes(&s.routes, py);
-        GraphColoring: build_graph_coloring, minimize = true, |s| s.objective as f64,
+        GraphColoring: build_graph_coloring, minimize = true,
             |s, py| decode_list(&s.colors, py);
-        FlowShop: build_flow_shop, minimize = true, |s| f64::from(s.objective),
+        FlowShop: build_flow_shop, minimize = true,
             |s, py| decode_list(&s.sequence, py);
-        Qap: build_qap, minimize = true, |s| s.objective as f64,
+        Qap: build_qap, minimize = true,
             |s, py| decode_list(&s.assignment, py);
-        BinPacking: build_bin_packing, minimize = true, |s| s.objective,
+        BinPacking: build_bin_packing, minimize = true,
             |s, py| decode_list(&s.bin_of, py);
     }
 
     if let Ok(f) = problem.extract::<PyRef<'_, Formula>>() {
         let (inner, maximize) = (&f.inner, f.maximize);
-        // A FormulaSolution reports its objective as an `Evaluable`, whose `minimized()` is the
-        // value with the direction already applied. Negating it recovers the
-        // direction-corrected score the report has always published, where higher is better --
-        // so the runner tracks it as a maximization whichever way the formula optimizes.
+        // A Formula reports a higher-is-better score whichever way it optimizes (its `Reported`
+        // impl), so the runner tracks it as a maximization.
         return finish(py.detach(|| {
             run_all(
                 inner,
@@ -1317,8 +1338,7 @@ pub fn solve(
                 false,
                 runs,
                 seed,
-                // Subtracting rather than negating keeps a zero objective reported as 0.0.
-                |s| 0.0 - s.evaluate().minimized(),
+                on_improvement,
                 |s, py| decode_list(s.values(), py),
             )
         }));
@@ -1339,7 +1359,7 @@ pub fn solve(
         prob.minimize(),
         runs,
         seed,
-        |s| s.objective,
+        on_improvement,
         |s, py| s.value.clone_ref(py),
     );
     if let Some(err) = prob.take_error() {

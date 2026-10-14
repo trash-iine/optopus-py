@@ -47,6 +47,11 @@ impl LocalSearch {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -54,15 +59,16 @@ impl LocalSearch {
     /// Raises:
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -121,6 +127,11 @@ impl SimulatedAnnealing {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -128,15 +139,16 @@ impl SimulatedAnnealing {
     /// Raises:
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -185,6 +197,11 @@ impl TabuSearch {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -192,15 +209,16 @@ impl TabuSearch {
     /// Raises:
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -250,6 +268,11 @@ impl LateAcceptanceHillClimbing {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -257,15 +280,16 @@ impl LateAcceptanceHillClimbing {
     /// Raises:
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -305,18 +329,24 @@ impl RandomWalk {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -378,15 +408,16 @@ impl BangBangSimulatedAnnealing {
     }
 
     /// Run the heuristic on a problem and return an aggregated report.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -429,15 +460,16 @@ impl BeamSearch {
     }
 
     /// Run the heuristic on a problem and return an aggregated report.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -508,6 +540,11 @@ impl VariableNeighborhoodSearch {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -516,15 +553,16 @@ impl VariableNeighborhoodSearch {
     ///     ValueError: If a step's ``neighbor`` is not valid for ``problem``, a step is a
     ///         problem-specific heuristic for a different problem, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -578,21 +616,27 @@ impl WalkSat {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
     ///     ValueError: If ``problem`` is not a ``Sat`` instance, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -697,6 +741,11 @@ impl PopulationAnnealing {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -704,15 +753,16 @@ impl PopulationAnnealing {
     /// Raises:
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -830,6 +880,11 @@ impl ParallelTempering {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -837,15 +892,16 @@ impl ParallelTempering {
     /// Raises:
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1034,6 +1090,11 @@ impl BreakoutLocalSearch {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1041,15 +1102,16 @@ impl BreakoutLocalSearch {
     /// Raises:
     ///     ValueError: If the constructor's form runs on anything but ``MaxCut``, a part does
     ///         not fit ``problem``, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1103,21 +1165,27 @@ impl LinKernighanHelsgaun {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
     ///     ValueError: If ``problem`` is not a ``Tsp`` instance, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1180,6 +1248,11 @@ impl AdaptiveLargeNeighborhoodSearch {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1187,15 +1260,16 @@ impl AdaptiveLargeNeighborhoodSearch {
     /// Raises:
     ///     ValueError: If ``problem`` is not a ``Vrp``, a ``Tsp``, or a Python problem with
     ///         the ruin methods, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1264,6 +1338,11 @@ impl IteratedGreedy {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1271,15 +1350,16 @@ impl IteratedGreedy {
     /// Raises:
     ///     ValueError: If ``problem`` is not a ``FlowShop``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1342,6 +1422,11 @@ impl GreedyRandomizedConstruction {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs, one construction each.
@@ -1350,15 +1435,16 @@ impl GreedyRandomizedConstruction {
     ///     ValueError: If ``problem`` is not one the construction applies to, or ``runs`` is
     ///         0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1456,21 +1542,27 @@ impl HybridGeneticSearch {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
     ///     ValueError: If ``problem`` is not a ``Vrp`` instance, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1523,6 +1615,11 @@ impl Sequential {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1530,15 +1627,16 @@ impl Sequential {
     /// Raises:
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1591,6 +1689,11 @@ impl Iterated {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1598,15 +1701,16 @@ impl Iterated {
     /// Raises:
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1660,6 +1764,11 @@ impl Restart {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1667,15 +1776,16 @@ impl Restart {
     /// Raises:
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1771,6 +1881,11 @@ impl BranchAndBound {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs, each run with ``proven_optimal``
@@ -1783,15 +1898,16 @@ impl BranchAndBound {
     ///     TypeError: If ``problem`` is not a problem instance, ``heuristic`` is not a
     ///         heuristic, or a callable relaxation returns something other than a number.
     ///         An exception the callable raises is raised as it is.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -1927,6 +2043,11 @@ impl GeneticAlgorithm {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1934,15 +2055,16 @@ impl GeneticAlgorithm {
     /// Raises:
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
 
@@ -2054,6 +2176,11 @@ impl ReinforcementLearningSearch {
     ///     runs (int): Number of independent runs to perform. Defaults to 1.
     ///     seed (int | None): Master seed. When set, runs are deterministic
     ///         (run 0 uses ``seed`` directly).
+    ///     on_improvement (Callable[[int, float, float], object] | None): Called as
+    ///         ``on_improvement(run, elapsed_secs, objective)`` while a run improves its best
+    ///         solution: at once for the first improvement, then at most every 0.1 seconds with
+    ///         the latest. An exception it raises is raised from ``run`` once the run under
+    ///         way ends, and no later run starts.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -2061,14 +2188,15 @@ impl ReinforcementLearningSearch {
     /// Raises:
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None))]
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
         py: Python<'_>,
         problem: &Bound<'_, PyAny>,
         runs: usize,
         seed: Option<u64>,
+        on_improvement: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed)
+        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
     }
 }
