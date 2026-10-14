@@ -41,9 +41,10 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
   `maturin develop`, `pytest`). Run it before pushing.
 - Auto-fix formatting and lint: `uv run invoke fix`.
 - Docs: `uv run invoke docs --strict` (rebuilds the extension first; add `--open` / `--clean`).
-- A plain `uv run <cmd>` re-syncs the env and can reinstall a cached `optopus` wheel over a fresh
-  `maturin develop` build; use `uv run --no-sync <cmd>` right after a build, or go through the
-  Invoke tasks, which handle it.
+- A plain `uv run <cmd>` re-syncs the env: when the Rust sources changed since uv last built the
+  extension, it builds it again with the release profile (about a minute) over a `maturin develop`
+  build (ADR 0009). Use `uv run --no-sync <cmd>` right after `maturin develop` to keep that build,
+  or go through the Invoke tasks, which handle it.
 - New ADR: `uv run invoke adr <kebab-slug> --title "<title>"`.
 - Releases: follow `.agents/skills/release/SKILL.md`; never bump the version in a feature PR.
 

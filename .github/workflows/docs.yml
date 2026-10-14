@@ -46,8 +46,8 @@ jobs:
       # to be built before sphinx runs.
       - name: Build the extension
         run: uv run maturin develop
-      # --no-sync keeps uv from reinstalling a cached `optopus` wheel over the
-      # build `maturin develop` just installed (same reason as docs/Makefile).
+      # --no-sync keeps uv from building the extension again over the one
+      # `maturin develop` just installed (same reason as docs/Makefile).
       - name: Build the docs
         run: uv run --no-sync sphinx-build -M html docs/source docs/build
       # The Japanese edition is published under ja/ inside the English one (ADR 0008).

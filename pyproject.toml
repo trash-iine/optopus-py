@@ -54,6 +54,16 @@ features = ["pyo3/extension-module"]
 # resolve the dev environment for >=3.11 only.
 [tool.uv]
 environments = ["python_version >= '3.11'"]
+# Build the extension again when its Rust sources change, not only pyproject.toml, so uv never
+# installs a wheel built from older sources, here or in a project using this checkout (ADR 0009).
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "src/**/*.rs" },
+    { file = "vendor/optopus/Cargo.toml" },
+    { file = "vendor/optopus/src/**/*.rs" },
+]
 
 [dependency-groups]
 dev = [
