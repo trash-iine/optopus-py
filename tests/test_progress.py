@@ -81,6 +81,44 @@ def test_improvements_reach_the_callback_while_the_run_goes_on(case):
         assert objectives[-1] == run.best_objective
 
 
+class Climb:
+    """Every move improves, so a run's last improvement is its last iteration."""
+
+    minimize = False
+
+    class Step:
+        def neighbors(self, problem, x):
+            return [1]
+
+        def apply(self, problem, x, step):
+            return x + step
+
+        def random_neighbor(self, problem, x, rng):
+            return 1
+
+        def delta(self, problem, x, step):
+            return float(step)
+
+    def __init__(self):
+        self.neighborhoods = {"Step": Climb.Step()}
+
+    def new_solution(self, rng):
+        return 0
+
+    def objective(self, x):
+        return float(x)
+
+
+def test_the_improvement_held_at_the_end_of_a_run_is_sent():
+    # The run is over well within 0.1 s, so only the first improvement is sent as it happens.
+    calls = []
+    report = optopus.RandomWalk("Step", stop(500)).run(
+        Climb(), runs=2, seed=1, on_improvement=lambda *args: calls.append(args)
+    )
+    for index, run in enumerate(report.runs):
+        assert [c[2] for c in calls if c[0] == index][-1] == run.best_objective
+
+
 def test_an_exception_in_the_callback_is_raised_and_no_later_run_starts():
     seen = []
 

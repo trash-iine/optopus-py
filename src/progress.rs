@@ -169,14 +169,19 @@ impl Watch {
         Watch { stop, ticker }
     }
 
-    /// Stops watching. Returns `false`, keeping the exception for [`take_error`], when the
-    /// callback raised one.
+    /// Stops watching, sending the improvement still held. Returns `false`, keeping the
+    /// exception for [`take_error`], when the callback raised one.
     pub fn finish(self) -> bool {
         WATCHING.store(false, Ordering::SeqCst);
         let _ = self.stop.send(());
         // The ticker may be waiting for the GIL; release it while waiting for the ticker.
         Python::attach(|py| py.detach(|| self.ticker.join()))
             .expect("the progress ticker does not panic");
+        // The run's last improvement, if it came within INTERVAL of the end.
+        let held = sink().as_mut().and_then(|s| s.held.take());
+        if let Some(point) = held {
+            call(point);
+        }
         let error = sink().take().and_then(|s| s.error);
         let raised = error.is_some();
         if raised {
