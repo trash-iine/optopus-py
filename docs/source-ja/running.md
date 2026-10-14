@@ -7,7 +7,7 @@ source_sha256: af0830283f56
 どのヒューリスティックも使い方は同じです。`StopCondition` を渡して作り、
 `run(problem, runs=1, seed=None)` を呼び、返ってくる `RunReport` を読みます。このページでは
 この 3 つを説明します。どのヒューリスティックを作るかは
-[Choosing a heuristic](https://trash-iine.github.io/optopus-py/heuristics.html) (英語) にあります。
+[ヒューリスティックの選び方](heuristics.md)にあります。
 
 ## `run`
 
@@ -105,16 +105,15 @@ print(run.iterations, run.best_objective)  # 746 89.0 — 冷えるずっと前�
 | `WalkSat` | 変数を 1 つ反転する |
 | `LinKernighanHelsgaun` | 改善する可変深さの交換を 1 回適用する |
 | `BreakoutLocalSearch` | 降下または摂動の 1 手 |
-| `Sequential`、`Iterated`、`VariableNeighborhoodSearch`、`Restart` | 各ステップの反復を数える。[How the outer stop counts](https://trash-iine.github.io/optopus-py/heuristics_composed.html#how-the-outer-stop-counts) (英語) を参照 |
-| `BranchAndBound` | ノードを 1 つ取り出す。そこで `heuristic` が行う反復は別に数える。[Exact search](https://trash-iine.github.io/optopus-py/heuristics_exact.html) (英語) を参照 |
+| `Sequential`、`Iterated`、`VariableNeighborhoodSearch`、`Restart` | 各ステップの反復を数える。[外側の停止条件の数え方](#how-the-outer-stop-counts)を参照 |
+| `BranchAndBound` | ノードを 1 つ取り出す。そこで `heuristic` が行う反復は別に数える。[厳密解法](heuristics_exact.md)を参照 |
 
 上限は仕事の単位と単位の間で確認され、単位の途中では確認されません。そのため、ヒューリスティックの
 最小単位は必ず最後まで実行され、実行は上限を最大 1 単位ぶん超えることがあります。ほとんどの
 ヒューリスティックでは単位は 1 反復です。`PopulationAnnealing` では温度ステップが単位なので、1 実行は
 少なくとも `sweeps_per_step` 反復します。合成ヒューリスティックではステップ 1 回の呼び出しが単位です。
 `HybridGeneticSearch` では最初の単位が初期集団全体です。
-[HybridGeneticSearch](https://trash-iine.github.io/optopus-py/heuristics_specific.html#hybridgeneticsearch)
-(英語) を参照してください。
+[HybridGeneticSearch](heuristics_specific.md#hybridgeneticsearch)を参照してください。
 
 時間制限で実行できる反復回数は、マシンとビルドによって変わります。既定の開発ビルドは
 `maturin develop --release` やインストールした wheel より数倍遅いので、時間を測るときはそちらを
@@ -150,7 +149,7 @@ print(run.iterations, run.best_objective)  # 746 89.0 — 冷えるずっと前�
 | `n_accepted`、`n_rejected` | 適用した移動の数と、何も適用しなかった反復の数 |
 | `n_best_updates` | 最良解が真に改善した回数 |
 | `seed` | その実行が使ったシード。`run` にシードを渡さなかった場合は `None` |
-| `proven_optimal`、`dual_bound` | `BranchAndBound` が証明した内容。[Exact search](https://trash-iine.github.io/optopus-py/heuristics_exact.html) (英語) を参照。他のヒューリスティックでは `None` |
+| `proven_optimal`、`dual_bound` | `BranchAndBound` が証明した内容。[厳密解法](heuristics_exact.md)を参照。他のヒューリスティックでは `None` |
 
 ```python
 run = report.runs[0]

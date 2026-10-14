@@ -6,7 +6,7 @@ source_sha256: b6fb496ba71a
 
 このページでは optopus に含まれる問題を比較します。それぞれが何を最適化するか、解がどんな形か、
 どの制約を問題自身が扱うか、実行が何を報告するかを説明します。すべてのコンストラクタと引数は
-[API reference](https://trash-iine.github.io/optopus-py/api_reference.html) (英語) に、ほとんどの問題の
+[API リファレンス](api_reference.md)に、ほとんどの問題の
 実例は[クイックスタート](quickstart.md)にあります。
 
 (choosing-a-representation)=
@@ -44,11 +44,10 @@ source_sha256: b6fb496ba71a
 
 汎用ヒューリスティックと合成ヒューリスティックは、どれもすべての問題で動きます。`GeneticAlgorithm`
 が各問題で使える交叉は
-[GeneticAlgorithm](https://trash-iine.github.io/optopus-py/heuristics_composed.html#geneticalgorithm)
-(英語) に一覧があります。
+[GeneticAlgorithm](heuristics_composed.md#geneticalgorithm)に一覧があります。
 
 `BranchAndBound` は `MaxCut`、`Qubo`、`Sat`、`VertexCover`、`Formula` で最適性を証明します。
-[Exact search](https://trash-iine.github.io/optopus-py/heuristics_exact.html) (英語) を参照してください。
+[厳密解法](heuristics_exact.md)を参照してください。
 
 (neighborhoods)=
 ## 近傍

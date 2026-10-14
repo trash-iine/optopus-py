@@ -247,7 +247,7 @@ print(lkh.run(tsp, seed=42).best_objective)       # 4.0 — 正方形の周長
 
 `AdaptiveLargeNeighborhoodSearch` は `Tsp`、`Vrp`、`FlowShop`、`BinPacking` でも動き、
 `HybridGeneticSearch` は `Vrp` で動きます。それぞれの引数と例は
-[Problem-specific heuristics](https://trash-iine.github.io/optopus-py/heuristics_specific.html) (英語)
+[問題専用ヒューリスティック](heuristics_specific.md)
 にあります。
 
 ```{note}
@@ -262,14 +262,9 @@ Hao の γ はアルゴリズム内部で 2 回数えられるので、G-set で
 - [探索の実行と結果の読み方](running.md) — 実行回数、シード、停止条件、結果の全フィールド。
 - [組み込みの問題](problems.md) — 問題の選び方、制約、各問題の例。
 - [Formula によるモデル化](formula.md) — 多項式、制約、ペナルティの重み。
-- [Choosing a heuristic](https://trash-iine.github.io/optopus-py/heuristics.html) (英語) —
-  どのヒューリスティックをどう設定するか。種類ごとのページ:
-  [generic](https://trash-iine.github.io/optopus-py/heuristics_generic.html)、
-  [composed](https://trash-iine.github.io/optopus-py/heuristics_composed.html)、
-  [problem-specific](https://trash-iine.github.io/optopus-py/heuristics_specific.html)、
-  [exact](https://trash-iine.github.io/optopus-py/heuristics_exact.html)。
+- [ヒューリスティックの選び方](heuristics.md) — どのヒューリスティックをどう設定するか。種類ごとの
+  ページ: [汎用](heuristics_generic.md)、[合成](heuristics_composed.md)、
+  [問題専用](heuristics_specific.md)、[厳密解法](heuristics_exact.md)。
 - [グラフとテスト用インスタンス](graphs_and_instances.md) — ランダムグラフ、最適解を埋め込んだインスタンス、カーネル化。
-- [Examples](https://trash-iine.github.io/optopus-py/examples.html) (英語) — 複数実行の統計と
-  ヒューリスティックの比較。
-- [API reference](https://trash-iine.github.io/optopus-py/api_reference.html) (英語) — すべての
-  クラス、メソッド、引数。
+- [例](examples.md) — 複数実行の統計とヒューリスティックの比較。
+- [API リファレンス](api_reference.md) — すべてのクラス、メソッド、引数。

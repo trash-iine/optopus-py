@@ -134,9 +134,7 @@ penalty_weight  >  (1 回の移動での目的関数の最大の利得) / (1 回
   `Sequential` や `VariableNeighborhoodSearch` で `"Change"` のあとに実行してください。
 
 `SimulatedAnnealing` もこうした実行不可能なステップを越えられますが、それはペナルティの重みに近い
-温度のときだけです。
-[SimulatedAnnealing](https://trash-iine.github.io/optopus-py/heuristics.html#simulatedannealing) (英語)
-を参照してください。
+温度のときだけです。[SimulatedAnnealing](heuristics.md#simulatedannealing)を参照してください。
 
 どちらも合わない場合は、すべての移動が構成上制約を守るように、問題を Python で書いてください。
 
@@ -201,7 +199,7 @@ penalty_weight  >  (1 回の移動での目的関数の最大の利得) / (1 回
 `GeneticAlgorithm` は `Formula` 上で、各変数をどちらかの親から受け継ぐ `crossover="Uniform"`
 (既定) か、親の値が食い違う変数をより小さな `Formula` として解く `"SubProblem"` で動きます。
 
-(examples)=
+(formula-examples)=
 ## 例
 
 (knapsack)=

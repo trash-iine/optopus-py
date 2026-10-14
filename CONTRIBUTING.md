@@ -114,8 +114,8 @@ written in Japanese.
   `tests/test_docs.py` fails when the English page has changed since; its message gives the new
   hash. A pull request that edits an English page updates the translation in the same PR, then
   the hash. A new English page gets its Japanese page, and its entry in the toctree of
-  `docs/source-ja/index.md`, in the same PR. An English page without a translation yet is linked
-  from the Japanese pages through its URL on the English site, marked `(英語)`.
+  `docs/source-ja/index.md`, in the same PR; the test fails while any English page has no
+  translation.
 - Example code is the English code, unchanged; only its comments are translated. The examples
   run under `tests/test_docs.py` like the English ones.
 - Keep a heading that is a class name (`## MaxCut`) as it is. Give a translated heading a target

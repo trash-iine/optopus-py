@@ -41,8 +41,7 @@ Follow CONTRIBUTING.md, "Japanese edition" (ADR 0008):
 - Translate the English diff into the page of the same name under `docs/source-ja/`, keeping its
   glossary, its heading targets such as `(stopping)=`, and the example code unchanged apart from
   comments. A new page gets its translation and an entry in the toctree of
-  `docs/source-ja/index.md`; Japanese pages that linked to it on the English site link to it
-  directly instead.
+  `docs/source-ja/index.md`; `test_every_english_page_is_translated` fails until it has one.
 - Run `uv run --no-sync pytest tests/test_docs.py`. A `test_translation_follows_the_english_page`
   failure names the new hash: set it as the page's `source_sha256` only once the translation
   matches the English page.
