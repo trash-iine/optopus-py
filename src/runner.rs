@@ -32,6 +32,7 @@ use optopus::problem::{
     VrpSwapNeighbor, VrpTwoOptNeighbor,
 };
 use optopus::problem::{EigenvalueRelaxation, IntervalRelaxation};
+use optopus::search_state::TrajectoryPoint;
 use optopus::trait_defs::{
     BranchSpace, Crossover, Distance, FixVariables, Ruinable, SubProblemExtractable,
 };
@@ -1104,7 +1105,7 @@ fn run_all<P>(
     minimize: bool,
     runs: usize,
     seed: Option<u64>,
-    obj: impl Fn(&P::Solution) -> f64,
+    obj: fn(&P::Solution) -> f64,
     decode: impl Fn(&P::Solution, Python<'_>) -> Py<PyAny>,
 ) -> Result<RunReport, String>
 where
@@ -1120,6 +1121,7 @@ where
             Some(s) => SearchState::new_with_seed(instance, s),
             None => SearchState::new(instance),
         };
+        state.set_objective_probe(obj);
         let initial_objective = obj(&state.initial_solution);
         let _ = heuristic.run(&mut state);
         let total_time = start.elapsed();
@@ -1152,10 +1154,36 @@ where
             seed: run_seed,
             proven_optimal: outcome.as_ref().map(|o| o.proven_optimal),
             dual_bound: outcome.map(|o| bnb::dual_on_report_scale(o.dual_bound, minimize)),
+            trajectory: monotone_trajectory(&state.trajectory, start, minimize),
         });
     }
 
     Ok(RunReport::from_runs(results, minimize))
+}
+
+/// The recorded best-solution improvements as `(elapsed_secs, iteration, objective)`, keeping
+/// only the points that improve on the one before. A `ClearBest` / `StartBest` sub-run records
+/// its own best, which can be worse than the run's best so far.
+fn monotone_trajectory(
+    points: &[TrajectoryPoint],
+    start: Instant,
+    minimize: bool,
+) -> Vec<(f64, u64, f64)> {
+    let mut out: Vec<(f64, u64, f64)> = Vec::with_capacity(points.len());
+    for p in points {
+        let improves = out.last().is_none_or(|&(_, _, incumbent)| {
+            if minimize {
+                p.objective < incumbent
+            } else {
+                p.objective > incumbent
+            }
+        });
+        if improves {
+            let elapsed = p.instant.saturating_duration_since(start).as_secs_f64();
+            out.push((elapsed, p.iteration, p.objective));
+        }
+    }
+    out
 }
 
 fn decode_list<'py, T: Copy + IntoPyObject<'py>>(x: &[T], py: Python<'py>) -> Py<PyAny> {
