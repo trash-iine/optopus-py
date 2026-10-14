@@ -1,0 +1,5 @@
+{#- The other edition's copy of this page, or its top page if it has none yet (see conf.py). -#}
+{%- set target = pagename if pagename in alt_lang_pages else "index" %}
+<div class="sidebar-language">
+  <a href="{{ alt_lang_prefix }}{{ target }}.html" hreflang="{{ alt_lang_code }}" lang="{{ alt_lang_code }}">{{ alt_lang_label }}</a>
+</div>

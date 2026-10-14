@@ -20,6 +20,9 @@ Do every item that applies:
 - **Editing an existing page**: go straight to step 3.
 - **Recording a design decision**: not user documentation; use the `adr` skill (`docs/adr/`).
 
+Every change to a page under `docs/source/` also goes to its Japanese translation under
+`docs/source-ja/` in the same PR (step 2b).
+
 ## 2. Add a page
 
 - Write it as Markdown (MyST) in `docs/source/`.
@@ -31,15 +34,30 @@ Do every item that applies:
   them in CONTRIBUTING.md, "Documentation", and run `uv run --no-sync pytest tests/test_docs.py`
   after a build.
 
+## 2b. Update the Japanese edition
+
+Follow CONTRIBUTING.md, "Japanese edition" (ADR 0008):
+
+- Translate the English diff into the page of the same name under `docs/source-ja/`, keeping its
+  glossary, its heading targets such as `(stopping)=`, and the example code unchanged apart from
+  comments. A new page gets its translation and an entry in the toctree of
+  `docs/source-ja/index.md`; Japanese pages that linked to it on the English site link to it
+  directly instead.
+- Run `uv run --no-sync pytest tests/test_docs.py`. A `test_translation_follows_the_english_page`
+  failure names the new hash: set it as the page's `source_sha256` only once the translation
+  matches the English page.
+- If the user does not want the translation done now, say that the test will fail until it is.
+
 ## 3. Build
 
 ```bash
 uv run invoke docs --strict
 ```
 
-This rebuilds the extension first, because autodoc reads the compiled module's docstrings.
-`--strict` turns warnings into errors: fix them and rebuild. Output goes to `docs/build/html/`
-(untracked); add `--open` to show it to the user, `--clean` to rule out stale output.
+This rebuilds the extension first, because autodoc reads the compiled module's docstrings, and
+builds both editions. `--strict` turns warnings into errors: fix them and rebuild. Output goes to
+`docs/build/html/` and `docs/build/html/ja/` (untracked); add `--open` to show it to the user,
+`--clean` to rule out stale output.
 
 ## 4. Report
 

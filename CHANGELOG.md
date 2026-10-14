@@ -126,6 +126,10 @@ entries below are breaking; see **Changed** and **Removed**.
   "Built-in problems" builds and solves a small instance of every problem with its
   constructors and evaluators; "Graphs and test instances" covers `Graph`, `PlantedMaxCut` and
   `MaxCutKernel`.
+- A Japanese edition of the documentation at
+  [trash-iine.github.io/optopus-py/ja/](https://trash-iine.github.io/optopus-py/ja/), linked
+  from every page's sidebar. It translates the top page, installation, the quickstart and
+  "Running a search" so far, and links the rest to the English pages.
 
 ### Changed
 

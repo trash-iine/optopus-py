@@ -16,6 +16,7 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
 - `tests/` — pytest suites run against the built extension; `tests/test_tasks.py` covers
   `tasks.py`.
 - `docs/source/` — the user documentation (Sphinx + MyST), published to GitHub Pages.
+- `docs/source-ja/` — its Japanese translation, same file names, published under `ja/` (ADR 0008).
 - `docs/adr/` — Architecture Decision Records (`NNNN-<slug>.md`) for contributors, kept out of the
   published docs. Read them before proposing changes to tooling or conventions.
 - `tasks.py` — Invoke tasks that bundle several steps: `ci`, `fix`, `docs`, `adr`, `set-version`,
@@ -47,7 +48,8 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
 - Releases: follow `.agents/skills/release/SKILL.md`; never bump the version in a feature PR.
 
 ## Conventions
-- Everything is written in English: code, comments, docstrings, docs, commits, PRs.
+- Everything is written in English: code, comments, docstrings, docs, commits, PRs. The one
+  exception is the Japanese edition in `docs/source-ja/`.
 - Branches: `<type>/<short-kebab-description>`, type in
   `feat|fix|docs|refactor|test|ci|chore|release`. Never commit to `main`.
 - Commits: imperative, sentence case, ≤72 characters, no gitmoji or type prefixes.
@@ -60,7 +62,9 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
 - Tests: tiny instances with known optima, `pytest.mark.parametrize` for variants and error paths,
   hermetic (no network, writes only under `tmp_path`).
 - Docs: new pages must be added to a toctree in `docs/source/index.md`. Every `python` block in
-  `docs/source/` runs under `tests/test_docs.py`, so a page's examples must run on their own
-  (ADR 0007).
+  `docs/source/` and `docs/source-ja/` runs under `tests/test_docs.py`, so a page's examples must
+  run on their own (ADR 0007).
+- Japanese edition: a change to an English page updates its `docs/source-ja/` translation in the
+  same PR, then the `source_sha256` the test asks for (CONTRIBUTING.md, "Japanese edition").
 - Decisions about conventions, tooling, dependencies or architecture get an ADR in the same PR.
   Accepted ADRs are superseded by new ones, never rewritten.

@@ -65,7 +65,7 @@ is a digest of this document for AI agents; where the two disagree, this documen
 
 ## Python
 
-- Python code is the test suite, `tasks.py` and `docs/source/conf.py`. Ruff lints and formats it;
+- Python code is the test suite, `tasks.py` and the two docs `conf.py`. Ruff lints and formats it;
   `pyproject.toml` is the single source of truth for the rules (a moderate, bug-oriented set,
   `line-length = 100`). The reasoning is in ADR 0003.
 - Before suppressing a rule, try to fix the code. If a suppression is unavoidable, use a
@@ -92,9 +92,56 @@ is a digest of this document for AI agents; where the two disagree, this documen
   from a temporary directory (ADR 0007). A block may use an earlier block of the same page, never
   another page's, and writes any file it reads. The test does not compare printed values: run a
   new example and check the values its comments claim.
-- Versioned wheel URLs appear only in `README.md` and `installation.md`, the files
-  `invoke set-version` rewrites; the top page installs from Git without a version.
+- Versioned wheel URLs appear only in `README.md` and both editions of `installation.md`, the
+  files `invoke set-version` rewrites; the top page installs from Git without a version.
 - Pushes to `main` deploy the docs to GitHub Pages; pull requests only build them.
+
+### Japanese edition
+
+`docs/source-ja/` is a Japanese translation of `docs/source/`, built by `invoke docs` into
+`docs/build/html/ja/` and published under `ja/` (ADR 0008). It is the one place in the repository
+written in Japanese.
+
+- A Japanese page has the same file name as the English page it translates and starts with
+  front matter recording the English page's hash:
+
+  ```text
+  ---
+  source_sha256: 58c223c1500a
+  ---
+  ```
+
+  `tests/test_docs.py` fails when the English page has changed since; its message gives the new
+  hash. A pull request that edits an English page updates the translation in the same PR, then
+  the hash. A new English page gets its Japanese page, and its entry in the toctree of
+  `docs/source-ja/index.md`, in the same PR. An English page without a translation yet is linked
+  from the Japanese pages through its URL on the English site, marked `(英語)`.
+- Example code is the English code, unchanged; only its comments are translated. The examples
+  run under `tests/test_docs.py` like the English ones.
+- Keep a heading that is a class name (`## MaxCut`) as it is. Give a translated heading a target
+  named after the English heading's anchor, so both editions share URL fragments:
+
+  ```text
+  (stopping)=
+  ## 停止条件
+  ```
+
+  Link to it with `[停止条件](#stopping)`, from any page.
+- Write in the polite form (です・ます). Code, argument values and names stay in their original
+  form. Translate recurring terms consistently:
+
+  | English | Japanese |
+  | --- | --- |
+  | heuristic | ヒューリスティック |
+  | metaheuristics | メタヒューリスティクス |
+  | neighborhood, move | 近傍, 移動 |
+  | run (noun), iteration | 実行, 反復 |
+  | objective (value) | 目的関数値 |
+  | stop condition | 停止条件 |
+  | local search, tabu search, simulated annealing | 局所探索, タブー探索, 焼きなまし法 |
+  | perturbation, crossover, offspring | 摂動, 交叉, 子 |
+  | feasible, constraint, penalty weight | 実行可能, 制約, ペナルティの重み |
+  | tour, route, depot | 巡回路, 経路, デポ |
 
 ## Architecture decision records (ADRs)
 

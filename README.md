@@ -174,7 +174,8 @@ print(report.runs[0].solution)  # [True, False] — value of each variable
 ```
 
 See the [documentation](https://trash-iine.github.io/optopus-py/) for the full API reference
-and more examples. Its sources live under [`docs/`](docs/source/index.md).
+and more examples ([日本語版](https://trash-iine.github.io/optopus-py/ja/)). Its sources live
+under [`docs/`](docs/source/index.md).
 
 ## Development
 
