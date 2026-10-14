@@ -19,8 +19,8 @@ ADR_GLOB = "[0-9][0-9][0-9][0-9]-*.md"
 # The checks .github/workflows/ci.yml runs, in the same order. Keep the two in sync.
 # `maturin develop` builds the extension from the current sources; `pytest` then
 # tests that build. Commands run bare rather than through `uv run`, because a uv
-# sync would reinstall a cached `optopus` wheel over the fresh build (see
-# docs/Makefile) -- run the tasks themselves with `uv run invoke`.
+# sync would build the extension again, with the release profile, over the fresh
+# dev build (ADR 0009) -- run the tasks themselves with `uv run invoke`.
 CI_CHECKS = (
     ("cargo fmt", "cargo fmt --check"),
     ("clippy", "cargo clippy --all-targets -- -D warnings"),
@@ -106,15 +106,14 @@ def fix(c):
 def docs(c, output="html", clean=False, strict=False, open=False):
     """Build the documentation (default: HTML)."""
     # The API reference is generated from the compiled extension's docstrings, so
-    # it has to be rebuilt first -- a plain `uv sync` reinstalls a cached wheel
-    # and would silently document a stale build.
+    # it has to be built from the current sources first.
     c.run("maturin develop")
     if clean:
         c.run("make -C docs clean")
     sphinxopts = ' SPHINXOPTS="-W --keep-going"' if strict else ""
     c.run(f"make -C docs {output}{sphinxopts}", pty=True)
     # The Japanese edition is published under ja/ inside the English one (ADR 0008).
-    # Bare like the CI checks: a uv sync here would undo the build above.
+    # Bare like the CI checks: a uv sync here would build again over the one above.
     strict_flags = " -W --keep-going" if strict else ""
     c.run(
         f"sphinx-build -b {output} docs/source-ja docs/build/{output}/ja"
