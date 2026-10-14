@@ -170,6 +170,28 @@ assert run.trajectory[-1][1:] == (run.best_iteration, run.best_objective)
 The times differ from machine to machine. A seeded run under an iteration limit repeats its
 iterations and objectives exactly, which makes them the axis to compare two runs on.
 
+### Watching a run as it goes
+
+`trajectory` arrives with the report. To see improvements while a run is still going, pass
+`on_improvement` to `run`, a callable it calls as `on_improvement(run, elapsed_secs, objective)`.
+The first improvement of each run arrives at once; after that, the latest improvement arrives
+at most every 0.1 seconds, so a fast search does not spend its time in Python, and none is left
+waiting when the search goes quiet. `objective` is on the scale of `best_objective`, and every
+call reports a better value than the one before it in that run.
+
+```python
+def show(run, elapsed, objective):
+    print(f"run {run}: {objective} after {elapsed:.3f} s")
+
+report = optopus.SimulatedAnnealing(
+    "Flip", 5.0, 0.999, optopus.StopCondition(max_iteration=5_000)
+).run(mc, runs=2, seed=1, on_improvement=show)
+```
+
+The callback runs on another thread at times, so keep it short and let it only record or
+forward what it gets. An exception it raises is raised from `run` once the run under way ends,
+and no later run starts.
+
 ### Picking the best solution
 
 The report holds no best solution of its own. Pick the run whose `best_objective` is the

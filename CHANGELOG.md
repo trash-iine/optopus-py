@@ -132,6 +132,9 @@ entries below are breaking; see **Changed** and **Removed**.
   classes with their English docstrings.
 - `RunResult.trajectory`, every improvement of the run's best solution as
   `(elapsed_secs, iteration, objective)`, for plotting how a run converged.
+- `on_improvement`, an optional argument of every heuristic's `run`: a callable that receives
+  `(run, elapsed_secs, objective)` while a run improves, at once for the first improvement and
+  then at most every 0.1 seconds.
 
 ### Changed
 
