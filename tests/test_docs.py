@@ -59,6 +59,13 @@ def test_code_blocks_run(page, tmp_path, monkeypatch):
         exec(compile(source, f"{page_id(page)}:{line}", "exec"), namespace)
 
 
+def test_every_english_page_is_translated():
+    untranslated = sorted(
+        page.name for page in ENGLISH.glob("*.md") if not (JAPANESE / page.name).exists()
+    )
+    assert not untranslated, f"no Japanese page in {JAPANESE.name}/ for {untranslated}"
+
+
 @pytest.mark.parametrize("translation", TRANSLATIONS, ids=page_id)
 def test_translation_follows_the_english_page(translation):
     english = ENGLISH / translation.name
