@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a release of optopus-py — run the version bump through `invoke set-version`, open the release PR, and tag its merge commit. Use this whenever the user wants to release, cut, publish, or ship a version, bump the version, tag a version, or prepare a release ("リリースして" / "タグを打って" / "0.2.0 出して"), and consult it before touching Cargo.toml's version, the CHANGELOG heading, or any v-prefixed URL in README.md or docs/source/installation.md, because those four files have to move together and a wrong wheel filename is a 404 no test catches.
+description: Cut a release of optopus-py — run the version bump through `invoke set-version`, open the release PR, and tag its merge commit. Use this whenever the user wants to release, cut, publish, or ship a version, bump the version, tag a version, or prepare a release ("リリースして" / "タグを打って" / "0.2.0 出して"), and consult it before touching Cargo.toml's version, the CHANGELOG heading, or any v-prefixed URL in README.md, docs/source/installation.md or docs/source-ja/installation.md, because those five files have to move together and a wrong wheel filename is a 404 no test catches.
 ---
 
 # Releasing optopus-py
@@ -8,7 +8,7 @@ description: Cut a release of optopus-py — run the version bump through `invok
 The mechanical part is `invoke`. What this skill adds is the ordering, which is not obvious and which two workflows constrain:
 
 - **`release.yml`** has a `check-version` job that *reads* `Cargo.toml` and fails if the tag name is not `v<version>`. A tag never sets the version, so someone commits it first.
-- **`docs.yml`** deploys the Sphinx site to GitHub Pages on **every push to `main`**, and `README.md` / `docs/source/installation.md` spell out wheel URLs with the version in the filename. A bumped `main` without a matching tag publishes install instructions that 404.
+- **`docs.yml`** deploys the Sphinx site to GitHub Pages on **every push to `main`**, and `README.md` / `docs/source/installation.md` / `docs/source-ja/installation.md` spell out wheel URLs with the version in the filename. A bumped `main` without a matching tag publishes install instructions that 404.
 
 Hence: **one PR moves everything version-shaped, and the tag goes on its merge commit.** That keeps the 404 window down to one CI run instead of leaving it open indefinitely. The corollary is that a version bump never rides along in a feature PR — if asked to add one, say why it belongs in its own PR and offer that instead. (This repo learned it the hard way; `git log --grep="Leave the version bump"` has the reasoning.)
 
@@ -31,7 +31,7 @@ git switch -c release/v0.2.0
 uv run invoke set-version 0.2.0
 ```
 
-`set-version` rewrites all four files: `Cargo.toml`'s `[package] version` (`pyproject.toml` is `dynamic = ["version"]` and reads it from there), the `## Unreleased` heading into `## 0.2.0 (today)`, and every wheel URL and `@vX.Y.Z` pin in `README.md` and `docs/source/installation.md`. Do not hand-edit those filenames — `release.yml` pins `MACOSX_DEPLOYMENT_TARGET` precisely so they stay predictable, and one wrong character is a 404 rather than a test failure.
+`set-version` rewrites all five files: `Cargo.toml`'s `[package] version` (`pyproject.toml` is `dynamic = ["version"]` and reads it from there), the `## Unreleased` heading into `## 0.2.0 (today)`, and every wheel URL and `@vX.Y.Z` pin in `README.md` and both editions of `installation.md`. Do not hand-edit those filenames — `release.yml` pins `MACOSX_DEPLOYMENT_TARGET` precisely so they stay predictable, and one wrong character is a 404 rather than a test failure.
 
 Then read the dated changelog entry as a user would. This is the last cheap moment to fix a wrong claim: each breaking change should say what a reader has to do differently.
 
@@ -82,7 +82,7 @@ Four assets: three wheels and an sdist. Then check the thing the whole ordering 
 
 ```bash
 for u in $(grep -ohE 'https://github.com/trash-iine/optopus-py/releases/download/[^ ]+whl' \
-             README.md docs/source/installation.md | sort -u); do
+             README.md docs/source/installation.md docs/source-ja/installation.md | sort -u); do
   printf '%s  %s\n' "$(curl -s -o /dev/null -w '%{http_code}' -L "$u")" "$(basename "$u")"
 done
 ```
