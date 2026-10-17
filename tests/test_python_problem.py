@@ -359,8 +359,14 @@ def test_grasp_runs_on_a_python_problem_with_the_ruin_methods():
     assert sorted(report.runs[0].solution) == list(range(6))
 
 
-def test_iterated_greedy_is_for_the_flow_shop_only():
-    with pytest.raises(ValueError, match="IteratedGreedy is only available for FlowShop"):
+def test_iterated_greedy_runs_on_a_python_problem():
+    greedy = optopus.IteratedGreedy(stop(100), removal_count=2, temperature=0.5)
+    report = greedy.run(RuinTsp(POINTS), runs=2, seed=1)
+    assert report.best_objective == pytest.approx(TSP_OPTIMUM)
+
+
+def test_iterated_greedy_needs_a_temperature_off_the_flow_shop():
+    with pytest.raises(ValueError, match="needs a 'temperature'"):
         optopus.IteratedGreedy(stop(10)).run(RuinTsp(POINTS))
 
 

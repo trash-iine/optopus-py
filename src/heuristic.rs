@@ -6,7 +6,7 @@ use optopus::heuristic::{ParentSelection, RewardShaping};
 
 use crate::branch_and_bound::RelaxationSpec;
 use crate::result::RunReport;
-use crate::runner::{self, HeuristicKind, HeuristicSpec};
+use crate::runner::{self, AlnsTuning, HeuristicKind, HeuristicSpec, HgsTuning};
 use crate::stop_condition::StopCondition;
 use crate::validate::{check_at_least, check_half_open_unit, check_positive, check_unit_interval};
 
@@ -1393,8 +1393,9 @@ impl LinKernighanHelsgaun {
 /// Applies to ``Vrp``, ``Tsp``, ``FlowShop`` and ``BinPacking`` problems, and to Python
 /// problems that define the ruin methods (``to_partial``, ``finish``, ``elements``,
 /// ``remove_all``, ``removal_gain``, ``relatedness``, ``num_buckets``, ``num_places``,
-/// ``insertion_cost``, ``insert``). On ``Vrp``, ``Tsp`` and ``FlowShop`` a descent around
-/// the reinserted elements follows every repair.
+/// ``insertion_cost``, ``insert``). On ``Vrp``, ``Tsp`` and ``FlowShop``, and on a Python
+/// problem with ``repair_around``, a descent around the reinserted elements follows every
+/// repair.
 ///
 /// Args:
 ///     stop (StopCondition): Stopping criterion.
@@ -1404,10 +1405,25 @@ impl LinKernighanHelsgaun {
 ///     cooling_rate (float): Geometric cooling factor for the acceptance temperature, in
 ///         ``(0, 1]``. The temperature starts where a solution 5% worse than the starting one
 ///         is accepted half the time. Defaults to 0.9995.
+///     scores (tuple[float, float, float]): What an operator pair earns for a new best
+///         solution, for beating the incumbent, and for an accepted worse candidate. Only the
+///         ratios matter. Non-negative. Defaults to Ropke and Pisinger's ``(4, 2, 1)``.
+///     segment_length (int): Iterations between two updates of the operator weights,
+///         ``>= 1``. Defaults to 100.
+///     reaction (float): How much of a segment's average score enters the weights at an
+///         update, in ``[0, 1]``. Defaults to 0.1.
+///     max_removal (int): Ceiling on the elements torn out in one iteration, on top of
+///         ``removal_fraction``, ``>= 1``. Defaults to 50.
+///     local_repair (bool): Whether the descent follows each repair where the problem has one.
+///         Defaults to True; False runs plain ruin and recreate.
+///
+/// Raises:
+///     ValueError: If a parameter is outside the range given above.
 #[pyclass(module = "optopus")]
 pub struct AdaptiveLargeNeighborhoodSearch {
     removal_fraction: f64,
     cooling_rate: f64,
+    tuning: AlnsTuning,
     stop: StopCondition,
 }
 
@@ -1417,6 +1433,7 @@ impl AdaptiveLargeNeighborhoodSearch {
             kind: HeuristicKind::AdaptiveLargeNeighborhoodSearch {
                 removal_fraction: self.removal_fraction,
                 cooling_rate: self.cooling_rate,
+                tuning: self.tuning,
             },
             neighbor: String::new(),
             stop: self.stop.clone(),
@@ -1427,13 +1444,54 @@ impl AdaptiveLargeNeighborhoodSearch {
 #[pymethods]
 impl AdaptiveLargeNeighborhoodSearch {
     #[new]
-    #[pyo3(signature = (stop, removal_fraction=0.15, cooling_rate=0.9995))]
-    fn new(stop: StopCondition, removal_fraction: f64, cooling_rate: f64) -> PyResult<Self> {
+    #[pyo3(signature = (
+        stop,
+        removal_fraction=0.15,
+        cooling_rate=0.9995,
+        scores=(4.0, 2.0, 1.0),
+        segment_length=100,
+        reaction=0.1,
+        max_removal=50,
+        local_repair=true,
+    ),
+    text_signature = "(stop, removal_fraction=0.15, cooling_rate=0.9995, scores=(4.0, 2.0, 1.0), \
+                      segment_length=100, reaction=0.1, max_removal=50, local_repair=True)"
+    )]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        stop: StopCondition,
+        removal_fraction: f64,
+        cooling_rate: f64,
+        scores: (f64, f64, f64),
+        segment_length: u64,
+        reaction: f64,
+        max_removal: usize,
+        local_repair: bool,
+    ) -> PyResult<Self> {
         check_half_open_unit("removal_fraction", removal_fraction)?;
         check_half_open_unit("cooling_rate", cooling_rate)?;
+        let (best, better, accept) = scores;
+        if ![best, better, accept]
+            .iter()
+            .all(|v| v.is_finite() && *v >= 0.0)
+        {
+            return Err(PyValueError::new_err(format!(
+                "'scores' must be finite and non-negative, got {scores:?}"
+            )));
+        }
+        check_at_least("segment_length", segment_length, 1)?;
+        check_unit_interval("reaction", reaction)?;
+        check_at_least("max_removal", max_removal, 1)?;
         Ok(Self {
             removal_fraction,
             cooling_rate,
+            tuning: AlnsTuning {
+                scores,
+                segment_length,
+                reaction,
+                max_removal,
+                local_repair,
+            },
             stop,
         })
     }
@@ -1485,30 +1543,40 @@ impl AdaptiveLargeNeighborhoodSearch {
     }
 }
 
-/// Iterated greedy for the permutation flow shop: each iteration takes ``removal_count`` jobs
-/// out at random, puts each back where the makespan grows least, runs an insertion descent,
-/// and accepts the result if it is no worse, or otherwise with probability
-/// ``exp(-Δ / temperature)`` at a constant temperature.
+/// Iterated greedy: each iteration takes ``removal_count`` elements out at random, puts each
+/// back where the objective grows least, runs the problem's descent around them, and accepts
+/// the result if it is no worse, or otherwise with probability ``exp(-Δ / temperature)`` at a
+/// constant temperature.
 ///
 /// It is ruin-and-recreate with one fixed destroy operator, one fixed repair operator and a
 /// fixed number of removals, which on the flow shop, where it was proposed, beats the adaptive
-/// choice of ``AdaptiveLargeNeighborhoodSearch``. Applies to ``FlowShop`` only.
+/// choice of ``AdaptiveLargeNeighborhoodSearch``. Applies to the problems
+/// ``AdaptiveLargeNeighborhoodSearch`` does: ``FlowShop``, ``Tsp``, ``Vrp``, ``BinPacking``,
+/// and Python problems with the ruin methods. The descent is the insertion descent on
+/// ``FlowShop``, the one ``AdaptiveLargeNeighborhoodSearch`` runs on ``Tsp`` and ``Vrp``, and
+/// ``repair_around`` on a Python problem; ``BinPacking`` has none.
 ///
 /// Args:
 ///     stop (StopCondition): Stopping criterion. One iteration is one destruction and
 ///         reconstruction with its descent.
-///     removal_count (int): Jobs taken out each iteration, ``>= 1``. Defaults to 4.
-///     temperature_factor (float): Scales the acceptance temperature, which is
-///         ``temperature_factor · Σp / (n_jobs · n_machines · 10)``, a tenth of the mean
+///     removal_count (int): Elements taken out each iteration, ``>= 1``. Defaults to 4.
+///     temperature_factor (float): On ``FlowShop``, scales the acceptance temperature, which
+///         is ``temperature_factor · Σp / (n_jobs · n_machines · 10)``, a tenth of the mean
 ///         processing time times the factor. Must be positive and finite. Defaults to 0.4.
+///     temperature (float | None): The acceptance temperature itself, in the units of the
+///         objective. Required on every problem but ``FlowShop``, where it replaces the one
+///         ``temperature_factor`` gives. Defaults to None.
+///     local_repair (bool): Whether the descent follows each reconstruction. Defaults to True.
 ///
 /// Raises:
-///     ValueError: If ``removal_count`` is 0 or ``temperature_factor`` is not positive and
-///         finite.
+///     ValueError: If ``removal_count`` is 0, or ``temperature_factor`` or ``temperature`` is
+///         not positive and finite.
 #[pyclass(module = "optopus")]
 pub struct IteratedGreedy {
     removal_count: usize,
     temperature_factor: f64,
+    temperature: Option<f64>,
+    local_repair: bool,
     stop: StopCondition,
 }
 
@@ -1518,6 +1586,8 @@ impl IteratedGreedy {
             kind: HeuristicKind::IteratedGreedy {
                 removal_count: self.removal_count,
                 temperature_factor: self.temperature_factor,
+                temperature: self.temperature,
+                local_repair: self.local_repair,
             },
             neighbor: String::new(),
             stop: self.stop.clone(),
@@ -1528,17 +1598,38 @@ impl IteratedGreedy {
 #[pymethods]
 impl IteratedGreedy {
     #[new]
-    #[pyo3(signature = (stop, removal_count=4, temperature_factor=0.4))]
-    fn new(stop: StopCondition, removal_count: usize, temperature_factor: f64) -> PyResult<Self> {
+    #[pyo3(signature = (
+        stop,
+        removal_count=4,
+        temperature_factor=0.4,
+        temperature=None,
+        local_repair=true,
+    ))]
+    fn new(
+        stop: StopCondition,
+        removal_count: usize,
+        temperature_factor: f64,
+        temperature: Option<f64>,
+        local_repair: bool,
+    ) -> PyResult<Self> {
         check_at_least("removal_count", removal_count, 1)?;
-        if !(temperature_factor.is_finite() && temperature_factor > 0.0) {
-            return Err(PyValueError::new_err(format!(
-                "'temperature_factor' must be positive and finite, got {temperature_factor}"
-            )));
+        for (name, value) in [
+            ("temperature_factor", Some(temperature_factor)),
+            ("temperature", temperature),
+        ] {
+            if let Some(v) = value
+                && !(v.is_finite() && v > 0.0)
+            {
+                return Err(PyValueError::new_err(format!(
+                    "'{name}' must be positive and finite, got {v}"
+                )));
+            }
         }
         Ok(Self {
             removal_count,
             temperature_factor,
+            temperature,
+            local_repair,
             stop,
         })
     }
@@ -1711,6 +1802,26 @@ impl GreedyRandomizedConstruction {
 ///         in ``(0, 1)`` exclusive. Defaults to 0.2.
 ///     restart_generations (int | None): Restart the population after this many generations
 ///         without improvement. Defaults to 20000; None never restarts.
+///     n_elite (int): How many of the cheapest individuals the survivor selection keeps
+///         whatever their diversity, ``>= 1``. Defaults to 4.
+///     n_closest (int): How many nearest individuals an individual's diversity is averaged
+///         over, ``>= 1``. Defaults to 5.
+///     penalty_adaptation (tuple[int, float, float, float]): ``(period, increase, decrease,
+///         tolerance)``: every ``period`` offspring the feasible share is read, and the
+///         capacity penalty is multiplied by ``increase`` (``> 1``) when the share is more than
+///         ``tolerance`` (in ``[0, 0.5)``) below ``target_feasible``, by ``decrease`` (in
+///         ``(0, 1)``) when it is that far above. Defaults to ``(100, 1.2, 0.85, 0.05)``.
+///     repair_probability (float): Probability that an infeasible offspring is also repaired
+///         under a boosted penalty, in ``[0, 1]``. Defaults to 0.5.
+///     initial_population (tuple[int, int]): ``(factor, nearest_neighbor_every)``: the
+///         initial population holds ``factor · min_population_size`` individuals, one in every
+///         ``nearest_neighbor_every`` built by a nearest-neighbor tour instead of at random.
+///         Both ``>= 1``. Defaults to ``(4, 4)``.
+///     descent_passes (int): Passes the granular descent may spend on one offspring,
+///         ``>= 1``. Defaults to 64.
+///
+/// Raises:
+///     ValueError: If a parameter is outside the range given above.
 #[pyclass(module = "optopus")]
 pub struct HybridGeneticSearch {
     min_population_size: usize,
@@ -1718,6 +1829,7 @@ pub struct HybridGeneticSearch {
     granularity: usize,
     target_feasible: f64,
     restart_generations: Option<u64>,
+    tuning: HgsTuning,
     stop: StopCondition,
 }
 
@@ -1730,6 +1842,7 @@ impl HybridGeneticSearch {
                 granularity: self.granularity,
                 target_feasible: self.target_feasible,
                 restart_generations: self.restart_generations,
+                tuning: self.tuning,
             },
             neighbor: String::new(),
             stop: self.stop.clone(),
@@ -1747,10 +1860,19 @@ impl HybridGeneticSearch {
         granularity=20,
         target_feasible=0.2,
         restart_generations=Some(20_000),
+        n_elite=4,
+        n_closest=5,
+        penalty_adaptation=(100, 1.2, 0.85, 0.05),
+        repair_probability=0.5,
+        initial_population=(4, 4),
+        descent_passes=64,
     ),
     text_signature = "(stop, min_population_size=25, generation_size=40, granularity=20, \
-                      target_feasible=0.2, restart_generations=20000)"
+                      target_feasible=0.2, restart_generations=20000, n_elite=4, n_closest=5, \
+                      penalty_adaptation=(100, 1.2, 0.85, 0.05), repair_probability=0.5, \
+                      initial_population=(4, 4), descent_passes=64)"
     )]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         stop: StopCondition,
         min_population_size: usize,
@@ -1758,6 +1880,12 @@ impl HybridGeneticSearch {
         granularity: usize,
         target_feasible: f64,
         restart_generations: Option<u64>,
+        n_elite: usize,
+        n_closest: usize,
+        penalty_adaptation: (u32, f64, f64, f64),
+        repair_probability: f64,
+        initial_population: (usize, usize),
+        descent_passes: usize,
     ) -> PyResult<Self> {
         check_at_least("min_population_size", min_population_size, 4)?;
         check_at_least("generation_size", generation_size, 1)?;
@@ -1767,12 +1895,43 @@ impl HybridGeneticSearch {
                 "'target_feasible' must be within (0.0, 1.0), got {target_feasible}"
             )));
         }
+        check_at_least("n_elite", n_elite, 1)?;
+        check_at_least("n_closest", n_closest, 1)?;
+        let (period, increase, decrease, tolerance) = penalty_adaptation;
+        let valid = period >= 1
+            && increase.is_finite()
+            && increase > 1.0
+            && decrease > 0.0
+            && decrease < 1.0
+            && (0.0..0.5).contains(&tolerance);
+        if !valid {
+            return Err(PyValueError::new_err(format!(
+                "'penalty_adaptation' must be (period >= 1, increase > 1, decrease in (0, 1), \
+                 tolerance in [0, 0.5)), got {penalty_adaptation:?}"
+            )));
+        }
+        check_unit_interval("repair_probability", repair_probability)?;
+        check_at_least("initial_population factor", initial_population.0, 1)?;
+        check_at_least(
+            "initial_population nearest_neighbor_every",
+            initial_population.1,
+            1,
+        )?;
+        check_at_least("descent_passes", descent_passes, 1)?;
         Ok(Self {
             min_population_size,
             generation_size,
             granularity,
             target_feasible,
             restart_generations,
+            tuning: HgsTuning {
+                n_elite,
+                n_closest,
+                penalty_adaptation,
+                repair_probability,
+                initial_population,
+                descent_passes,
+            },
             stop,
         })
     }
