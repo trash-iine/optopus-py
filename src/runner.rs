@@ -45,6 +45,7 @@ use pyo3::types::PyList;
 use rand::rngs::SmallRng;
 
 use crate::branch_and_bound::{self as bnb, PyRelaxation, RelaxationSpec};
+use crate::details::{self, Details};
 use crate::error;
 use crate::heuristic as py_heuristic;
 use crate::initial;
@@ -337,9 +338,13 @@ where
                 reward_shaping.clone(),
                 *max_candidates,
             );
-            Ok(Box::new(match policy_weights {
+            let rl = match policy_weights {
                 Some(w) => rl.with_policy_weights(*w),
                 None => rl,
+            };
+            Ok(details::recording(rl, |rl| Details {
+                policy_weights: Some(rl.policy.weights.to_vec()),
+                ..Details::default()
             }))
         }
         HeuristicKind::PopulationAnnealing {
@@ -377,9 +382,14 @@ where
                 *beta_max,
                 *sweeps_per_exchange,
             );
-            Ok(Box::new(match sweep_length {
+            let pt = match sweep_length {
                 Some(length) => pt.with_sweep_length(*length),
                 None => pt,
+            };
+            Ok(details::recording(pt, |pt| Details {
+                betas: Some(pt.betas().to_vec()),
+                exchange_acceptance: pt.exchange_acceptance(),
+                ..Details::default()
             }))
         }
         other => Err(unsupported(other)),
@@ -1252,6 +1262,15 @@ where
         // searched a part of the run.
         let outcome = bnb::take_outcome()
             .filter(|_| matches!(spec.kind, HeuristicKind::BranchAndBound { .. }));
+        let details = details::take()
+            .filter(|_| {
+                matches!(
+                    spec.kind,
+                    HeuristicKind::ParallelTempering { .. }
+                        | HeuristicKind::ReinforcementLearningSearch { .. }
+                )
+            })
+            .unwrap_or_default();
 
         let best_objective = state.best_solution.reported();
         let raw_diff = best_objective - initial_objective;
@@ -1277,6 +1296,9 @@ where
             seed: run_seed,
             proven_optimal: outcome.as_ref().map(|o| o.proven_optimal),
             dual_bound: outcome.map(|o| bnb::dual_on_report_scale(o.dual_bound, minimize)),
+            betas: details.betas,
+            exchange_acceptance: details.exchange_acceptance,
+            policy_weights: details.policy_weights,
             trajectory: monotone_trajectory(&state.trajectory, start, minimize),
         });
     }
@@ -1388,6 +1410,7 @@ pub fn solve(
     // Drop what an earlier call left behind, should it have stopped before taking it.
     bnb::take_outcome();
     bnb::take_error();
+    details::take();
 
     let py = problem.py();
     let finish = |report: PyResult<RunReport>| {

@@ -90,6 +90,26 @@ pub struct RunResult {
     /// before the whole problem had been split once.
     #[pyo3(get)]
     pub dual_bound: Option<f64>,
+    /// The inverse temperatures of the replica ladder, hottest first.
+    ///
+    /// Set only when the heuristic run is a ``ParallelTempering``, and ``None`` otherwise.
+    #[pyo3(get)]
+    pub betas: Option<Vec<f64>>,
+    /// The share of replica exchanges the run accepted.
+    ///
+    /// Set only when the heuristic run is a ``ParallelTempering`` that tried an exchange, and
+    /// ``None`` otherwise. A share near 0 means neighboring temperatures are too far apart for
+    /// a configuration to travel up and down the ladder; add replicas or narrow
+    /// ``beta_min``..``beta_max``.
+    #[pyo3(get)]
+    pub exchange_acceptance: Option<f64>,
+    /// The policy weights the run ended with, one per feature.
+    ///
+    /// Set only when the heuristic run is a ``ReinforcementLearningSearch``, and ``None``
+    /// otherwise. Pass them as ``policy_weights`` to start another search from what this one
+    /// learned.
+    #[pyo3(get)]
+    pub policy_weights: Option<Vec<f64>>,
     /// Every improvement of the best solution, as ``(elapsed_secs, iteration, objective)``
     /// tuples in the order they happened.
     ///
