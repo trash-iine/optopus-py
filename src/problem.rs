@@ -121,6 +121,36 @@ impl MaxCut {
         }
     }
 
+    /// Read a Max Cut instance from an edge-list file, such as a G-set instance.
+    ///
+    /// The format is :meth:`Graph.load_file`'s: a line ``N M``, then one line ``i j w`` per
+    /// edge with 1-indexed vertices and an optional weight.
+    ///
+    /// Args:
+    ///     path (str): Path to the instance file.
+    ///
+    /// Returns:
+    ///     MaxCut: The loaded problem instance.
+    ///
+    /// Raises:
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse.
+    #[staticmethod]
+    fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
+        OptMaxCut::load_file(path)
+            .map(|inner| Self { inner })
+            .map_err(input_error)
+    }
+
+    /// The underlying graph, as a copy.
+    fn graph(&self) -> PyGraph {
+        PyGraph {
+            inner: self.inner.graph.clone(),
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "MaxCut(num_vertices={}, num_edges={})",
@@ -493,6 +523,31 @@ impl Qubo {
         }
     }
 
+    /// Read a QUBO instance from a sparse matrix file.
+    ///
+    /// The file starts with a line ``N M``, the number of variables and of entries, followed by
+    /// one line ``i j v`` per entry with 1-indexed variables. Each line sets
+    /// ``Q[i][j] = Q[j][i] = v``, a linear term when ``i == j``, and a pair given twice keeps
+    /// the last value, as in :meth:`from_entries`.
+    ///
+    /// Args:
+    ///     path (str): Path to the instance file.
+    ///
+    /// Returns:
+    ///     Qubo: The loaded problem instance.
+    ///
+    /// Raises:
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse.
+    #[staticmethod]
+    fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
+        OptQubo::load_file(path)
+            .map(|inner| Self { inner })
+            .map_err(input_error)
+    }
+
     fn __repr__(&self) -> String {
         format!("Qubo(dim={})", self.inner.len())
     }
@@ -546,6 +601,29 @@ impl Sat {
             inner.add_clause(clause);
         }
         Ok(Self { inner })
+    }
+
+    /// Read a MaxSAT instance from a DIMACS CNF file.
+    ///
+    /// The file has a header ``p cnf <n_vars> <n_clauses>`` and one clause per line as
+    /// literals ending in ``0``; lines starting with ``c`` are comments.
+    ///
+    /// Args:
+    ///     path (str): Path to the instance file.
+    ///
+    /// Returns:
+    ///     Sat: The loaded problem instance.
+    ///
+    /// Raises:
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse.
+    #[staticmethod]
+    fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
+        OptSat::load_file(path)
+            .map(|inner| Self { inner })
+            .map_err(input_error)
     }
 
     fn __repr__(&self) -> String {
@@ -602,6 +680,36 @@ impl VertexCover {
     fn from_graph(graph: &PyGraph) -> Self {
         Self {
             inner: OptVc::new(graph.inner.clone()),
+        }
+    }
+
+    /// Read a Vertex Cover instance from an edge-list file.
+    ///
+    /// The format is :meth:`Graph.load_file`'s: a line ``N M``, then one line ``i j [w]`` per
+    /// edge with 1-indexed vertices. Weights are read but do not affect the objective.
+    ///
+    /// Args:
+    ///     path (str): Path to the instance file.
+    ///
+    /// Returns:
+    ///     VertexCover: The loaded problem instance.
+    ///
+    /// Raises:
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse.
+    #[staticmethod]
+    fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
+        OptVc::load_file(path)
+            .map(|inner| Self { inner })
+            .map_err(input_error)
+    }
+
+    /// The underlying graph, as a copy.
+    fn graph(&self) -> PyGraph {
+        PyGraph {
+            inner: self.inner.graph.clone(),
         }
     }
 
@@ -1178,6 +1286,36 @@ impl GraphColoring {
         Self::build(graph.inner.clone(), num_colors)
     }
 
+    /// Read a Graph Coloring instance from an edge-list file.
+    ///
+    /// The format is :meth:`Graph.load_file`'s: a line ``N M``, then one line ``i j [w]`` per
+    /// edge with 1-indexed vertices. Weights are ignored.
+    ///
+    /// Args:
+    ///     path (str): Path to the instance file.
+    ///     num_colors (int | None): Palette size. Defaults to None (``max_degree + 1``).
+    ///
+    /// Returns:
+    ///     GraphColoring: The loaded problem instance.
+    ///
+    /// Raises:
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse, or ``num_colors`` is 0.
+    #[staticmethod]
+    #[pyo3(signature = (path, num_colors=None))]
+    fn load_file(path: &str, num_colors: Option<usize>) -> PyResult<Self> {
+        check_readable(path)?;
+        Self::build(Graph::load_file(path).map_err(input_error)?, num_colors)
+    }
+
+    /// The underlying graph, as a copy.
+    fn graph(&self) -> PyGraph {
+        PyGraph {
+            inner: self.inner.graph.clone(),
+        }
+    }
+
     /// Palette size: the number of colors a solution may use.
     fn num_colors(&self) -> usize {
         self.inner.k
@@ -1292,6 +1430,30 @@ impl JobShopScheduling {
         Ok(Self {
             inner: OptJobShop::new(name, n_machines, jobs),
         })
+    }
+
+    /// Read a Job Shop instance from a file in the Taillard / OR-Library layout.
+    ///
+    /// The file starts with a line ``n_jobs n_machines``, followed by one line per job of
+    /// ``machine duration`` pairs, one pair per machine, with 0-indexed machines. Empty lines
+    /// and lines starting with ``#`` are ignored.
+    ///
+    /// Args:
+    ///     path (str): Path to the instance file.
+    ///
+    /// Returns:
+    ///     JobShopScheduling: The loaded problem instance.
+    ///
+    /// Raises:
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse.
+    #[staticmethod]
+    fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
+        OptJobShop::load_file(path)
+            .map(|inner| Self { inner })
+            .map_err(input_error)
     }
 
     fn __repr__(&self) -> String {

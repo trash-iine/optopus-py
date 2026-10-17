@@ -24,17 +24,31 @@ pub fn run_error(err: OptError) -> PyErr {
 /// error, so this raises the `OSError` subclass Python's own `open` would, `FileNotFoundError`
 /// or `PermissionError`, with the path attached.
 pub fn check_readable(path: &str) -> PyResult<()> {
-    std::fs::File::open(path).map(drop).map_err(|err| {
-        let Some(code) = err.raw_os_error() else {
-            return PyErr::from(err);
-        };
-        // `OSError(errno, strerror, filename)` picks the subclass for `errno`, and its
-        // `strerror` is the message alone, without the "(os error N)" Rust appends.
-        let message = err.to_string();
-        let strerror = message
-            .strip_suffix(&format!(" (os error {code})"))
-            .unwrap_or(&message)
-            .to_string();
-        PyOSError::new_err((code, strerror, path.to_string()))
-    })
+    std::fs::File::open(path)
+        .map(drop)
+        .map_err(|err| os_error(err, path))
+}
+
+/// An error optopus returned while writing `path`: an `OSError` naming the file for a failed
+/// write, otherwise as [`input_error`].
+pub fn write_error(err: OptError, path: &str) -> PyErr {
+    match err {
+        OptError::Io(io) => os_error(io, path),
+        other => input_error(other),
+    }
+}
+
+/// The `OSError` subclass Python raises for `err`, with `path` as its `filename`.
+fn os_error(err: std::io::Error, path: &str) -> PyErr {
+    let Some(code) = err.raw_os_error() else {
+        return PyErr::from(err);
+    };
+    // `OSError(errno, strerror, filename)` picks the subclass for `errno`, and its `strerror`
+    // is the message alone, without the "(os error N)" Rust appends.
+    let message = err.to_string();
+    let strerror = message
+        .strip_suffix(&format!(" (os error {code})"))
+        .unwrap_or(&message)
+        .to_string();
+    PyOSError::new_err((code, strerror, path.to_string()))
 }

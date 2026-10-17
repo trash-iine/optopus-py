@@ -1,9 +1,11 @@
+use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use optopus::prelude::{Graph as OptGraph, seeded_rng};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+use crate::error::{check_readable, input_error, write_error};
 use crate::validate::{check_at_least, check_unit_interval};
 
 /// Largest integer magnitude that survives a round trip through `f32`, matching
@@ -254,6 +256,90 @@ impl Graph {
     ///     list[tuple[int, int, float]]: Each undirected edge once, as ``(u, v, weight)``.
     fn edges(&self) -> Vec<(usize, usize, f32)> {
         self.inner.edges().collect()
+    }
+
+    /// Read a graph from an edge-list file.
+    ///
+    /// The file starts with a line ``N M``, the number of vertices and of edges, followed by
+    /// one line ``i j w`` per edge with 1-indexed vertices; the weight ``w`` is optional and
+    /// defaults to 1.0. This is the format of the G-set Max Cut instances.
+    ///
+    /// Args:
+    ///     path (str): Path to the file.
+    ///
+    /// Returns:
+    ///     Graph: The graph the file describes, with 0-indexed vertices.
+    ///
+    /// Raises:
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse.
+    #[staticmethod]
+    fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
+        OptGraph::load_file(path)
+            .map(|inner| Self { inner })
+            .map_err(input_error)
+    }
+
+    /// Write the graph to a file in the format :meth:`load_file` reads.
+    ///
+    /// The header counts every vertex up to the largest index, isolated ones included, and the
+    /// weights are written in full precision, so loading the file gives the same graph back.
+    ///
+    /// Args:
+    ///     path (str): Path of the file to create or overwrite.
+    ///
+    /// Raises:
+    ///     OSError: If the file cannot be written.
+    fn write_to_file(&self, path: &str) -> PyResult<()> {
+        self.inner
+            .write_to_file(path)
+            .map_err(|err| write_error(err, path))
+    }
+
+    /// The subgraph on the vertices in ``keep``, with the edges among them and their weights.
+    ///
+    /// Vertices keep their indices, so vertex ``v`` of the result is vertex ``v`` of this
+    /// graph.
+    ///
+    /// Args:
+    ///     keep (Iterable[int]): The vertices to keep.
+    ///
+    /// Returns:
+    ///     Graph: The induced subgraph.
+    fn induced_subgraph(&self, keep: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let keep = keep
+            .try_iter()?
+            .map(|v| v?.extract())
+            .collect::<PyResult<HashSet<usize>>>()?;
+        Ok(Self {
+            inner: self.inner.induced_subgraph(|v| keep.contains(&v)),
+        })
+    }
+
+    /// Number of edges at vertex ``v``, 0 for a vertex the graph does not have.
+    fn degree(&self, v: usize) -> usize {
+        self.inner.degree(v)
+    }
+
+    /// The vertices adjacent to ``v`` with the weights of the edges to them.
+    ///
+    /// Returns:
+    ///     list[tuple[int, float]]: ``(neighbor, weight)`` pairs in increasing order of
+    ///     neighbor, empty for a vertex the graph does not have.
+    fn neighbors(&self, v: usize) -> Vec<(usize, f32)> {
+        self.inner.neighbors(v).copied().collect()
+    }
+
+    /// Whether an edge joins ``u`` and ``v``.
+    fn has_edge(&self, u: usize, v: usize) -> bool {
+        self.inner.has_edge(u, v)
+    }
+
+    /// The weight of the edge between ``u`` and ``v``, 0.0 when there is none.
+    fn weight(&self, u: usize, v: usize) -> f32 {
+        self.inner.get_weight(u, v)
     }
 
     fn __repr__(&self) -> String {
