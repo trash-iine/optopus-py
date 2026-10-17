@@ -141,6 +141,9 @@ Partition the vertices into two sides, maximizing the weight of edges between th
 |---|---|
 | `MaxCut.from_edges(edges)` | the instance over `(u, v, weight)` edges, 0-indexed |
 | `MaxCut.from_graph(graph)` | the instance over a [`Graph`](graphs_and_instances.md#graph) |
+| `MaxCut.load_file(path)` | a G-set style edge-list file, `N M` then `i j w` per edge, 1-indexed |
+
+`graph()` returns the underlying [`Graph`](graphs_and_instances.md#graph), as a copy.
 
 ```python
 import optopus
@@ -166,6 +169,7 @@ Minimize x^T Q x over binary x.
 | Constructor | Builds |
 |---|---|
 | `Qubo.from_entries(entries)` | the instance from `(i, j, coefficient)` entries with integer coefficients |
+| `Qubo.load_file(path)` | a sparse matrix file, `N M` then `i j v` per entry, 1-indexed; a pair given twice keeps the last value |
 
 A diagonal entry `(i, i, c)` is the linear term c·x_i, and an off-diagonal one the product
 term c·x_i·x_j.
@@ -208,6 +212,7 @@ clause holds).
 | Constructor | Builds |
 |---|---|
 | `Sat.from_clauses(n_vars, clauses)` | the instance over `n_vars` variables; each clause is a list of DIMACS literals |
+| `Sat.load_file(path)` | a DIMACS CNF file |
 
 A literal `+i` is variable `i` and `-i` its negation, **1-indexed**, while the solution list is
 0-indexed, so variable `i` is `solution[i - 1]`.
@@ -232,6 +237,9 @@ Choose the fewest vertices such that every edge has a chosen end.
 |---|---|
 | `VertexCover.from_edges(edges)` | the instance over `(u, v, weight)` edges; the weights are ignored, pass `1.0` |
 | `VertexCover.from_graph(graph)` | the instance over a [`Graph`](graphs_and_instances.md#graph) |
+| `VertexCover.load_file(path)` | an edge-list file in the format of `MaxCut.load_file`; the weights are ignored |
+
+`graph()` returns the underlying graph, as a copy.
 
 ```python
 edges = [(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 4, 1.0), (4, 0, 1.0), (0, 2, 1.0)]
@@ -301,6 +309,7 @@ runs one operation at a time. Minimize the makespan, the time the last operation
 | Constructor | Builds |
 |---|---|
 | `JobShopScheduling.from_jobs(jobs, name="")` | the instance from one list of `(machine, duration)` per job, machines 0-indexed |
+| `JobShopScheduling.load_file(path)` | a Taillard / OR-Library file: `n_jobs n_machines`, then one line of `machine duration` pairs per job, machines 0-indexed |
 
 A solution is a sequence in which job `j` appears once per operation: its `k`-th occurrence
 schedules the `k`-th operation of job `j`, as early as the machines allow.
@@ -527,11 +536,13 @@ Color the vertices so that no edge joins two of one color, using as few colors a
 |---|---|
 | `GraphColoring.from_edges(edges, num_colors=None)` | the instance over `(u, v, weight)` edges; the weights are ignored |
 | `GraphColoring.from_graph(graph, num_colors=None)` | the instance over a [`Graph`](graphs_and_instances.md#graph) |
+| `GraphColoring.load_file(path, num_colors=None)` | an edge-list file in the format of `MaxCut.load_file`; the weights are ignored |
 
 | Method | Returns |
 |---|---|
 | `num_colors()` | the palette size; `None` above makes it `max_degree + 1`, which always admits a proper coloring |
 | `penalty_weight()` | the penalty per conflicting edge, `num_vertices + 1` |
+| `graph()` | the underlying graph, as a copy |
 | `evaluate_colors(colors)` | a dict with `objective`, `colors_used` and `conflicts` |
 
 ```python

@@ -19,6 +19,7 @@ draws a fresh one every call.
 | `Graph.watts_strogatz(n, k, beta, seed=None)` | Watts-Strogatz small world: a ring where each vertex is joined to its `k` nearest, every edge rewired with probability `beta`; `n k / 2` edges, `k` even and below `n` |
 | `Graph.grid_torus_2d(l)` | the periodic square lattice: `l²` vertices, `2 l²` edges, 4-regular, `l >= 3`; vertex `m + l · n` sits at `(m, n)` |
 | `Graph.grid_torus_3d(l)` | the periodic cubic lattice: `l³` vertices, `3 l³` edges, 6-regular, `l >= 3`; vertex `m + l · n + l² · k` sits at `(m, n, k)` |
+| `Graph.load_file(path)` | an edge-list file: `N M`, then `i j w` per edge with 1-indexed vertices, `w` optional and 1.0 when left out (the G-set format) |
 
 | Method | Returns |
 |---|---|
@@ -26,6 +27,12 @@ draws a fresh one every call.
 | `num_vertices()` | the number of vertices with at least one edge |
 | `num_edges()` | the number of edges |
 | `edges()` | every edge once, as `(u, v, weight)` |
+| `degree(v)` | the number of edges at `v` |
+| `neighbors(v)` | the vertices adjacent to `v`, as `(neighbor, weight)` in increasing order |
+| `has_edge(u, v)` | whether an edge joins `u` and `v` |
+| `weight(u, v)` | the weight of the edge between `u` and `v`, 0.0 when there is none |
+| `induced_subgraph(keep)` | the subgraph on the vertices in `keep`, which keep their numbers |
+| `write_to_file(path)` | nothing; writes the graph in the format `load_file` reads, isolated vertices and full-precision weights included |
 
 ```python
 import optopus

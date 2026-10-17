@@ -1,5 +1,5 @@
 ---
-source_sha256: 5aeba08e7218
+source_sha256: 53ca8197a145
 ---
 
 # 組み込みの問題
@@ -150,6 +150,9 @@ source_sha256: 5aeba08e7218
 |---|---|
 | `MaxCut.from_edges(edges)` | `(u, v, weight)` の辺からなるインスタンス。頂点番号は 0 から |
 | `MaxCut.from_graph(graph)` | [`Graph`](graphs_and_instances.md#graph) 上のインスタンス |
+| `MaxCut.load_file(path)` | G-set 形式の辺リストのファイル。`N M` の後に辺ごとに `i j w`、頂点番号は 1 から |
+
+`graph()` は元になる [`Graph`](graphs_and_instances.md#graph) のコピーを返します。
 
 ```python
 import optopus
@@ -175,6 +178,7 @@ print(report.runs[0].solution)  # [False, True, False, True] — 各頂点がど
 | コンストラクタ | 作るもの |
 |---|---|
 | `Qubo.from_entries(entries)` | 整数係数の `(i, j, coefficient)` からなるインスタンス |
+| `Qubo.load_file(path)` | 疎行列のファイル。`N M` の後に要素ごとに `i j v`、変数番号は 1 から。同じ組が 2 回あれば後の値を使う |
 
 対角成分 `(i, i, c)` は 1 次の項 c·x_i、非対角成分は積の項 c·x_i·x_j です。
 
@@ -217,6 +221,7 @@ q = optopus.Qubo.from_entries([(i, j, c) for (i, j), c in summed.items()])
 | コンストラクタ | 作るもの |
 |---|---|
 | `Sat.from_clauses(n_vars, clauses)` | `n_vars` 個の変数上のインスタンス。各節は DIMACS 形式のリテラルのリスト |
+| `Sat.load_file(path)` | DIMACS CNF 形式のファイル |
 
 リテラル `+i` は変数 `i`、`-i` はその否定で、番号は **1 から**です。一方、解のリストは 0 から
 数えるので、変数 `i` は `solution[i - 1]` です。
@@ -241,6 +246,9 @@ x1, x2 = best.solution  # 変数 i は solution[i - 1]
 |---|---|
 | `VertexCover.from_edges(edges)` | `(u, v, weight)` の辺からなるインスタンス。重みは無視されるので `1.0` を渡す |
 | `VertexCover.from_graph(graph)` | [`Graph`](graphs_and_instances.md#graph) 上のインスタンス |
+| `VertexCover.load_file(path)` | `MaxCut.load_file` と同じ形式の辺リストのファイル。重みは無視される |
+
+`graph()` は元になるグラフのコピーを返します。
 
 ```python
 edges = [(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 4, 1.0), (4, 0, 1.0), (0, 2, 1.0)]
@@ -309,6 +317,7 @@ print(square, square.num_cities())  # Tsp(name="square", n_cities=4) 4
 | コンストラクタ | 作るもの |
 |---|---|
 | `JobShopScheduling.from_jobs(jobs, name="")` | ジョブごとの `(machine, duration)` のリストからなるインスタンス。機械番号は 0 から |
+| `JobShopScheduling.load_file(path)` | Taillard / OR-Library 形式のファイル。`n_jobs n_machines` の後にジョブごとに 1 行の `machine duration` の組、機械番号は 0 から |
 
 解は、ジョブ `j` がその作業の数だけ現れる列です。`j` の `k` 回目の出現は、ジョブ `j` の `k` 番目の
 作業を機械が許す最も早い時刻に割り当てます。
@@ -531,11 +540,13 @@ service_time = 2.0             # 省略可
 |---|---|
 | `GraphColoring.from_edges(edges, num_colors=None)` | `(u, v, weight)` の辺からなるインスタンス。重みは無視される |
 | `GraphColoring.from_graph(graph, num_colors=None)` | [`Graph`](graphs_and_instances.md#graph) 上のインスタンス |
+| `GraphColoring.load_file(path, num_colors=None)` | `MaxCut.load_file` と同じ形式の辺リストのファイル。重みは無視される |
 
 | メソッド | 返すもの |
 |---|---|
 | `num_colors()` | パレットの大きさ。上で `None` なら `max_degree + 1` になり、正しい彩色が必ず存在する |
 | `penalty_weight()` | 衝突する辺 1 本あたりのペナルティ、`num_vertices + 1` |
+| `graph()` | 元になるグラフのコピー |
 | `evaluate_colors(colors)` | `objective`、`colors_used`、`conflicts` を持つ辞書 |
 
 ```python
