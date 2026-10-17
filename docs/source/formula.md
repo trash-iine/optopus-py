@@ -30,6 +30,13 @@ whose variables are all binary takes a faster path, and fixing one variable at `
 it, which ran about 1.5 times slower per move on a 56-variable model. When that matters on a large binary model,
 substitute the fixed value into the polynomials instead and drop the variable's terms.
 
+`permutation=True` makes the variables a permutation instead: each ranges over
+`[0, n_vars - 1]` and no two take the same value, so variable `p` holds what sits at position
+`p`, or the position of item `p`, as the model reads it. A random solution is a random
+permutation, and the search keeps it one, so an ordering needs no "all different" constraints.
+It cannot be combined with `bounds`, and `BranchAndBound` does not run on it, since narrowing one
+variable at a time does not leave a permutation.
+
 ## Polynomials
 
 The objective and both sides of every constraint are polynomials, written as a list of terms.
@@ -183,7 +190,8 @@ fault.
 | `"Swap"` | exchanges the values of two variables whose values differ and fit each other's range |
 | `"Reverse"` | reverses the values of a range of consecutive variables |
 
-`"Swap"` and `"Reverse"` only rearrange values, so they keep how many variables hold each value.
+`"Swap"` and `"Reverse"` only rearrange values, so they keep how many variables hold each value,
+and they are the moves a permutation has: `"Change"` raises `ValueError` there.
 Pair them with `"Change"` unless the counts are right by construction. They are also pairwise:
 a `LocalSearch` or `TabuSearch` step scores about n²/2 moves for n variables, against the
 n · (range) of `"Change"`. On a 56-variable binary model a `TabuSearch` step with `"Swap"` took
@@ -197,7 +205,8 @@ variables. A variable ranging over millions of values is better written as a pro
 
 `GeneticAlgorithm` runs on a `Formula` with `crossover="Uniform"` (the default), which takes each
 variable from either parent, or `"SubProblem"`, which solves the variables the parents disagree
-on as a smaller `Formula`.
+on as a smaller `Formula`. On a permutation `"Uniform"` is the order crossover, which keeps a
+segment of one parent and fills the rest in the other's order, and `"SubProblem"` does not apply.
 
 ## Examples
 
@@ -306,4 +315,27 @@ best = max(report.runs, key=lambda r: r.best_objective)  # higher is better on a
 print({shifts[s]: workers[w] for s in range(len(shifts)) for w in range(len(workers))
        if best.solution[x(w, s)]})  # {'Mon': 'Ben', 'Tue': 'Ann', 'Wed': 'Ben', 'Thu': 'Cal'}
 print(roster.eval_objective(best.solution), roster.eval_penalty(best.solution))  # 9.0 0.0
+```
+
+### Linear arrangement
+
+Place items in a row so that items that work together sit close: minimize
+Σ w_ij · (pos_i − pos_j)² over the linked pairs. With `permutation=True` variable `i` is the
+position of item `i`, and each square expands into the polynomial terms
+`pos_i² + pos_j² − 2 pos_i pos_j`.
+
+```python
+links = {(0, 2): 1.0, (2, 1): 1.0, (1, 3): 1.0, (0, 3): 0.5}
+
+objective = []
+for (i, j), w in links.items():
+    objective += [([i, i], w), ([j, j], w), ([i, j], -2.0 * w)]
+
+row = optopus.Formula(n_vars=4, objective=objective, direction="Minimize", permutation=True)
+report = optopus.LocalSearch("Swap", optopus.StopCondition(max_iteration=100)).run(
+    row, runs=4, seed=1
+)
+best = max(report.runs, key=lambda r: r.best_objective)  # higher is better on a Formula
+print(sorted(range(4), key=lambda i: best.solution[i]))  # [3, 1, 2, 0], left to right; its mirror is as good
+print(row.eval_objective(best.solution))  # 7.5
 ```

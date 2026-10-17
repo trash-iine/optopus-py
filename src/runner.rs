@@ -1077,13 +1077,27 @@ fn crossover_formula(
 }
 
 /// Builds a heuristic for a `Formula`. `maximize` is its direction, which a relaxation written
-/// in Python states its bound in and the core keeps private.
+/// in Python states its bound in and the core keeps private, and `permutation` whether its
+/// variables are a permutation, which rules out the moves and the crossover that would leave
+/// one.
 fn build_formula(
     maximize: bool,
+    permutation: bool,
     spec: &HeuristicSpec,
 ) -> Result<Box<dyn Heuristic<FormulaProblem>>, String> {
-    let recur = |s: &HeuristicSpec| build_formula(maximize, s);
-    if let Some(built) = build_nested(spec, &recur, &crossover_formula)? {
+    let recur = |s: &HeuristicSpec| build_formula(maximize, permutation, s);
+    let crossover = |kind: Option<&str>, sub| {
+        // optopus asserts a sub-problem is not cut out of a permutation.
+        if permutation && kind == Some("SubProblem") {
+            return Err(
+                "the 'SubProblem' crossover does not apply to a permutation Formula; use \
+                 'Uniform', which is an order crossover there"
+                    .to_string(),
+            );
+        }
+        crossover_formula(kind, sub)
+    };
+    if let Some(built) = build_nested(spec, &recur, &crossover)? {
         return Ok(built);
     }
     let bnb =
@@ -1105,6 +1119,11 @@ fn build_formula(
     match spec.neighbor.as_str() {
         // On a binary variable an integer change *is* a flip, which upstream says in as many
         // words, so "Flip" stays accepted as the name it had before the integer layer.
+        "Change" | "Flip" if permutation => Err(format!(
+            "invalid neighbor '{}' for a permutation Formula, which no single change keeps a \
+             permutation (use 'Swap' or 'Reverse')",
+            spec.neighbor
+        )),
         "Change" | "Flip" => build_generic::<FormulaProblem, IntChangeNeighbor>(spec),
         "Swap" => build_generic::<FormulaProblem, IntSwapNeighbor>(spec),
         "Reverse" => build_generic::<FormulaProblem, IntReverseNeighbor>(spec),
@@ -1479,6 +1498,7 @@ pub fn solve(
 
     if let Ok(f) = problem.extract::<PyRef<'_, Formula>>() {
         let (inner, maximize) = (&f.inner, f.maximize);
+        let permutation = inner.variables().is_permutation();
         let initial = initial_solution
             .as_ref()
             .map(|value| initial::formula(inner, value.bind(py), "initial_solution"))
@@ -1489,7 +1509,7 @@ pub fn solve(
             run_all(
                 inner,
                 spec,
-                |s| build_formula(maximize, s),
+                |s| build_formula(maximize, permutation, s),
                 false,
                 runs,
                 seed,
