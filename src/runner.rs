@@ -40,10 +40,12 @@ use optopus::trait_defs::{
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
+use rand::rngs::SmallRng;
 
 use crate::branch_and_bound::{self as bnb, PyRelaxation, RelaxationSpec};
 use crate::error;
 use crate::heuristic as py_heuristic;
+use crate::initial;
 use crate::problem::{
     BinPacking, FlowShop, Formula, GraphColoring, JobShopScheduling, MaxCut, Qap, Qubo, Sat, Tsp,
     VertexCover, Vrp,
@@ -1109,6 +1111,8 @@ fn run_all<P>(
     runs: usize,
     seed: Option<u64>,
     on_improvement: Option<&Arc<Py<PyAny>>>,
+    initial: Option<&P::Solution>,
+    start_from_given: impl Fn(&mut SmallRng),
     decode: impl Fn(&P::Solution, Python<'_>) -> Py<PyAny>,
 ) -> PyResult<RunReport>
 where
@@ -1121,10 +1125,15 @@ where
         let mut heuristic = build(spec).map_err(PyValueError::new_err)?;
 
         let start = Instant::now();
-        let mut state = match run_seed {
-            Some(s) => SearchState::new_with_seed(instance, s),
-            None => SearchState::new(instance),
+        let mut state = match (initial, run_seed) {
+            (None, Some(s)) => SearchState::new_with_seed(instance, s),
+            (None, None) => SearchState::new(instance),
+            (Some(sol), Some(s)) => SearchState::with_solution_and_seed(instance, sol.clone(), s),
+            (Some(sol), None) => SearchState::with_solution(instance, sol.clone()),
         };
+        if initial.is_some() {
+            start_from_given(&mut state.rng);
+        }
         state.set_objective_probe(progress::probe::<P::Solution>);
         let initial_objective = state.initial_solution.reported();
         let watch = on_improvement.map(|callback| {
@@ -1266,6 +1275,7 @@ pub fn solve(
     runs: usize,
     seed: Option<u64>,
     on_improvement: Option<Py<PyAny>>,
+    initial_solution: Option<Py<PyAny>>,
 ) -> PyResult<RunReport> {
     if runs == 0 {
         return Err(PyValueError::new_err("'runs' must be at least 1"));
@@ -1296,44 +1306,63 @@ pub fn solve(
     // A built-in problem never calls into Python during a run (a relaxation written in Python
     // attaches on its own), so the run releases the GIL for other Python threads.
     macro_rules! built_in {
-        ($($ty:ident: $build:expr, minimize = $minimize:literal, $decode:expr;)+) => {
+        ($($ty:ident: $build:expr, minimize = $minimize:literal, $encode:path, $decode:expr;)+) => {
             $(
                 if let Ok(p) = problem.extract::<PyRef<'_, $ty>>() {
                     let inner = &p.inner;
+                    let initial = initial_solution
+                        .as_ref()
+                        .map(|value| $encode(inner, value.bind(py)))
+                        .transpose()?;
                     return finish(py.detach(|| {
-                        run_all(inner, spec, $build, $minimize, runs, seed, on_improvement, $decode)
+                        run_all(
+                            inner,
+                            spec,
+                            $build,
+                            $minimize,
+                            runs,
+                            seed,
+                            on_improvement,
+                            initial.as_ref(),
+                            |_| {},
+                            $decode,
+                        )
                     }));
                 }
             )+
         };
     }
     built_in! {
-        MaxCut: build_max_cut, minimize = false,
+        MaxCut: build_max_cut, minimize = false, initial::max_cut,
             |s, py| decode_list(&s.x, py);
-        Qubo: build_qubo, minimize = true,
+        Qubo: build_qubo, minimize = true, initial::qubo,
             |s, py| decode_list(&s.x, py);
-        Sat: build_sat, minimize = false,
+        Sat: build_sat, minimize = false, initial::sat,
             |s, py| decode_list(&s.x, py);
-        VertexCover: build_vertex_cover, minimize = true,
+        VertexCover: build_vertex_cover, minimize = true, initial::vertex_cover,
             |s, py| decode_list(&s.x, py);
-        Tsp: build_tsp, minimize = true,
+        Tsp: build_tsp, minimize = true, initial::tsp,
             |s, py| decode_list(&s.tour, py);
-        JobShopScheduling: build_job_shop, minimize = true,
+        JobShopScheduling: build_job_shop, minimize = true, initial::job_shop,
             |s, py| decode_list(&s.operations, py);
-        Vrp: build_vrp, minimize = true,
+        Vrp: build_vrp, minimize = true, initial::vrp,
             |s, py| decode_routes(&s.routes, py);
-        GraphColoring: build_graph_coloring, minimize = true,
+        GraphColoring: build_graph_coloring, minimize = true, initial::graph_coloring,
             |s, py| decode_list(&s.colors, py);
-        FlowShop: build_flow_shop, minimize = true,
+        FlowShop: build_flow_shop, minimize = true, initial::flow_shop,
             |s, py| decode_list(&s.sequence, py);
-        Qap: build_qap, minimize = true,
+        Qap: build_qap, minimize = true, initial::qap,
             |s, py| decode_list(&s.assignment, py);
-        BinPacking: build_bin_packing, minimize = true,
+        BinPacking: build_bin_packing, minimize = true, initial::bin_packing,
             |s, py| decode_list(&s.bin_of, py);
     }
 
     if let Ok(f) = problem.extract::<PyRef<'_, Formula>>() {
         let (inner, maximize) = (&f.inner, f.maximize);
+        let initial = initial_solution
+            .as_ref()
+            .map(|value| initial::formula(inner, value.bind(py)))
+            .transpose()?;
         // A Formula reports a higher-is-better score whichever way it optimizes (its `Reported`
         // impl), so the runner tracks it as a maximization.
         return finish(py.detach(|| {
@@ -1345,6 +1374,8 @@ pub fn solve(
                 runs,
                 seed,
                 on_improvement,
+                initial.as_ref(),
+                |_| {},
                 |s, py| decode_list(s.values(), py),
             )
         }));
@@ -1358,6 +1389,10 @@ pub fn solve(
         ));
     }
     let prob = PyProblem::from_py(problem)?;
+    let initial = initial_solution
+        .as_ref()
+        .map(|value| prob.given_solution(value.bind(py)))
+        .transpose()?;
     let report = run_all(
         &prob,
         spec,
@@ -1366,6 +1401,8 @@ pub fn solve(
         runs,
         seed,
         on_improvement,
+        initial.as_ref(),
+        |rng| prob.start_from_given(rng),
         |s, py| s.value.clone_ref(py),
     );
     if let Some(err) = prob.take_error() {

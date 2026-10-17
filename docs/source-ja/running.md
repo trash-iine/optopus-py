@@ -1,11 +1,11 @@
 ---
-source_sha256: c67c0a1fc2a5
+source_sha256: 6a49ea060782
 ---
 
 # 探索の実行と結果の読み方
 
 どのヒューリスティックも使い方は同じです。`StopCondition` を渡して作り、
-`run(problem, runs=1, seed=None)` を呼び、返ってくる `RunReport` を読みます。このページでは
+`run(problem, runs=1, seed=None, on_improvement=None, initial_solution=None)` を呼び、返ってくる `RunReport` を読みます。このページでは
 この 3 つを説明します。どのヒューリスティックを作るかは
 [ヒューリスティックの選び方](heuristics.md)にあります。
 
@@ -32,6 +32,8 @@ print(report)
 | `problem` | | 組み込みの問題、`Formula`、または [Python で書いた問題](python_problems.md) |
 | `runs` | `1` | 独立な実行の回数。各実行はそれぞれのランダムな初期解から始まる。`0` は `ValueError` |
 | `seed` | `None` | マスターシード。実行 0 はこれをそのまま使い、残りの実行はこれから自分のシードを導く。そのため同じ呼び出しは同じレポートを再現する。`None` なら呼び出しごとに新しいシードを取る |
+| `on_improvement` | `None` | 実行中に改善を受け取るコールバック。[実行中の様子を見る](#watching-a-run-as-it-goes)を参照 |
+| `initial_solution` | `None` | ランダムな解の代わりに各実行を始める解。[解から始める](#starting-from-a-solution)を参照 |
 
 - 実行は**1 つずつ順に**行われます。1 実行あたり `max_duration_secs=d` の予算なら、呼び出し全体は
   約 `runs × d` かかります。
@@ -52,6 +54,26 @@ assert [r.solution for r in a.runs] == [r.solution for r in b.runs]
 ```
 
 これは反復回数で止める場合の話です。時間制限については[停止条件](#stopping)を見てください。
+
+(starting-from-a-solution)=
+### 解から始める
+
+`initial_solution` を渡すと、各実行はランダムな解ではなく与えた解から始まります。形は
+[組み込みの問題](problems.md)にある、その問題の `RunResult.solution` と同じです。そのため、ある呼び出しの
+最良解を次の呼び出しで、別のヒューリスティックでも続きから探索できます。
+
+```python
+rough = sa.run(mc, seed=1).runs[0]
+polished = optopus.TabuSearch(
+    neighbor="Flip", tabu_tenure=(5, 10), stop=optopus.StopCondition(max_iteration=2_000)
+).run(mc, seed=2, initial_solution=rough.solution)
+assert polished.runs[0].initial_objective == rough.best_objective
+```
+
+どの実行も同じ解から始まり、実行が引く乱数はこれまでどおり `seed` で決まります。0/1 の割り当ては
+bool でも整数の 0 と 1 でも渡せます。同じ都市を 2 回訪れる巡回路のように問題に合わない解は
+`ValueError` になります。Python で書いた問題には、その `objective` が受け付けるどんなオブジェクトでも
+渡せ、探索は `new_solution` を呼ばずにそのオブジェクトから始まります。
 
 (stopping)=
 ## 停止条件
@@ -179,6 +201,7 @@ assert run.trajectory[-1][1:] == (run.best_iteration, run.best_objective)
 時間はマシンごとに変わります。seed を与え反復回数で止めた実行は、反復回数と目的関数値を正確に再現する
 ので、2つの実行を比べるときはそちらを軸にします。
 
+(watching-a-run-as-it-goes)=
 ### 実行中の様子を見る
 
 `trajectory` はレポートと一緒に届きます。実行中に改善を見たいときは、`run` に `on_improvement`

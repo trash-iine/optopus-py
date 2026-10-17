@@ -315,6 +315,30 @@ impl PyProblem {
             .clone()
     }
 
+    /// Draws the seed of the `random.Random` the callbacks get from the run's RNG, as drawing
+    /// the initial solution does first.
+    fn seed_callbacks<'py>(
+        &self,
+        py: Python<'py>,
+        rng: &mut impl Rng,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let seed: u64 = rng.random();
+        let py_rng = py.import("random")?.getattr("Random")?.call1((seed,))?;
+        *self.rng.lock().unwrap() = Some(py_rng.clone().unbind());
+        Ok(py_rng)
+    }
+
+    /// Prepares a run that starts from a given solution instead of `new_solution`: the
+    /// callbacks' `random.Random` is seeded from the run's RNG all the same.
+    pub fn start_from_given(&self, rng: &mut impl Rng) {
+        self.call(|py| self.seed_callbacks(py, rng).map(drop));
+    }
+
+    /// `value`, an `initial_solution` from Python, as a solution with its objective.
+    pub fn given_solution(&self, value: &Bound<'_, PyAny>) -> PyResult<PySolution> {
+        self.solution(value.py(), value.clone())
+    }
+
     fn objective(&self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<f64> {
         self.shared
             .obj
@@ -388,10 +412,8 @@ impl ProblemTrait for PyProblem {
     type Solution = PySolution;
 
     fn new_solution(&self, rng: &mut impl Rng) -> PySolution {
-        let seed: u64 = rng.random();
         let made = self.call(|py| {
-            let py_rng = py.import("random")?.getattr("Random")?.call1((seed,))?;
-            *self.rng.lock().unwrap() = Some(py_rng.clone().unbind());
+            let py_rng = self.seed_callbacks(py, rng)?;
             let value = self
                 .shared
                 .obj

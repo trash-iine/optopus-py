@@ -12,6 +12,12 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `initial_solution=` on every heuristic's `run` starts each run from a solution you give
+  instead of a random one, in the form `RunResult.solution` has for the problem, so the best
+  solution of one call continues in the next. It works on every built-in problem, `Formula`
+  and problems written in Python, and a solution that does not fit the problem raises
+  `ValueError`. `MaxCutKernel.project` now has a use: a solution of the original starts a
+  search on the kernel.
 - `FlowShop`, the permutation flow shop (minimize the makespan), with the `Relocate` (insertion)
   and `Swap` neighborhoods and the `Order` crossover. Build it from processing times or read a
   Taillard-layout file with `load_file`; `makespan(sequence)` scores an order and `neh()`

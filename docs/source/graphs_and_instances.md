@@ -149,6 +149,18 @@ else:
 print(f"cut {best} over {len(assignment)} vertices")
 ```
 
+`project` goes the other way: a solution of the original, restricted to the kernel, starts a
+search there through `initial_solution` (see
+[Starting from a solution](running.md#starting-from-a-solution)):
+
+```python
+start = kernel.project(assignment)
+tabu = optopus.TabuSearch(
+    neighbor="Flip", tabu_tenure=(5, 10), stop=optopus.StopCondition(max_iteration=200)
+)
+again = tabu.run(kernel.kernel(), seed=2, initial_solution=start)
+```
+
 The rules bite on sparse, irregular graphs, such as the many low-degree vertices of a
 Barabási-Albert graph, and do nothing on lattices: `MaxCutKernel.reduce` of a
 `grid_torus_2d` instance is trivial.

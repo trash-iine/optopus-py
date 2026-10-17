@@ -1,5 +1,5 @@
 ---
-source_sha256: 368488d2a444
+source_sha256: 8537fca8d95b
 ---
 
 # グラフとテスト用インスタンス
@@ -151,6 +151,17 @@ else:
     assignment = kernel.lift(report.runs[0].solution)
 
 print(f"cut {best} over {len(assignment)} vertices")
+```
+
+`project` は逆向きです。元の問題の解をカーネルに制限したものを `initial_solution` に渡すと、カーネル上の
+探索をそこから始められます ({ref}`解から始める <starting-from-a-solution>`を参照)。
+
+```python
+start = kernel.project(assignment)
+tabu = optopus.TabuSearch(
+    neighbor="Flip", tabu_tenure=(5, 10), stop=optopus.StopCondition(max_iteration=200)
+)
+again = tabu.run(kernel.kernel(), seed=2, initial_solution=start)
 ```
 
 規則がよく効くのは、Barabási-Albert グラフの多数の低次数頂点のような、疎で不規則なグラフです。格子

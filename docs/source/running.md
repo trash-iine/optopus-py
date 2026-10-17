@@ -1,7 +1,7 @@
 # Running a search and reading results
 
 Every heuristic is used the same way: build it with a `StopCondition`, call
-`run(problem, runs=1, seed=None)`, and read the `RunReport` it returns. This page covers those
+`run(problem, runs=1, seed=None, on_improvement=None, initial_solution=None)`, and read the `RunReport` it returns. This page covers those
 three pieces. Which heuristic to build is in [Choosing a heuristic](heuristics.md).
 
 ## `run`
@@ -27,6 +27,8 @@ print(report)
 | `problem` | | a built-in problem, a `Formula`, or a [problem written in Python](python_problems.md) |
 | `runs` | `1` | independent runs, each from its own random starting solution; `0` raises `ValueError` |
 | `seed` | `None` | master seed. Run 0 uses it as is and the others derive theirs from it, so the same call reproduces the same report. `None` draws a fresh seed every call |
+| `on_improvement` | `None` | a callback for a run's improvements while it runs, see [Watching a run as it goes](#watching-a-run-as-it-goes) |
+| `initial_solution` | `None` | where every run starts instead of a random solution, see [Starting from a solution](#starting-from-a-solution) |
 
 - The runs execute **one after another**. A budget of `max_duration_secs=d` per run makes the
   call take about `runs × d`.
@@ -47,6 +49,27 @@ assert [r.solution for r in a.runs] == [r.solution for r in b.runs]
 ```
 
 That holds under an iteration limit; see [Stopping](#stopping) for time limits.
+
+### Starting from a solution
+
+`initial_solution` starts every run from a solution you give instead of a random one. It takes
+the form `RunResult.solution` has for the problem, as listed under
+[Built-in problems](problems.md), so the best solution of one call continues in the next, under
+another heuristic as well:
+
+```python
+rough = sa.run(mc, seed=1).runs[0]
+polished = optopus.TabuSearch(
+    neighbor="Flip", tabu_tenure=(5, 10), stop=optopus.StopCondition(max_iteration=2_000)
+).run(mc, seed=2, initial_solution=rough.solution)
+assert polished.runs[0].initial_objective == rough.best_objective
+```
+
+Each run starts from the same solution, and `seed` still sets everything a run draws. A 0/1
+assignment may be given as bools or as the ints 0 and 1. A solution that does not fit the
+problem, such as a tour that visits a city twice, raises `ValueError`. A problem written in
+Python takes any object its `objective` accepts, and the search starts from that object without
+calling `new_solution`.
 
 ## Stopping
 

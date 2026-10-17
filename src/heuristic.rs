@@ -52,6 +52,10 @@ impl LocalSearch {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -61,7 +65,8 @@ impl LocalSearch {
     ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -69,8 +74,16 @@ impl LocalSearch {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -134,6 +147,10 @@ impl SimulatedAnnealing {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -143,7 +160,8 @@ impl SimulatedAnnealing {
     ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -151,8 +169,16 @@ impl SimulatedAnnealing {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -206,6 +232,10 @@ impl TabuSearch {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -215,7 +245,8 @@ impl TabuSearch {
     ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -223,8 +254,16 @@ impl TabuSearch {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -279,6 +318,10 @@ impl LateAcceptanceHillClimbing {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -288,7 +331,8 @@ impl LateAcceptanceHillClimbing {
     ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -296,8 +340,16 @@ impl LateAcceptanceHillClimbing {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -342,6 +394,10 @@ impl RandomWalk {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -349,7 +405,8 @@ impl RandomWalk {
     /// Raises:
     ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
     ///         neighborhood.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -357,8 +414,16 @@ impl RandomWalk {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -421,10 +486,13 @@ impl BangBangSimulatedAnnealing {
 
     /// Run the heuristic on a problem and return an aggregated report.
     ///
+    /// Takes the arguments of ``LocalSearch.run``, ``initial_solution`` included.
+    ///
     /// Raises:
     ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
     ///         neighborhood.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -432,8 +500,16 @@ impl BangBangSimulatedAnnealing {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -477,10 +553,13 @@ impl BeamSearch {
 
     /// Run the heuristic on a problem and return an aggregated report.
     ///
+    /// Takes the arguments of ``LocalSearch.run``, ``initial_solution`` included.
+    ///
     /// Raises:
     ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
     ///         neighborhood.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -488,8 +567,16 @@ impl BeamSearch {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -565,6 +652,10 @@ impl VariableNeighborhoodSearch {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -575,7 +666,8 @@ impl VariableNeighborhoodSearch {
     ///     ValueError: If a step's ``neighbor`` is not valid for ``problem``, a step is a
     ///         problem-specific heuristic for a different problem, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -583,8 +675,16 @@ impl VariableNeighborhoodSearch {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -643,6 +743,10 @@ impl WalkSat {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -651,7 +755,8 @@ impl WalkSat {
     ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
     ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``Sat`` instance, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -659,8 +764,16 @@ impl WalkSat {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -770,6 +883,10 @@ impl PopulationAnnealing {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -779,7 +896,8 @@ impl PopulationAnnealing {
     ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -787,8 +905,16 @@ impl PopulationAnnealing {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -911,6 +1037,10 @@ impl ParallelTempering {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -920,7 +1050,8 @@ impl ParallelTempering {
     ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -928,8 +1059,16 @@ impl ParallelTempering {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1123,6 +1262,10 @@ impl BreakoutLocalSearch {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1132,7 +1275,8 @@ impl BreakoutLocalSearch {
     ///         neighborhood.
     ///     ValueError: If the constructor's form runs on anything but ``MaxCut``, a part does
     ///         not fit ``problem``, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1140,8 +1284,16 @@ impl BreakoutLocalSearch {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1200,6 +1352,10 @@ impl LinKernighanHelsgaun {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1208,7 +1364,8 @@ impl LinKernighanHelsgaun {
     ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
     ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``Tsp`` instance, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1216,8 +1373,16 @@ impl LinKernighanHelsgaun {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1285,6 +1450,10 @@ impl AdaptiveLargeNeighborhoodSearch {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1294,7 +1463,8 @@ impl AdaptiveLargeNeighborhoodSearch {
     ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``Vrp``, a ``Tsp``, or a Python problem with
     ///         the ruin methods, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1302,8 +1472,16 @@ impl AdaptiveLargeNeighborhoodSearch {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1377,6 +1555,10 @@ impl IteratedGreedy {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1386,7 +1568,8 @@ impl IteratedGreedy {
     ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``FlowShop``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1394,8 +1577,16 @@ impl IteratedGreedy {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1463,6 +1654,10 @@ impl GreedyRandomizedConstruction {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs, one construction each.
@@ -1473,7 +1668,8 @@ impl GreedyRandomizedConstruction {
     ///     ValueError: If ``problem`` is not one the construction applies to, or ``runs`` is
     ///         0.
     ///     TypeError: If ``problem`` is not a problem instance.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1481,8 +1677,16 @@ impl GreedyRandomizedConstruction {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1585,6 +1789,10 @@ impl HybridGeneticSearch {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1593,7 +1801,8 @@ impl HybridGeneticSearch {
     ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
     ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``Vrp`` instance, or ``runs`` is 0.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1601,8 +1810,16 @@ impl HybridGeneticSearch {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1660,6 +1877,10 @@ impl Sequential {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1669,7 +1890,8 @@ impl Sequential {
     ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1677,8 +1899,16 @@ impl Sequential {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1736,6 +1966,10 @@ impl Iterated {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1745,7 +1979,8 @@ impl Iterated {
     ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1753,8 +1988,16 @@ impl Iterated {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1813,6 +2056,10 @@ impl Restart {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -1822,7 +2069,8 @@ impl Restart {
     ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1830,8 +2078,16 @@ impl Restart {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -1932,6 +2188,10 @@ impl BranchAndBound {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs, each run with ``proven_optimal``
@@ -1946,7 +2206,8 @@ impl BranchAndBound {
     ///     TypeError: If ``problem`` is not a problem instance, ``heuristic`` is not a
     ///         heuristic, or a callable relaxation returns something other than a number.
     ///         An exception the callable raises is raised as it is.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -1954,8 +2215,16 @@ impl BranchAndBound {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -2096,6 +2365,10 @@ impl GeneticAlgorithm {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -2105,7 +2378,8 @@ impl GeneticAlgorithm {
     ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -2113,8 +2387,16 @@ impl GeneticAlgorithm {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
 
@@ -2231,6 +2513,10 @@ impl ReinforcementLearningSearch {
     ///         solution: at once for the first improvement, then at most every 0.1 seconds with
     ///         the latest. An exception it raises is raised from ``run`` once the run under
     ///         way ends, and no later run starts.
+    ///     initial_solution (object | None): Where every run starts, in the form
+    ///         ``RunResult.solution`` has for ``problem``, so the best solution of an earlier
+    ///         run continues there. ``None``, the default, starts each run from a random
+    ///         solution.
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
@@ -2240,7 +2526,8 @@ impl ReinforcementLearningSearch {
     ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
-    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
+    ///     ValueError: If ``initial_solution`` is not a solution of ``problem``.
+    #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None, initial_solution=None))]
     fn run(
         &self,
         py: Python<'_>,
@@ -2248,7 +2535,15 @@ impl ReinforcementLearningSearch {
         runs: usize,
         seed: Option<u64>,
         on_improvement: Option<Py<PyAny>>,
+        initial_solution: Option<Py<PyAny>>,
     ) -> PyResult<RunReport> {
-        runner::solve(problem, &self.to_spec(py)?, runs, seed, on_improvement)
+        runner::solve(
+            problem,
+            &self.to_spec(py)?,
+            runs,
+            seed,
+            on_improvement,
+            initial_solution,
+        )
     }
 }
