@@ -59,7 +59,7 @@ unknown name raises `ValueError` when `run` is called.
 | `FlowShop` | `"Relocate"` | moves one job elsewhere in the sequence, the insertion move |
 | | `"Swap"` | exchanges the jobs at two positions |
 | `Qap` | `"Swap"` | exchanges the locations of two facilities |
-| `BinPacking` | `"Relocate"` | moves one item into another bin with room for it, emptying its bin if it was the last |
+| `BinPacking` | `"Relocate"` | moves one item into another bin with room for it, emptying its bin if it was the last, or into a new bin of its own if it shares one |
 | | `"Swap"` | exchanges two items of different sizes in different bins, when both still fit |
 | `Vrp` | `"Relocate"` | moves one customer to a position in another route |
 | | `"Swap"` | exchanges two customers of different routes |
