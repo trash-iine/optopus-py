@@ -186,9 +186,15 @@ impl<P: BranchSpace, R: Relaxation<P>> Heuristic<P> for Reported<P, R> {
         self.inner.stop_condition()
     }
 
-    /// Done as the search is, or as soon as a Python relaxation has raised.
+    /// Done as the search is, or as soon as a Python relaxation has raised. The outcome is
+    /// recorded here as well as in `run`, since the `Guarded` around a heuristic on a Python
+    /// problem drives the loop through `run_once` and `is_done` and never calls `run`.
     fn is_done<'a>(&self, state: &SearchState<'a, P>) -> bool {
-        failed() || self.inner.is_done(state)
+        let done = failed() || self.inner.is_done(state);
+        if done {
+            self.record_outcome(state);
+        }
+        done
     }
 
     fn run_once<'a>(&mut self, state: &mut SearchState<'a, P>) -> Result<(), OptError> {
@@ -207,13 +213,19 @@ impl<P: BranchSpace, R: Relaxation<P>> Heuristic<P> for Reported<P, R> {
         if let Err(OptError::Config(msg)) = &result {
             record(PyValueError::new_err(msg.clone()));
         }
+        self.record_outcome(state);
+        result
+    }
+}
+
+impl<P: BranchSpace, R: Relaxation<P>> Reported<P, R> {
+    fn record_outcome(&self, state: &SearchState<'_, P>) {
         OUTCOME.with(|o| {
             *o.borrow_mut() = Some(Outcome {
                 proven_optimal: self.inner.is_proven_optimal(&state.best_solution),
                 dual_bound: self.inner.dual_bound(&state.best_solution),
             });
         });
-        result
     }
 }
 
