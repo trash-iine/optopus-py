@@ -1,5 +1,5 @@
 ---
-source_sha256: 6a49ea060782
+source_sha256: 5f726df313c6
 ---
 
 # 探索の実行と結果の読み方
@@ -175,6 +175,8 @@ print(run.iterations, run.best_objective)  # 746 89.0 — 冷えるずっと前�
 | `seed` | その実行が使ったシード。`run` にシードを渡さなかった場合は `None` |
 | `trajectory` | 最良解の改善のすべてを `(elapsed_secs, iteration, objective)` で並べたもの。下記を参照 |
 | `proven_optimal`、`dual_bound` | `BranchAndBound` が証明した内容。[厳密解法](heuristics_exact.md)を参照。他のヒューリスティックでは `None` |
+| `betas`、`exchange_acceptance` | `ParallelTempering` の温度のはしごと、受理した交換の割合。他のヒューリスティックでは `None` |
+| `policy_weights` | `ReinforcementLearningSearch` が最後に持っていた重み。他のヒューリスティックでは `None` |
 
 ```python
 run = report.runs[0]

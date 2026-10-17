@@ -267,6 +267,9 @@ overlap in energy, or a good configuration never travels down the ladder. When w
 range, add replicas with it. With a pairwise move, set `sweep_length` as for
 `PopulationAnnealing`.
 
+Each run reports its ladder in `RunResult.betas` and the share of exchanges accepted in
+`RunResult.exchange_acceptance`. A share near 0 says neighboring replicas are too far apart.
+
 ## ReinforcementLearningSearch
 
 Learns which moves to take while it searches. Every iteration describes each candidate move by
@@ -291,5 +294,7 @@ rl = optopus.ReinforcementLearningSearch(
 print(rl.run(mc, runs=3, seed=42).best_objective)  # 93.0
 ```
 
-The policy starts from scratch in every run. On a large neighborhood, set `max_candidates` to a
-few hundred: scoring every move each iteration is what makes it slow.
+The policy starts from scratch in every run. `RunResult.policy_weights` holds the weights a run
+ended with; pass them as `policy_weights` to start the next search from what it learned. On a
+large neighborhood, set `max_candidates` to a few hundred: scoring every move each iteration is
+what makes it slow.
