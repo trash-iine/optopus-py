@@ -388,7 +388,7 @@ def test_ga_rejects_a_named_crossover_on_a_python_problem():
     ga = optopus.GeneticAlgorithm(
         6, optopus.LocalSearch("TwoOpt", stop(5)), stop(5), crossover="Order"
     )
-    with pytest.raises(ValueError, match="one crossover"):
+    with pytest.raises(ValueError, match="invalid crossover 'Order' for a Python problem"):
         ga.run(RuinTsp(POINTS))
 
 

@@ -1169,15 +1169,20 @@ fn build_python(
     spec: &HeuristicSpec,
 ) -> Result<Box<dyn Heuristic<PyProblem>>, String> {
     let recur = |s: &HeuristicSpec| build_python(prob, s);
-    let crossover = |kind: Option<&str>, sub: Option<Box<dyn Heuristic<PyProblem>>>| {
-        if kind.is_some() || sub.is_some() {
-            return Err(
-                "a Python problem has one crossover, its 'crossover' method, so leave \
-                 'crossover' and 'sub_heuristic' unset"
-                    .to_string(),
-            );
+    let crossover = |kind: Option<&str>, sub: Option<Box<dyn Heuristic<PyProblem>>>| match kind {
+        Some("SubProblem") => {
+            prob.check_sub_problem()?;
+            let sub = sub.ok_or("crossover 'SubProblem' needs a 'sub_heuristic'")?;
+            Ok(sub_problem_crossover(sub))
         }
-        Ok(Box::new(PyCrossover::new(prob)?) as Box<dyn Crossover<PyProblem>>)
+        Some(other) => Err(format!(
+            "invalid crossover '{other}' for a Python problem (use 'SubProblem', or leave it \
+             unset for the problem's 'crossover' method)"
+        )),
+        None if sub.is_some() => {
+            Err("'sub_heuristic' only applies to crossover 'SubProblem'".to_string())
+        }
+        None => Ok(Box::new(PyCrossover::new(prob)?) as Box<dyn Crossover<PyProblem>>),
     };
     let inner: Box<dyn Heuristic<PyProblem>> = match build_nested(spec, &recur, &crossover)? {
         Some(built) => built,
