@@ -28,13 +28,20 @@ pub fn check_readable(path: &str) -> PyResult<()> {
         let Some(code) = err.raw_os_error() else {
             return PyErr::from(err);
         };
-        // `OSError(errno, strerror, filename)` picks the subclass for `errno`, and its
-        // `strerror` is the message alone, without the "(os error N)" Rust appends.
+        // `OSError` picks the subclass from the error code, and its `strerror` is the message
+        // alone, without the "(os error N)" Rust appends.
         let message = err.to_string();
         let strerror = message
             .strip_suffix(&format!(" (os error {code})"))
             .unwrap_or(&message)
             .to_string();
-        PyOSError::new_err((code, strerror, path.to_string()))
+        // On Windows the code is a Win32 error, not an errno: `OSError(errno, strerror,
+        // filename, winerror)` maps it to the errno, as Python's own `open` does, where taking
+        // it for an errno would turn a missing directory (3) into `ProcessLookupError`.
+        if cfg!(windows) {
+            PyOSError::new_err((0, strerror, path.to_string(), code))
+        } else {
+            PyOSError::new_err((code, strerror, path.to_string()))
+        }
     })
 }
