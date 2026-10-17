@@ -12,6 +12,11 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `Formula(..., permutation=True)` makes the variables a permutation of `0..n_vars`, so an
+  ordering such as a linear arrangement is a `Formula` without "all different" constraints.
+  The search keeps every solution a permutation through the `"Swap"` and `"Reverse"` moves and
+  the order crossover; `"Change"`, `BranchAndBound` and the `"SubProblem"` crossover raise
+  `ValueError` there. `Formula.is_permutation()` reads it back.
 - `RunResult.betas` and `exchange_acceptance` report a `ParallelTempering` run's temperature
   ladder and the share of replica exchanges it accepted, for tuning the ladder, and
   `RunResult.policy_weights` the weights a `ReinforcementLearningSearch` run ended with, which

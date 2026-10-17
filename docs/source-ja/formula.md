@@ -1,5 +1,5 @@
 ---
-source_sha256: f1a3b5b9fa83
+source_sha256: 4a9dab528fda
 ---
 
 # Formula によるモデル化
@@ -32,6 +32,12 @@ repr の `binary` フィールドは、すべての変数の範囲がちょう�
 すべて 2 値の式は高速な経路を通りますが、1 つの変数を `(0, 0)` に固定するとその経路から外れ、
 56 変数のモデルでは移動 1 回あたり約 1.5 倍遅くなりました。大きな 2 値モデルでそれが問題になる
 場合は、固定した値を多項式に代入し、その変数の項を取り除いてください。
+
+`permutation=True` にすると、変数は順列になります。各変数は `[0, n_vars - 1]` の範囲を取り、どの 2 つも
+同じ値を取りません。そのため変数 `p` は、モデルの読み方に応じて、位置 `p` にあるもの、または項目 `p` の
+位置を表します。ランダムな解はランダムな順列で、探索はそれを順列のまま保つので、順序づけに「すべて
+異なる」制約は要りません。`bounds` とは併用できず、`BranchAndBound` も動きません。変数を 1 つずつ
+絞り込むと順列でなくなるためです。
 
 (polynomials)=
 ## 多項式
@@ -184,6 +190,8 @@ penalty_weight  >  (1 回の移動での目的関数の最大の利得) / (1 回
 | `"Swap"` | 値が異なり、互いの範囲に収まる 2 つの変数の値を入れ替える |
 | `"Reverse"` | 連続する変数の範囲の値を逆順にする |
 
+順列では `"Swap"` と `"Reverse"` だけが使え、`"Change"` は `ValueError` になります。
+
 `"Swap"` と `"Reverse"` は値を並べ替えるだけなので、各値を取る変数の個数を保ちます。個数が構成上
 正しい場合を除き、`"Change"` と組み合わせてください。また、これらは 2 変数の組についての近傍です。
 `LocalSearch` や `TabuSearch` の 1 ステップは、n 変数に対して `"Change"` の n · (範囲の幅) に比べ、
@@ -197,7 +205,9 @@ penalty_weight  >  (1 回の移動での目的関数の最大の利得) / (1 回
 です。
 
 `GeneticAlgorithm` は `Formula` 上で、各変数をどちらかの親から受け継ぐ `crossover="Uniform"`
-(既定) か、親の値が食い違う変数をより小さな `Formula` として解く `"SubProblem"` で動きます。
+(既定) か、親の値が食い違う変数をより小さな `Formula` として解く `"SubProblem"` で動きます。順列では
+`"Uniform"` は順序交叉になり、一方の親の区間を残して残りをもう一方の親の順に埋めます。
+`"SubProblem"` は使えません。
 
 (formula-examples)=
 ## 例
@@ -308,4 +318,26 @@ best = max(report.runs, key=lambda r: r.best_objective)  # Formula では大き�
 print({shifts[s]: workers[w] for s in range(len(shifts)) for w in range(len(workers))
        if best.solution[x(w, s)]})  # {'Mon': 'Ben', 'Tue': 'Ann', 'Wed': 'Ben', 'Thu': 'Cal'}
 print(roster.eval_objective(best.solution), roster.eval_penalty(best.solution))  # 9.0 0.0
+```
+
+### 線形配置
+
+一緒に働く項目どうしが近くに来るように、項目を一列に並べます。つながった組について
+Σ w_ij · (pos_i − pos_j)² を最小化します。`permutation=True` では変数 `i` が項目 `i` の位置で、各 2 乗は
+多項式の項 `pos_i² + pos_j² − 2 pos_i pos_j` に展開できます。
+
+```python
+links = {(0, 2): 1.0, (2, 1): 1.0, (1, 3): 1.0, (0, 3): 0.5}
+
+objective = []
+for (i, j), w in links.items():
+    objective += [([i, i], w), ([j, j], w), ([i, j], -2.0 * w)]
+
+row = optopus.Formula(n_vars=4, objective=objective, direction="Minimize", permutation=True)
+report = optopus.LocalSearch("Swap", optopus.StopCondition(max_iteration=100)).run(
+    row, runs=4, seed=1
+)
+best = max(report.runs, key=lambda r: r.best_objective)  # Formula では大きいほど良い
+print(sorted(range(4), key=lambda i: best.solution[i]))  # [3, 1, 2, 0]、左から右。左右反転も同じく最適
+print(row.eval_objective(best.solution))  # 7.5
 ```
