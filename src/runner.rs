@@ -257,7 +257,10 @@ impl HeuristicKind {
             Self::GreedyRandomizedConstruction { .. } => {
                 Some("Tsp, Vrp, FlowShop, BinPacking and Python problems with the ruin methods")
             }
-            Self::BranchAndBound { .. } => Some("MaxCut, Qubo, Sat, VertexCover and Formula"),
+            Self::BranchAndBound { .. } => Some(
+                "MaxCut, Qubo, Sat, VertexCover, Formula and Python problems with the branching \
+                 methods",
+            ),
             _ => None,
         }
     }
@@ -1194,6 +1197,24 @@ fn build_python(
                     || PyRepair::new(prob).map(|r| Box::new(r) as Box<dyn LocalRepair<PyProblem>>);
                 ruin_and_recreate(spec, "a Python problem", repair, None)
                     .expect("the spec is one ruin_and_recreate builds")?
+            }
+            HeuristicKind::BranchAndBound { ref relaxation, .. } => {
+                prob.check_branchable()?;
+                if !matches!(relaxation, RelaxationSpec::Python(_)) {
+                    return Err(
+                        "BranchAndBound on a Python problem needs a relaxation written \
+                                in Python, a callable taking the node's ranges"
+                            .to_string(),
+                    );
+                }
+                branch_and_bound(
+                    spec,
+                    "a Python problem",
+                    !prob.minimize(),
+                    &recur,
+                    |_, _| None,
+                )
+                .expect("the spec is a BranchAndBound")?
             }
             HeuristicKind::GreedyRandomizedConstruction { alpha } => {
                 prob.check_ruinable(spec.kind.name())?;

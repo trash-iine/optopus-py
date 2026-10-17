@@ -1,5 +1,5 @@
 ---
-source_sha256: f2f2b15c2958
+source_sha256: d28379bf04f0
 ---
 
 # Python で書いた問題
@@ -81,6 +81,7 @@ Rust に残り、問題に依存する処理はすべてあなたのオブジェ
 | `GeneticAlgorithm`、`BreakoutLocalSearch.from_parts` | 省略可の `distance(a, b)`。非負の int。なければ `a == b` を 0、それ以外を 1 として数える |
 | `AdaptiveLargeNeighborhoodSearch` | ruin 系メソッド |
 | `GeneticAlgorithm(crossover="SubProblem")` | `extract_sub_problem(a, b)` と `lift_solution(a, b, sub_solution)` |
+| `BranchAndBound` | `variable_bounds()`、`variable_values(solution)`、`solution_from_values(values)`、`restricted(bounds)`。{ref}`厳密解法 <on-a-problem-written-in-python>`を参照 |
 
 `GeneticAlgorithm` は `crossover` を指定しなければ問題の `crossover` を使い、そのとき `sub_heuristic` も
 指定しません。
