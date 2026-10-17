@@ -143,7 +143,10 @@ Partition the vertices into two sides, maximizing the weight of edges between th
 | `MaxCut.from_graph(graph)` | the instance over a [`Graph`](graphs_and_instances.md#graph) |
 | `MaxCut.load_file(path)` | a G-set style edge-list file, `N M` then `i j w` per edge, 1-indexed |
 
-`graph()` returns the underlying [`Graph`](graphs_and_instances.md#graph), as a copy.
+| Method | Returns |
+|---|---|
+| `cut_size(assignment)` | the weight of the edges an assignment cuts, what a run maximizes |
+| `graph()` | the underlying [`Graph`](graphs_and_instances.md#graph), as a copy |
 
 ```python
 import optopus
@@ -170,6 +173,8 @@ Minimize x^T Q x over binary x.
 |---|---|
 | `Qubo.from_entries(entries)` | the instance from `(i, j, coefficient)` entries with integer coefficients |
 | `Qubo.load_file(path)` | a sparse matrix file, `N M` then `i j v` per entry, 1-indexed; a pair given twice keeps the last value |
+
+`energy(assignment)` returns the energy of an assignment, what a run minimizes.
 
 A diagonal entry `(i, i, c)` is the linear term c·x_i, and an off-diagonal one the product
 term c·x_i·x_j.
@@ -214,6 +219,11 @@ clause holds).
 | `Sat.from_clauses(n_vars, clauses)` | the instance over `n_vars` variables; each clause is a list of DIMACS literals |
 | `Sat.load_file(path)` | a DIMACS CNF file |
 
+| Method | Returns |
+|---|---|
+| `num_satisfied(assignment)` | the clauses an assignment satisfies, what a run maximizes |
+| `num_vars()`, `num_clauses()` | the instance's size |
+
 A literal `+i` is variable `i` and `-i` its negation, **1-indexed**, while the solution list is
 0-indexed, so variable `i` is `solution[i - 1]`.
 
@@ -239,7 +249,11 @@ Choose the fewest vertices such that every edge has a chosen end.
 | `VertexCover.from_graph(graph)` | the instance over a [`Graph`](graphs_and_instances.md#graph) |
 | `VertexCover.load_file(path)` | an edge-list file in the format of `MaxCut.load_file`; the weights are ignored |
 
-`graph()` returns the underlying graph, as a copy.
+| Method | Returns |
+|---|---|
+| `evaluate_cover(assignment)` | a dict with `objective`, `cover_size` and `uncovered_edges`; the objective is `cover_size + penalty_weight() * uncovered_edges` |
+| `penalty_weight()` | the penalty per uncovered edge |
+| `graph()` | the underlying graph, as a copy |
 
 ```python
 edges = [(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 4, 1.0), (4, 0, 1.0), (0, 2, 1.0)]
@@ -262,11 +276,21 @@ Find the shortest closed tour through every city.
 
 | Constructor | Builds |
 |---|---|
-| `Tsp.from_coordinates(coordinates, name="")` | Euclidean distances between `(x, y)` points |
+| `Tsp.from_coordinates(coordinates, name="", edge_weight_type="Continuous", nearest_neighbors=None)` | distances between `(x, y)` points: plain Euclidean, or TSPLIB's `"EUC_2D"`, `"CEIL_2D"`, `"ATT"` or `"GEO"` |
 | `Tsp.from_distance_matrix(matrix, name="")` | the given distances; symmetric, finite and non-negative |
 | `Tsp.load_file(path)` | a TSPLIB instance |
 
-`num_cities()` returns the number of cities.
+`nearest_neighbors=k` keeps only the distances to each city's `k` nearest cities, `n × k`
+numbers instead of `n²`, and computes any other pair from the coordinates when asked: the
+distances are the same, and a large instance fits in memory. `load_file` does this on its own
+above 2000 cities.
+
+| Method | Returns |
+|---|---|
+| `tour_length(tour)` | the length of a closed tour, what a run minimizes |
+| `distance(i, j)` | the distance from city `i` to city `j` |
+| `num_cities()` | the number of cities |
+| `coordinates()`, `edge_weight_type()` | the points and the distance formula, `None` for an instance built from a matrix |
 
 ```python
 dist = [
@@ -311,6 +335,12 @@ runs one operation at a time. Minimize the makespan, the time the last operation
 | `JobShopScheduling.from_jobs(jobs, name="")` | the instance from one list of `(machine, duration)` per job, machines 0-indexed |
 | `JobShopScheduling.load_file(path)` | a Taillard / OR-Library file: `n_jobs n_machines`, then one line of `machine duration` pairs per job, machines 0-indexed |
 
+| Method | Returns |
+|---|---|
+| `makespan(operations)` | the makespan of an operation sequence, what a run minimizes |
+| `completion_times(operations)` | when the operation at each position of the sequence finishes |
+| `num_jobs()`, `num_machines()` | the instance's size |
+
 A solution is a sequence in which job `j` appears once per operation: its `k`-th occurrence
 schedules the `k`-th operation of job `j`, as early as the machines allow.
 
@@ -343,6 +373,7 @@ machine takes the jobs in one common order, the solution. Minimize the makespan.
 | `makespan(sequence)` | the makespan of a job order |
 | `neh()` | the order the NEH construction builds, the usual baseline |
 | `num_jobs()`, `num_machines()` | the instance's size |
+| `processing_time(machine, job)` | how long `job` takes on `machine` |
 
 ```python
 from pathlib import Path
@@ -368,7 +399,7 @@ distance.
 
 | Constructor | Builds |
 |---|---|
-| `Vrp.from_coordinates(coordinates, demands, capacity, num_vehicles=0, name="vrp", rounded=False)` | Euclidean distances; `rounded` rounds them as CVRPLIB does |
+| `Vrp.from_coordinates(coordinates, demands, capacity, num_vehicles=0, name="vrp", rounded=False, nearest_neighbors=None)` | Euclidean distances; `rounded` rounds them as CVRPLIB does, and `nearest_neighbors` keeps only each node's nearest as `Tsp`'s does |
 | `Vrp.from_distance_matrix(matrix, demands, capacity, num_vehicles=0, name="vrp")` | the given distances; symmetric, finite and non-negative |
 | `Vrp.with_fleet(coordinates, demands, vehicle_types, service_times=None, objective_mode="TotalTime", cost_weight=1.0, name="vrp", rounded=False)` | a mixed fleet, see [Mixed fleet](#vrp-mixed-fleet) |
 | `Vrp.load_file(path)` | a CVRPLIB file, or a mixed fleet from a `.toml` file |
@@ -377,6 +408,7 @@ distance.
 |---|---|
 | `evaluate_routes(routes)` | a dict with `objective`, `distance`, `overload` and `route_loads`, and for a mixed fleet every term of its objective |
 | `num_customers()`, `num_vehicles()` | the instance's size; `num_vehicles()` is the number of routes in every solution |
+| `split_giant_tour(giant)` | routes from an order of all customers, cut where the objective is lowest (Prins' Split) |
 | `capacity()` | the vehicle capacity; `ValueError` on a fleet of several types |
 | `penalty_weight()` | the penalty per unit of overload |
 | `vehicle_types()`, `slot_types()`, `service_times()`, `objective_mode()`, `cost_weight()` | the fleet's description, see [Mixed fleet](#vrp-mixed-fleet) |
@@ -616,6 +648,7 @@ Pack items into as few bins of one capacity as possible.
 |---|---|
 | `evaluate_bins(bins)` | a dict with `objective`, `num_bins`, `loads` and `bins` for a solution |
 | `lower_bound()` | `⌈Σ size / capacity⌉`; a packing that reaches it is optimal |
+| `first_fit(order=None)` | the bin of each item when each in turn goes into the first bin with room; sizes in decreasing order give First Fit Decreasing |
 | `capacity()`, `sizes()`, `num_items()` | the instance's data |
 
 A solution gives each item's bin, numbered from 0. Every packing the search visits fits.

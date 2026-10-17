@@ -1,5 +1,5 @@
 ---
-source_sha256: 53ca8197a145
+source_sha256: 547ce4cd8ee0
 ---
 
 # 組み込みの問題
@@ -152,7 +152,10 @@ source_sha256: 53ca8197a145
 | `MaxCut.from_graph(graph)` | [`Graph`](graphs_and_instances.md#graph) 上のインスタンス |
 | `MaxCut.load_file(path)` | G-set 形式の辺リストのファイル。`N M` の後に辺ごとに `i j w`、頂点番号は 1 から |
 
-`graph()` は元になる [`Graph`](graphs_and_instances.md#graph) のコピーを返します。
+| メソッド | 返すもの |
+|---|---|
+| `cut_size(assignment)` | 割り当てが切る辺の重みの合計。実行が最大化する値 |
+| `graph()` | 元になる [`Graph`](graphs_and_instances.md#graph) のコピー |
 
 ```python
 import optopus
@@ -179,6 +182,8 @@ print(report.runs[0].solution)  # [False, True, False, True] — 各頂点がど
 |---|---|
 | `Qubo.from_entries(entries)` | 整数係数の `(i, j, coefficient)` からなるインスタンス |
 | `Qubo.load_file(path)` | 疎行列のファイル。`N M` の後に要素ごとに `i j v`、変数番号は 1 から。同じ組が 2 回あれば後の値を使う |
+
+`energy(assignment)` は割り当てのエネルギー、つまり実行が最小化する値を返します。
 
 対角成分 `(i, i, c)` は 1 次の項 c·x_i、非対角成分は積の項 c·x_i·x_j です。
 
@@ -223,6 +228,11 @@ q = optopus.Qubo.from_entries([(i, j, c) for (i, j), c in summed.items()])
 | `Sat.from_clauses(n_vars, clauses)` | `n_vars` 個の変数上のインスタンス。各節は DIMACS 形式のリテラルのリスト |
 | `Sat.load_file(path)` | DIMACS CNF 形式のファイル |
 
+| メソッド | 返すもの |
+|---|---|
+| `num_satisfied(assignment)` | 割り当てが満たす節の数。実行が最大化する値 |
+| `num_vars()`、`num_clauses()` | インスタンスの大きさ |
+
 リテラル `+i` は変数 `i`、`-i` はその否定で、番号は **1 から**です。一方、解のリストは 0 から
 数えるので、変数 `i` は `solution[i - 1]` です。
 
@@ -248,7 +258,11 @@ x1, x2 = best.solution  # 変数 i は solution[i - 1]
 | `VertexCover.from_graph(graph)` | [`Graph`](graphs_and_instances.md#graph) 上のインスタンス |
 | `VertexCover.load_file(path)` | `MaxCut.load_file` と同じ形式の辺リストのファイル。重みは無視される |
 
-`graph()` は元になるグラフのコピーを返します。
+| メソッド | 返すもの |
+|---|---|
+| `evaluate_cover(assignment)` | `objective`、`cover_size`、`uncovered_edges` を持つ辞書。目的関数は `cover_size + penalty_weight() * uncovered_edges` |
+| `penalty_weight()` | 覆われていない辺 1 本あたりのペナルティ |
+| `graph()` | 元になるグラフのコピー |
 
 ```python
 edges = [(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 4, 1.0), (4, 0, 1.0), (0, 2, 1.0)]
@@ -271,11 +285,20 @@ print(best.best_objective, cover, uncovered)  # 3.0 [False, True, True, False, T
 
 | コンストラクタ | 作るもの |
 |---|---|
-| `Tsp.from_coordinates(coordinates, name="")` | `(x, y)` の点の間のユークリッド距離 |
+| `Tsp.from_coordinates(coordinates, name="", edge_weight_type="Continuous", nearest_neighbors=None)` | `(x, y)` の点の間の距離。通常のユークリッド距離か、TSPLIB の `"EUC_2D"`、`"CEIL_2D"`、`"ATT"`、`"GEO"` |
 | `Tsp.from_distance_matrix(matrix, name="")` | 与えた距離。対称・有限・非負であること |
 | `Tsp.load_file(path)` | TSPLIB のインスタンス |
 
-`num_cities()` は都市の数を返します。
+`nearest_neighbors=k` を渡すと、各都市から近い `k` 都市への距離だけを `n²` ではなく `n × k` 個持ち、
+それ以外の組は必要になったときに座標から計算します。距離は変わらず、大きなインスタンスもメモリに
+収まります。`load_file` は 2000 都市を超えると自動でこうします。
+
+| メソッド | 返すもの |
+|---|---|
+| `tour_length(tour)` | 閉じた巡回路の長さ。実行が最小化する値 |
+| `distance(i, j)` | 都市 `i` から都市 `j` への距離 |
+| `num_cities()` | 都市の数 |
+| `coordinates()`、`edge_weight_type()` | 点と距離の式。行列から作ったインスタンスでは `None` |
 
 ```python
 dist = [
@@ -319,6 +342,12 @@ print(square, square.num_cities())  # Tsp(name="square", n_cities=4) 4
 | `JobShopScheduling.from_jobs(jobs, name="")` | ジョブごとの `(machine, duration)` のリストからなるインスタンス。機械番号は 0 から |
 | `JobShopScheduling.load_file(path)` | Taillard / OR-Library 形式のファイル。`n_jobs n_machines` の後にジョブごとに 1 行の `machine duration` の組、機械番号は 0 から |
 
+| メソッド | 返すもの |
+|---|---|
+| `makespan(operations)` | 作業の列のメイクスパン。実行が最小化する値 |
+| `completion_times(operations)` | 列の各位置の作業が終わる時刻 |
+| `num_jobs()`、`num_machines()` | インスタンスの大きさ |
+
 解は、ジョブ `j` がその作業の数だけ現れる列です。`j` の `k` 回目の出現は、ジョブ `j` の `k` 番目の
 作業を機械が許す最も早い時刻に割り当てます。
 
@@ -351,6 +380,7 @@ print(best.solution)        # [0, 1, 1, 2, 0, 2, 0, 2, 1]
 | `makespan(sequence)` | ジョブの順序のメイクスパン |
 | `neh()` | NEH 構築法が作る順序。標準的な基準解 |
 | `num_jobs()`、`num_machines()` | インスタンスの大きさ |
+| `processing_time(machine, job)` | `machine` での `job` の処理時間 |
 
 ```python
 from pathlib import Path
@@ -375,7 +405,7 @@ print(ig.run(shop, runs=3, seed=42).best_objective)  # 44.0 — NEH より 1 良
 
 | コンストラクタ | 作るもの |
 |---|---|
-| `Vrp.from_coordinates(coordinates, demands, capacity, num_vehicles=0, name="vrp", rounded=False)` | ユークリッド距離。`rounded` は CVRPLIB と同じように距離を丸める |
+| `Vrp.from_coordinates(coordinates, demands, capacity, num_vehicles=0, name="vrp", rounded=False, nearest_neighbors=None)` | ユークリッド距離。`rounded` は CVRPLIB と同じように距離を丸め、`nearest_neighbors` は `Tsp` と同じく各ノードの近傍だけを持つ |
 | `Vrp.from_distance_matrix(matrix, demands, capacity, num_vehicles=0, name="vrp")` | 与えた距離。対称・有限・非負であること |
 | `Vrp.with_fleet(coordinates, demands, vehicle_types, service_times=None, objective_mode="TotalTime", cost_weight=1.0, name="vrp", rounded=False)` | 混成車両。[混成車両](#vrp-mixed-fleet)を参照 |
 | `Vrp.load_file(path)` | CVRPLIB のファイル、または `.toml` ファイルの混成車両 |
@@ -384,6 +414,7 @@ print(ig.run(shop, runs=3, seed=42).best_objective)  # 44.0 — NEH より 1 良
 |---|---|
 | `evaluate_routes(routes)` | `objective`、`distance`、`overload`、`route_loads` を持つ辞書。混成車両では目的関数の全項も |
 | `num_customers()`、`num_vehicles()` | インスタンスの大きさ。`num_vehicles()` はどの解にも含まれる経路の数 |
+| `split_giant_tour(giant)` | 全顧客を並べた順序を、目的関数が最も小さくなる位置で切った経路 (Prins の Split) |
 | `capacity()` | 車両の容量。複数の車種からなる車両では `ValueError` |
 | `penalty_weight()` | 超過 1 単位あたりのペナルティ |
 | `vehicle_types()`、`slot_types()`、`service_times()`、`objective_mode()`、`cost_weight()` | 車両の構成。[混成車両](#vrp-mixed-fleet)を参照 |
@@ -618,6 +649,7 @@ print(qap.cost(best.solution))             # 790 — 全 24 通りの割当て�
 |---|---|
 | `evaluate_bins(bins)` | 解についての `objective`、`num_bins`、`loads`、`bins` を持つ辞書 |
 | `lower_bound()` | `⌈Σ size / capacity⌉`。これに達する詰め方は最適 |
+| `first_fit(order=None)` | 品物を順に、入る最初の箱へ入れたときの各品物の箱。サイズの大きい順にすると First Fit Decreasing |
 | `capacity()`、`sizes()`、`num_items()` | インスタンスのデータ |
 
 解は各品物の箱を 0 からの番号で与えます。探索が通るどの詰め方も容量に収まっています。
