@@ -12,6 +12,19 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- Scoring without a run: `MaxCut.cut_size`, `Qubo.energy`, `Sat.num_satisfied`,
+  `VertexCover.evaluate_cover`, `Tsp.tour_length` and `JobShopScheduling.makespan` /
+  `completion_times`. Each takes a solution in the form `RunResult.solution` has, through the
+  same checks as `initial_solution`.
+- Reading an instance back: `Sat.num_vars` / `num_clauses`, `VertexCover.penalty_weight`,
+  `Tsp.distance`, `coordinates` and `edge_weight_type`, `JobShopScheduling.num_jobs` /
+  `num_machines`, and `FlowShop.processing_time`.
+- `BinPacking.first_fit(order=None)` and `Vrp.split_giant_tour(giant)`, the constructions
+  optopus's heuristics start from, as solutions to score or to start a run from.
+- `Tsp.from_coordinates` takes `edge_weight_type=` (`"EUC_2D"`, `"CEIL_2D"`, `"ATT"`,
+  `"GEO"`, so lengths match TSPLIB's optima) and `nearest_neighbors=`, and
+  `Vrp.from_coordinates` takes `nearest_neighbors=`: only each node's `k` nearest distances are
+  kept, with the same distances in less memory.
 - `load_file` for `MaxCut`, `VertexCover` and `GraphColoring` (G-set style edge lists), `Qubo`
   (sparse matrix files), `Sat` (DIMACS CNF) and `JobShopScheduling` (Taillard / OR-Library),
   so every built-in problem reads an instance file. `MaxCut`, `VertexCover` and `GraphColoring`
@@ -150,6 +163,8 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Changed
 
+- `Tsp.from_coordinates` raises `ValueError` for a non-finite coordinate, as
+  `Vrp.from_coordinates` already did, instead of building an instance with NaN distances.
 - **`load_file` raises `OSError` for a file it cannot open**, `FileNotFoundError` when the file
   does not exist, with the path in `filename`, as Python's own `open` does. It used to raise
   `ValueError`. Catch `OSError` (or `FileNotFoundError`) where you caught `ValueError` for a missing

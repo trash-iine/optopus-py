@@ -1,4 +1,4 @@
-use optopus::building_blocks::instance::{Graph, seeded_rng};
+use optopus::building_blocks::instance::{EdgeWeightType, Graph, seeded_rng};
 use optopus::building_blocks::representation::{IntVar, IntVars};
 use optopus::problem::{
     BinPacking as OptBinPacking, Constraint, ConstraintRel, Expr, FlowShop as OptFlowShop,
@@ -6,7 +6,7 @@ use optopus::problem::{
     MaxCut as OptMaxCut, MaxCutKernel as OptMaxCutKernel, ObjectiveMode,
     PlantedMaxCut as OptPlantedMaxCut, Qap as OptQap, Qubo as OptQubo, Sat as OptSat, TileProbs2d,
     TileProbs3d, Tsp as OptTsp, VehicleType as OptVehicleType, VertexCover as OptVc, Vrp as OptVrp,
-    WishartCouplers,
+    WishartCouplers, split_giant_tour,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -14,6 +14,7 @@ use pyo3::types::PyDict;
 
 use crate::error::{check_readable, input_error};
 use crate::graph::{Graph as PyGraph, resolve_seed};
+use crate::initial;
 use crate::validate::check_at_least;
 
 /// A polynomial term used by Python-side `Formula` construction:
@@ -149,6 +150,20 @@ impl MaxCut {
         PyGraph {
             inner: self.inner.graph.clone(),
         }
+    }
+
+    /// The weight of the edges an assignment cuts, what a run maximizes.
+    ///
+    /// Args:
+    ///     assignment (list[bool]): The side of each vertex, as bools or the ints 0 and 1.
+    ///
+    /// Returns:
+    ///     float: The total weight of the edges whose ends are on different sides.
+    ///
+    /// Raises:
+    ///     ValueError: If ``assignment`` does not have one value per vertex.
+    fn cut_size(&self, assignment: &Bound<'_, PyAny>) -> PyResult<f32> {
+        Ok(initial::max_cut(&self.inner, assignment, "assignment")?.objective)
     }
 
     fn __repr__(&self) -> String {
@@ -548,6 +563,22 @@ impl Qubo {
             .map_err(input_error)
     }
 
+    /// The energy ``xᵀ Q x`` of an assignment, what a run minimizes.
+    ///
+    /// Args:
+    ///     assignment (list[bool]): The value of each variable, as bools or the ints 0 and 1.
+    ///
+    /// Returns:
+    ///     int: The energy.
+    ///
+    /// Raises:
+    ///     ValueError: If ``assignment`` does not have one value per variable.
+    fn energy(&self, assignment: &Bound<'_, PyAny>) -> PyResult<i64> {
+        Ok(initial::qubo(&self.inner, assignment, "assignment")?
+            .objective
+            .into())
+    }
+
     fn __repr__(&self) -> String {
         format!("Qubo(dim={})", self.inner.len())
     }
@@ -624,6 +655,30 @@ impl Sat {
         OptSat::load_file(path)
             .map(|inner| Self { inner })
             .map_err(input_error)
+    }
+
+    /// Number of variables.
+    fn num_vars(&self) -> usize {
+        self.inner.n_vars()
+    }
+
+    /// Number of clauses.
+    fn num_clauses(&self) -> usize {
+        self.inner.n_clauses()
+    }
+
+    /// The number of clauses an assignment satisfies, what a run maximizes.
+    ///
+    /// Args:
+    ///     assignment (list[bool]): The value of each variable, as bools or the ints 0 and 1.
+    ///
+    /// Returns:
+    ///     int: The satisfied clauses; :meth:`num_clauses` means every one.
+    ///
+    /// Raises:
+    ///     ValueError: If ``assignment`` does not have one value per variable.
+    fn num_satisfied(&self, assignment: &Bound<'_, PyAny>) -> PyResult<usize> {
+        Ok(initial::sat(&self.inner, assignment, "assignment")?.n_satisfied)
     }
 
     fn __repr__(&self) -> String {
@@ -713,6 +768,37 @@ impl VertexCover {
         }
     }
 
+    /// The penalty charged per uncovered edge.
+    fn penalty_weight(&self) -> i32 {
+        self.inner.penalty_weight()
+    }
+
+    /// Score a choice of vertices without running a heuristic.
+    ///
+    /// Args:
+    ///     assignment (list[bool]): Whether each vertex is in the cover, as bools or the ints
+    ///         0 and 1.
+    ///
+    /// Returns:
+    ///     dict: ``{"objective": int, "cover_size": int, "uncovered_edges": int}``. The
+    ///     objective a run minimizes is ``cover_size + penalty_weight() * uncovered_edges``,
+    ///     and an ``uncovered_edges`` of 0 means the choice is a cover.
+    ///
+    /// Raises:
+    ///     ValueError: If ``assignment`` does not have one value per vertex.
+    fn evaluate_cover<'py>(
+        &self,
+        py: Python<'py>,
+        assignment: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let solution = initial::vertex_cover(&self.inner, assignment, "assignment")?;
+        let dict = PyDict::new(py);
+        dict.set_item("objective", solution.objective)?;
+        dict.set_item("cover_size", solution.cover_size)?;
+        dict.set_item("uncovered_edges", solution.uncovered_edges)?;
+        Ok(dict)
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "VertexCover(num_vertices={}, num_edges={})",
@@ -740,21 +826,43 @@ impl Tsp {
     /// Args:
     ///     coordinates (list[tuple[float, float]]): ``(x, y)`` coordinates for each city.
     ///     name (str): Optional instance name (default ``""``).
+    ///     edge_weight_type (str): The distance formula. ``"Continuous"``, the default, is the
+    ///         plain Euclidean distance; ``"EUC_2D"``, ``"CEIL_2D"``, ``"ATT"`` and ``"GEO"``
+    ///         are TSPLIB's integer formulas, so lengths match published optima.
+    ///     nearest_neighbors (int | None): Keep only the distances to each city's ``k`` nearest
+    ///         cities, ``n × k`` numbers instead of ``n²``, and compute any other pair from the
+    ///         coordinates when asked. Distances are the same either way; this saves memory on
+    ///         large instances. Defaults to None, the full matrix.
     ///
     /// Returns:
-    ///     Tsp: A new problem instance using continuous Euclidean distances.
+    ///     Tsp: A new problem instance.
     ///
     /// Raises:
-    ///     ValueError: If ``coordinates`` is empty.
+    ///     ValueError: If ``coordinates`` is empty or holds a non-finite value,
+    ///         ``edge_weight_type`` is not one of the names above, or ``nearest_neighbors`` is
+    ///         0.
     #[staticmethod]
-    #[pyo3(signature = (coordinates, name=""))]
-    fn from_coordinates(coordinates: Vec<(f64, f64)>, name: &str) -> PyResult<Self> {
+    #[pyo3(signature = (coordinates, name="", edge_weight_type="Continuous", nearest_neighbors=None))]
+    fn from_coordinates(
+        coordinates: Vec<(f64, f64)>,
+        name: &str,
+        edge_weight_type: &str,
+        nearest_neighbors: Option<usize>,
+    ) -> PyResult<Self> {
         if coordinates.is_empty() {
             return Err(PyValueError::new_err("'coordinates' must not be empty"));
         }
-        Ok(Self {
-            inner: OptTsp::new(name.to_string(), coordinates),
-        })
+        check_coordinates(&coordinates)?;
+        let kind = parse_edge_weight_type(edge_weight_type)?;
+        let name = name.to_string();
+        let inner = match nearest_neighbors {
+            None => OptTsp::with_edge_weight_type(name, coordinates, kind),
+            Some(k) => {
+                check_at_least("nearest_neighbors", k, 1)?;
+                OptTsp::with_nearest_neighbors(name, coordinates, kind, k)
+            }
+        };
+        Ok(Self { inner })
     }
 
     /// Build a TSP instance from an explicit distance matrix.
@@ -802,6 +910,46 @@ impl Tsp {
     /// Number of cities.
     fn num_cities(&self) -> usize {
         self.inner.get_n()
+    }
+
+    /// The length of a tour, what a run minimizes.
+    ///
+    /// Args:
+    ///     tour (list[int]): A permutation of the cities.
+    ///
+    /// Returns:
+    ///     float: The length of the closed tour, back to its first city.
+    ///
+    /// Raises:
+    ///     ValueError: If ``tour`` is not a permutation of the cities.
+    fn tour_length(&self, tour: &Bound<'_, PyAny>) -> PyResult<f64> {
+        Ok(initial::tsp(&self.inner, tour, "tour")?.objective)
+    }
+
+    /// The distance from city ``i`` to city ``j``.
+    ///
+    /// Raises:
+    ///     ValueError: If ``i`` or ``j`` is not a city.
+    fn distance(&self, i: usize, j: usize) -> PyResult<f64> {
+        let n = self.inner.get_n();
+        if let Some(bad) = [i, j].into_iter().find(|&c| c >= n) {
+            return Err(PyValueError::new_err(format!(
+                "city {bad} is outside [0, {n})"
+            )));
+        }
+        Ok(self.inner.distance(i, j))
+    }
+
+    /// The coordinates the instance was built from, ``None`` for one built from a distance
+    /// matrix or read from an explicit-matrix file.
+    fn coordinates(&self) -> Option<Vec<(f64, f64)>> {
+        self.inner.coordinates().map(<[_]>::to_vec)
+    }
+
+    /// The TSPLIB distance formula applied to the coordinates, ``"Continuous"``, ``"EUC_2D"``,
+    /// ``"CEIL_2D"``, ``"ATT"`` or ``"GEO"``, and ``None`` without coordinates.
+    fn edge_weight_type(&self) -> Option<&'static str> {
+        self.inner.edge_weight_type().map(edge_weight_type_name)
     }
 
     fn __repr__(&self) -> String {
@@ -958,6 +1106,20 @@ impl FlowShop {
     ///     list[int]: Every job once, in the order they run.
     fn neh(&self) -> Vec<usize> {
         self.inner.neh().sequence
+    }
+
+    /// The processing time of ``job`` on ``machine``.
+    ///
+    /// Raises:
+    ///     ValueError: If ``machine`` or ``job`` is out of range.
+    fn processing_time(&self, machine: usize, job: usize) -> PyResult<u32> {
+        let (machines, jobs) = (self.inner.n_machines, self.inner.n_jobs);
+        if machine >= machines || job >= jobs {
+            return Err(PyValueError::new_err(format!(
+                "(machine, job) = ({machine}, {job}) is outside {machines} machines and {jobs} jobs"
+            )));
+        }
+        Ok(self.inner.processing_time(machine, job))
     }
 
     fn __repr__(&self) -> String {
@@ -1220,6 +1382,32 @@ impl BinPacking {
         Ok(dict)
     }
 
+    /// First Fit: each item in turn into the first bin with room, a new one when none has.
+    ///
+    /// Args:
+    ///     order (list[int] | None): The order to place the items in, a permutation of the
+    ///         items. Defaults to None, the items in index order. Sizes in decreasing order give
+    ///         First Fit Decreasing.
+    ///
+    /// Returns:
+    ///     list[int]: The bin of each item, a solution to score with :meth:`evaluate_bins` or
+    ///     to start a run from.
+    ///
+    /// Raises:
+    ///     ValueError: If ``order`` is not a permutation of the items.
+    #[pyo3(signature = (order=None))]
+    fn first_fit(&self, order: Option<Vec<usize>>) -> PyResult<Vec<usize>> {
+        let n = self.inner.num_items();
+        let order = match order {
+            Some(order) => {
+                check_permutation(&order, n, "order", "item")?;
+                order
+            }
+            None => (0..n).collect(),
+        };
+        Ok(self.inner.first_fit(order).bin_of)
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "BinPacking(name={:?}, n_items={}, capacity={})",
@@ -1454,6 +1642,45 @@ impl JobShopScheduling {
         OptJobShop::load_file(path)
             .map(|inner| Self { inner })
             .map_err(input_error)
+    }
+
+    /// Number of jobs.
+    fn num_jobs(&self) -> usize {
+        self.inner.n_jobs
+    }
+
+    /// Number of machines.
+    fn num_machines(&self) -> usize {
+        self.inner.n_machines
+    }
+
+    /// The makespan of an operation sequence, what a run minimizes.
+    ///
+    /// Args:
+    ///     operations (list[int]): A sequence in which job ``j`` appears once per operation it
+    ///         has, as in ``RunResult.solution``.
+    ///
+    /// Returns:
+    ///     int: When the last operation finishes.
+    ///
+    /// Raises:
+    ///     ValueError: If ``operations`` does not list every operation of every job once.
+    fn makespan(&self, operations: &Bound<'_, PyAny>) -> PyResult<u32> {
+        Ok(initial::job_shop(&self.inner, operations, "operations")?.objective)
+    }
+
+    /// When each operation of a sequence finishes, the schedule behind :meth:`makespan`.
+    ///
+    /// Args:
+    ///     operations (list[int]): A sequence as for :meth:`makespan`.
+    ///
+    /// Returns:
+    ///     list[int]: The finish time of the operation at each position of ``operations``.
+    ///
+    /// Raises:
+    ///     ValueError: If ``operations`` does not list every operation of every job once.
+    fn completion_times(&self, operations: &Bound<'_, PyAny>) -> PyResult<Vec<u32>> {
+        Ok(initial::job_shop(&self.inner, operations, "operations")?.completion_times)
     }
 
     fn __repr__(&self) -> String {
@@ -1786,15 +2013,27 @@ impl Vrp {
     ///     name (str): Optional instance name (default ``"vrp"``).
     ///     rounded (bool): When True, distances are rounded to the nearest integer, matching
     ///         CVRPLIB's ``EUC_2D`` convention. Defaults to False (plain Euclidean).
+    ///     nearest_neighbors (int | None): Keep only the distances to each node's ``k`` nearest
+    ///         nodes and compute any other pair from the coordinates when asked, as
+    ///         :meth:`Tsp.from_coordinates` does. Defaults to None, the full matrix.
     ///
     /// Returns:
     ///     Vrp: A new problem instance.
     ///
     /// Raises:
     ///     ValueError: If ``coordinates`` is empty or holds a non-finite value, its length
-    ///         differs from ``demands``, ``capacity`` is not positive, or a demand is negative.
+    ///         differs from ``demands``, ``capacity`` is not positive, a demand is negative, or
+    ///         ``nearest_neighbors`` is 0.
     #[staticmethod]
-    #[pyo3(signature = (coordinates, demands, capacity, num_vehicles=0, name="vrp", rounded=false))]
+    #[pyo3(signature = (
+        coordinates,
+        demands,
+        capacity,
+        num_vehicles=0,
+        name="vrp",
+        rounded=false,
+        nearest_neighbors=None,
+    ))]
     fn from_coordinates(
         coordinates: Vec<(f64, f64)>,
         demands: Vec<i64>,
@@ -1802,14 +2041,28 @@ impl Vrp {
         num_vehicles: usize,
         name: &str,
         rounded: bool,
+        nearest_neighbors: Option<usize>,
     ) -> PyResult<Self> {
         let name = name.to_string();
         check_coordinates(&coordinates)?;
         check_vrp_instance("coordinates", coordinates.len(), &demands, capacity)?;
-        let inner = if rounded {
-            OptVrp::with_rounding(name, coordinates, demands, capacity, num_vehicles)
-        } else {
-            OptVrp::new(name, coordinates, demands, capacity, num_vehicles)
+        let inner = match (nearest_neighbors, rounded) {
+            (Some(k), _) => {
+                check_at_least("nearest_neighbors", k, 1)?;
+                OptVrp::with_nearest_neighbors(
+                    name,
+                    coordinates,
+                    demands,
+                    capacity,
+                    num_vehicles,
+                    rounded,
+                    k,
+                )
+            }
+            (None, true) => {
+                OptVrp::with_rounding(name, coordinates, demands, capacity, num_vehicles)
+            }
+            (None, false) => OptVrp::new(name, coordinates, demands, capacity, num_vehicles),
         };
         Ok(Self { inner })
     }
@@ -2135,6 +2388,36 @@ impl Vrp {
         Ok(dict)
     }
 
+    /// Split a giant tour into routes, the best way the fleet can drive it in that order.
+    ///
+    /// Prins' Split: the customers keep the order of ``giant`` and are cut into consecutive
+    /// routes, choosing the cuts that minimize the objective, capacity overload priced at
+    /// :meth:`penalty_weight`.
+    ///
+    /// Args:
+    ///     giant (list[int]): Every customer, ``1`` to :meth:`num_customers`, once.
+    ///
+    /// Returns:
+    ///     list[list[int]]: One route per vehicle, empty ones included, the form
+    ///     :meth:`evaluate_routes` and ``initial_solution`` take.
+    ///
+    /// Raises:
+    ///     ValueError: If ``giant`` does not list every customer once.
+    fn split_giant_tour(&self, giant: Vec<usize>) -> PyResult<Vec<Vec<usize>>> {
+        let n = self.inner.get_n();
+        let shifted: Vec<usize> = giant.iter().map(|c| c.wrapping_sub(1)).collect();
+        check_permutation(&shifted, n, "giant", "customer").map_err(|_| {
+            PyValueError::new_err(format!(
+                "'giant' must list every customer from 1 to {n} once, got {giant:?}"
+            ))
+        })?;
+        Ok(split_giant_tour(
+            &self.inner,
+            &giant,
+            self.inner.penalty_weight(),
+        ))
+    }
+
     fn __repr__(&self) -> String {
         let fleet = match self.inner.vehicle_types() {
             [only] => format!("capacity={}", only.capacity),
@@ -2399,4 +2682,32 @@ fn extract_constraint(c: &Bound<'_, PyAny>, n_vars: usize) -> PyResult<Constrain
             penalty_weight,
         })
     }
+}
+
+/// TSPLIB's name for an edge-weight type.
+fn edge_weight_type_name(kind: EdgeWeightType) -> &'static str {
+    match kind {
+        EdgeWeightType::Continuous => "Continuous",
+        EdgeWeightType::Euc2d => "EUC_2D",
+        EdgeWeightType::Ceil2d => "CEIL_2D",
+        EdgeWeightType::Att => "ATT",
+        EdgeWeightType::Geo => "GEO",
+    }
+}
+
+/// The edge-weight type a TSPLIB name gives.
+fn parse_edge_weight_type(name: &str) -> PyResult<EdgeWeightType> {
+    Ok(match name {
+        "Continuous" => EdgeWeightType::Continuous,
+        "EUC_2D" => EdgeWeightType::Euc2d,
+        "CEIL_2D" => EdgeWeightType::Ceil2d,
+        "ATT" => EdgeWeightType::Att,
+        "GEO" => EdgeWeightType::Geo,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "'edge_weight_type' must be \"Continuous\", \"EUC_2D\", \"CEIL_2D\", \"ATT\" \
+                 or \"GEO\", got {other:?}"
+            )));
+        }
+    })
 }
