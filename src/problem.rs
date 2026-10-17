@@ -2459,9 +2459,15 @@ impl Vrp {
 ///         see "Modeling with Formula" in the documentation.
 ///     bounds (list[tuple[int, int]] | None): Inclusive ``(lower, upper)`` range per
 ///         variable. Defaults to None, which makes every variable binary.
+///     permutation (bool): Make the variables a permutation of ``0..n_vars``: each ranges over
+///         ``[0, n_vars - 1]`` and no two take the same value, so variable ``p`` is what sits
+///         at position ``p``, such as the city visited ``p``-th. A random solution is a random
+///         permutation, and only the ``"Swap"`` and ``"Reverse"`` neighborhoods, which keep a
+///         permutation, apply. Defaults to False. Cannot be combined with ``bounds``.
 ///
 /// Raises:
-///     ValueError: If ``n_vars`` is 0, ``bounds`` has the wrong length, a bound is inverted,
+///     ValueError: If ``n_vars`` is 0, both ``bounds`` and ``permutation`` are given,
+///         ``bounds`` has the wrong length, a bound is inverted,
 ///         the direction or a relation is unrecognized, a ``penalty_weight`` is negative or
 ///         not finite, a ``Clamp`` range has ``lo`` above ``hi``, or the objective or a
 ///         constraint reads a variable index outside ``[0, n_vars)``.
@@ -2496,8 +2502,16 @@ pub struct Formula {
 impl Formula {
     #[new]
     #[pyo3(
-        signature = (n_vars, objective, direction="Maximize".to_string(), constraints=Vec::new(), bounds=None),
-        text_signature = "(n_vars, objective, direction='Maximize', constraints=[], bounds=None)"
+        signature = (
+            n_vars,
+            objective,
+            direction="Maximize".to_string(),
+            constraints=Vec::new(),
+            bounds=None,
+            permutation=false,
+        ),
+        text_signature = "(n_vars, objective, direction='Maximize', constraints=[], bounds=None, \
+                          permutation=False)"
     )]
     fn new(
         n_vars: usize,
@@ -2505,10 +2519,21 @@ impl Formula {
         direction: String,
         constraints: Vec<Bound<'_, PyAny>>,
         bounds: Option<Vec<(i64, i64)>>,
+        permutation: bool,
     ) -> PyResult<Self> {
         check_at_least("n_vars", n_vars, 1)?;
         let maximize = parse_direction(&direction)?;
-        let vars = build_int_vars(n_vars, bounds)?;
+        let vars = if permutation {
+            if bounds.is_some() {
+                return Err(PyValueError::new_err(
+                    "'bounds' and 'permutation' cannot both be given: a permutation's variables \
+                     all range over [0, n_vars - 1]",
+                ));
+            }
+            IntVars::permutation(n_vars)
+        } else {
+            build_int_vars(n_vars, bounds)?
+        };
 
         // Upstream panics when an expression reads a variable outside `vars`, so check the
         // indices of the objective and of every constraint here and report them as a
@@ -2534,6 +2559,11 @@ impl Formula {
     /// Number of variables.
     fn n_vars(&self) -> usize {
         self.inner.variables().len()
+    }
+
+    /// Whether the variables are a permutation, as ``permutation=True`` makes them.
+    fn is_permutation(&self) -> bool {
+        self.inner.variables().is_permutation()
     }
 
     /// The objective expression's value for an assignment, before any constraint penalty.
@@ -2572,14 +2602,16 @@ impl Formula {
         } else {
             "Minimize"
         };
-        format!(
-            "Formula(n_vars={}, direction={dir:?}, binary={})",
-            self.inner.variables().len(),
-            self.inner
-                .variables()
-                .iter()
-                .all(|v| v.lower() == 0 && v.upper() == 1)
-        )
+        let vars = self.inner.variables();
+        let kind = if vars.is_permutation() {
+            "permutation=true".to_string()
+        } else {
+            format!(
+                "binary={}",
+                vars.iter().all(|v| v.lower() == 0 && v.upper() == 1)
+            )
+        };
+        format!("Formula(n_vars={}, direction={dir:?}, {kind})", vars.len())
     }
 }
 
