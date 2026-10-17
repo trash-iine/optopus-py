@@ -61,6 +61,11 @@ On the 30-vertex graph above, `"Binary"` proves the same optimum with about 2,50
 iterations as `"Eigenvalue"`. The built-in bounds suit instances of a few dozen variables. A
 name the problem does not support raises `ValueError` when `run` is called.
 
+`relaxation=optopus.EigenvalueRelaxation(max_iterations=100, lanczos_steps=30,
+certify_limit=3000)` is `"Eigenvalue"` with its limits set: the subgradient steps and Lanczos
+steps spent on each bound, and the largest node, in vertices, it certifies before falling back to
+the sum of the positive weights. More steps tighten the bound and cost more per node.
+
 ## A bound of your own
 
 A bound that knows the problem is written as a function. It takes the node's ranges, one

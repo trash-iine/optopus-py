@@ -12,6 +12,20 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `AdaptiveLargeNeighborhoodSearch` takes `scores`, `segment_length`, `reaction` and
+  `max_removal`, the operator rewards and weight adaptation of Ropke and Pisinger and the ceiling
+  on one iteration's removals, and `local_repair=False` to run without the descent after each
+  repair. The defaults are optopus's, so runs that set none of them do not change.
+- `IteratedGreedy` runs on `Tsp`, `Vrp`, `BinPacking` and Python problems with the ruin
+  methods, not only `FlowShop`. It takes `temperature=` (required off the flow shop) and
+  `local_repair=`.
+- `HybridGeneticSearch` takes `n_elite`, `n_closest`, `penalty_adaptation`,
+  `repair_probability`, `initial_population` and `descent_passes`.
+- `EigenvalueRelaxation(max_iterations=, lanczos_steps=, certify_limit=)` sets the limits of
+  `BranchAndBound`'s eigenvalue bound on `MaxCut`; `relaxation="Eigenvalue"` is it with the
+  defaults.
+- `StopCondition`'s `max_iteration`, `max_duration_secs` and `max_failed_update` can be read
+  back.
 - Scoring without a run: `MaxCut.cut_size`, `Qubo.energy`, `Sat.num_satisfied`,
   `VertexCover.evaluate_cover`, `Tsp.tour_length` and `JobShopScheduling.makespan` /
   `completion_times`. Each takes a solution in the form `RunResult.solution` has, through the

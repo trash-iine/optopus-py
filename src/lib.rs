@@ -74,5 +74,6 @@ fn optopus(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::IteratedGreedy>()?;
     m.add_class::<heuristic::GreedyRandomizedConstruction>()?;
     m.add_class::<heuristic::BranchAndBound>()?;
+    m.add_class::<branch_and_bound::EigenvalueRelaxation>()?;
     Ok(())
 }

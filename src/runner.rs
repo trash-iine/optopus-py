@@ -5,7 +5,7 @@ use optopus::building_blocks::representation::BinaryRelaxation;
 use optopus::heuristic::reinforcement_learning::feature::NUM_FEATURES;
 use optopus::heuristic::{
     AdaptiveLargeNeighborhoodSearch, AdaptivePerturbation, BreakoutLocalSearch, GeneticAlgorithm,
-    GreedyRandomizedConstruction as OptGreedyRandomizedConstruction, Iterated,
+    GreedyRandomizedConstruction as OptGreedyRandomizedConstruction, Iterated, IteratedGreedy,
     ParallelTempering as OptParallelTempering, ParentSelection,
     PopulationAnnealing as OptPopulationAnnealing, ReinforcementLearningSearch, Restart,
     RewardShaping, Sequential, SubProblemBasedCrossover,
@@ -14,9 +14,11 @@ use optopus::prelude::{
     BangBangSimulatedAnnealing, BeamSearch, EnabledTabu, Evaluate, Heuristic,
     HybridGeneticSearchForVrp, LateAcceptanceHillClimbing, LinKernighanHelsgaunForTsp, LocalSearch,
     MoveToNeighbor, ProblemTrait, RandomWalk, Rankable, SearchState, SimulatedAnnealing,
-    TabuSearch, VariableNeighborhoodSearch, WalkSatForSat, alns_for_flow_shop, alns_for_tsp,
-    alns_for_vrp, bls_for_max_cut, iterated_greedy_for_flow_shop,
+    TabuSearch, VariableNeighborhoodSearch, WalkSatForSat, bls_for_max_cut,
 };
+use optopus::problem::flow_shop::FlowShopInsertionDescent;
+use optopus::problem::tsp::AnchoredTourDescent;
+use optopus::problem::vrp::AnchoredRouteDescent;
 use optopus::problem::{
     BinPacking as OptBinPacking, BinPackingGroupCrossover, BinPackingRelocateNeighbor,
     BinPackingSwapNeighbor, FlowShop as OptFlowShop, FlowShopInsertNeighbor,
@@ -35,7 +37,7 @@ use optopus::problem::{
 use optopus::problem::{EigenvalueRelaxation, IntervalRelaxation};
 use optopus::search_state::TrajectoryPoint;
 use optopus::trait_defs::{
-    BranchSpace, Crossover, Distance, FixVariables, Ruinable, SubProblemExtractable,
+    BranchSpace, Crossover, Distance, FixVariables, LocalRepair, Ruinable, SubProblemExtractable,
 };
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -160,10 +162,14 @@ pub enum HeuristicKind {
     AdaptiveLargeNeighborhoodSearch {
         removal_fraction: f64,
         cooling_rate: f64,
+        tuning: AlnsTuning,
     },
     IteratedGreedy {
         removal_count: usize,
         temperature_factor: f64,
+        /// A fixed temperature, in place of the flow shop's one from `temperature_factor`.
+        temperature: Option<f64>,
+        local_repair: bool,
     },
     GreedyRandomizedConstruction {
         alpha: f64,
@@ -174,7 +180,33 @@ pub enum HeuristicKind {
         granularity: usize,
         target_feasible: f64,
         restart_generations: Option<u64>,
+        tuning: HgsTuning,
     },
+}
+
+/// What `AdaptiveLargeNeighborhoodSearch` sets beyond its removal share and cooling.
+#[derive(Clone, Copy)]
+pub struct AlnsTuning {
+    /// The rewards for a new best, a better incumbent and an accepted worse candidate.
+    pub scores: (f64, f64, f64),
+    pub segment_length: u64,
+    pub reaction: f64,
+    pub max_removal: usize,
+    /// Whether the problem's own descent follows each recreation.
+    pub local_repair: bool,
+}
+
+/// What `HybridGeneticSearch` sets beyond its constructor's arguments.
+#[derive(Clone, Copy)]
+pub struct HgsTuning {
+    pub n_elite: usize,
+    pub n_closest: usize,
+    /// `(period, increase, decrease, tolerance)`.
+    pub penalty_adaptation: (u32, f64, f64, f64),
+    pub repair_probability: f64,
+    /// `(factor, nearest_neighbor_every)`.
+    pub initial_population: (usize, usize),
+    pub descent_passes: usize,
 }
 
 impl HeuristicKind {
@@ -218,7 +250,9 @@ impl HeuristicKind {
                 Some("Vrp, Tsp, FlowShop, BinPacking and Python problems with the ruin methods")
             }
             Self::HybridGeneticSearch { .. } => Some("Vrp"),
-            Self::IteratedGreedy { .. } => Some("FlowShop"),
+            Self::IteratedGreedy { .. } => {
+                Some("FlowShop, Tsp, Vrp, BinPacking and Python problems with the ruin methods")
+            }
             Self::GreedyRandomizedConstruction { .. } => {
                 Some("Tsp, Vrp, FlowShop, BinPacking and Python problems with the ruin methods")
             }
@@ -509,6 +543,76 @@ where
     }
 }
 
+/// Builds the ruin-and-recreate heuristic `spec` names on `problem`, an
+/// `AdaptiveLargeNeighborhoodSearch` or an `IteratedGreedy` tuned as the spec says, or returns
+/// `None` for any other spec.
+///
+/// `repair` gives the problem's own descent, run around the reinserted elements after each
+/// recreation unless the spec turns it off. `flow_shop_temperature` gives the iterated greedy's
+/// temperature from `temperature_factor` on the one problem that defines it; elsewhere the
+/// spec's `temperature` is required.
+fn ruin_and_recreate<P>(
+    spec: &HeuristicSpec,
+    problem: &str,
+    repair: impl FnOnce() -> Option<Box<dyn LocalRepair<P>>>,
+    flow_shop_temperature: Option<fn(&P, f64) -> f64>,
+) -> Option<Result<Box<dyn Heuristic<P>>, String>>
+where
+    P: Ruinable + 'static,
+    P::Solution: Evaluate,
+{
+    let stop = spec.stop.to_opt();
+    Some(Ok(match spec.kind {
+        HeuristicKind::AdaptiveLargeNeighborhoodSearch {
+            removal_fraction,
+            cooling_rate,
+            tuning,
+        } => {
+            let (best, better, accept) = tuning.scores;
+            let alns =
+                AdaptiveLargeNeighborhoodSearch::<P>::new(stop, removal_fraction, cooling_rate)
+                    .with_scoring(best, better, accept)
+                    .with_adaptation(tuning.segment_length, tuning.reaction)
+                    .with_max_removal(tuning.max_removal);
+            match repair().filter(|_| tuning.local_repair) {
+                Some(local) => Box::new(alns.with_local_repair(local)),
+                None => Box::new(alns),
+            }
+        }
+        HeuristicKind::IteratedGreedy {
+            removal_count,
+            temperature_factor,
+            temperature,
+            local_repair,
+        } => {
+            let greedy = match (temperature, flow_shop_temperature) {
+                (Some(t), _) => IteratedGreedy::<P>::new(stop, removal_count, move |_: &P| t),
+                (None, Some(of)) => IteratedGreedy::<P>::new(stop, removal_count, move |p: &P| {
+                    of(p, temperature_factor)
+                }),
+                (None, None) => {
+                    return Some(Err(format!(
+                        "IteratedGreedy on {problem} needs a 'temperature', in the units of the \
+                         objective"
+                    )));
+                }
+            };
+            match repair().filter(|_| local_repair) {
+                Some(local) => Box::new(greedy.with_local_repair(local)),
+                None => Box::new(greedy),
+            }
+        }
+        _ => return None,
+    }))
+}
+
+/// The flow shop's iterated greedy temperature, as `iterated_greedy_for_flow_shop` sets it: a
+/// tenth of the mean processing time, times `factor`.
+fn flow_shop_temperature(prob: &OptFlowShop, factor: f64) -> f64 {
+    let operations = (prob.n_jobs * prob.n_machines).max(1) as f64;
+    factor * prob.total_processing_time() as f64 / (operations * 10.0)
+}
+
 /// Builds a `BranchAndBound` pruning by the relaxation `spec` names: one written in Python on
 /// any problem, or one of the problem's own, which `native` builds and answers `None` to when
 /// it does not apply. Returns `None` when `spec` is something else.
@@ -591,8 +695,16 @@ fn build_max_cut(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptMaxCut>>, 
                 RelaxationSpec::Default | RelaxationSpec::Binary => {
                     Some(bnb::build(&spec.stop, inner, BinaryRelaxation))
                 }
-                RelaxationSpec::Eigenvalue => {
-                    Some(bnb::build(&spec.stop, inner, EigenvalueRelaxation::new()))
+                RelaxationSpec::Eigenvalue {
+                    max_iterations,
+                    lanczos_steps,
+                    certify_limit,
+                } => {
+                    let eigen = EigenvalueRelaxation::new()
+                        .with_max_iterations(*max_iterations)
+                        .with_lanczos_steps(*lanczos_steps)
+                        .with_certify_limit(*certify_limit);
+                    Some(bnb::build(&spec.stop, inner, eigen))
                 }
                 _ => None,
             },
@@ -731,6 +843,14 @@ fn build_tsp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptTsp>>, String>
     if let Some(grasp) = grasp(spec) {
         return Ok(grasp);
     }
+    if let Some(built) = ruin_and_recreate(
+        spec,
+        "Tsp",
+        || Some(Box::new(AnchoredTourDescent::new())),
+        None,
+    ) {
+        return built;
+    }
     match &spec.kind {
         HeuristicKind::LinKernighanHelsgaun {
             num_neighbors,
@@ -739,14 +859,6 @@ fn build_tsp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptTsp>>, String>
             spec.stop.to_opt(),
             *num_neighbors,
             *max_depth,
-        ))),
-        HeuristicKind::AdaptiveLargeNeighborhoodSearch {
-            removal_fraction,
-            cooling_rate,
-        } => Ok(Box::new(alns_for_tsp(
-            spec.stop.to_opt(),
-            *removal_fraction,
-            *cooling_rate,
         ))),
         _ => match spec.neighbor.as_str() {
             "TwoOpt" => build_generic::<OptTsp, TspTwoOptNeighbor>(spec),
@@ -804,30 +916,42 @@ fn build_vrp(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptVrp>>, String>
     if let Some(grasp) = grasp(spec) {
         return Ok(grasp);
     }
+    if let Some(built) = ruin_and_recreate(
+        spec,
+        "Vrp",
+        || Some(Box::new(AnchoredRouteDescent::new())),
+        None,
+    ) {
+        return built;
+    }
     let cond = spec.stop.to_opt();
     match &spec.kind {
-        HeuristicKind::AdaptiveLargeNeighborhoodSearch {
-            removal_fraction,
-            cooling_rate,
-        } => Ok(Box::new(alns_for_vrp(
-            cond,
-            *removal_fraction,
-            *cooling_rate,
-        ))),
         HeuristicKind::HybridGeneticSearch {
             min_population_size,
             generation_size,
             granularity,
             target_feasible,
             restart_generations,
-        } => Ok(Box::new(HybridGeneticSearchForVrp::new(
-            cond,
-            *min_population_size,
-            *generation_size,
-            *granularity,
-            *target_feasible,
-            *restart_generations,
-        ))),
+            tuning,
+        } => {
+            let (period, increase, decrease, tolerance) = tuning.penalty_adaptation;
+            let (factor, nearest_neighbor_every) = tuning.initial_population;
+            Ok(Box::new(
+                HybridGeneticSearchForVrp::new(
+                    cond,
+                    *min_population_size,
+                    *generation_size,
+                    *granularity,
+                    *target_feasible,
+                    *restart_generations,
+                )
+                .with_elite(tuning.n_elite, tuning.n_closest)
+                .with_penalty_adaptation(period, increase, decrease, tolerance)
+                .with_repair_probability(tuning.repair_probability)
+                .with_initial_population(factor, nearest_neighbor_every)
+                .with_descent_passes(tuning.descent_passes),
+            ))
+        }
         _ => match spec.neighbor.as_str() {
             "Relocate" => build_generic::<OptVrp, VrpRelocateNeighbor>(spec),
             "Swap" => build_generic::<OptVrp, VrpSwapNeighbor>(spec),
@@ -861,29 +985,18 @@ fn build_flow_shop(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptFlowShop
     if let Some(grasp) = grasp(spec) {
         return Ok(grasp);
     }
-    let cond = spec.stop.to_opt();
-    match &spec.kind {
-        HeuristicKind::IteratedGreedy {
-            removal_count,
-            temperature_factor,
-        } => Ok(Box::new(iterated_greedy_for_flow_shop(
-            cond,
-            *removal_count,
-            *temperature_factor,
-        ))),
-        HeuristicKind::AdaptiveLargeNeighborhoodSearch {
-            removal_fraction,
-            cooling_rate,
-        } => Ok(Box::new(alns_for_flow_shop(
-            cond,
-            *removal_fraction,
-            *cooling_rate,
-        ))),
-        _ => match spec.neighbor.as_str() {
-            "Relocate" => build_generic::<OptFlowShop, FlowShopInsertNeighbor>(spec),
-            "Swap" => build_generic::<OptFlowShop, FlowShopSwapNeighbor>(spec),
-            _ => Err(neighbor_error(spec, "FlowShop", "'Relocate' or 'Swap'")),
-        },
+    if let Some(built) = ruin_and_recreate(
+        spec,
+        "FlowShop",
+        || Some(Box::new(FlowShopInsertionDescent::new())),
+        Some(flow_shop_temperature),
+    ) {
+        return built;
+    }
+    match spec.neighbor.as_str() {
+        "Relocate" => build_generic::<OptFlowShop, FlowShopInsertNeighbor>(spec),
+        "Swap" => build_generic::<OptFlowShop, FlowShopSwapNeighbor>(spec),
+        _ => Err(neighbor_error(spec, "FlowShop", "'Relocate' or 'Swap'")),
     }
 }
 
@@ -930,22 +1043,13 @@ fn build_bin_packing(spec: &HeuristicSpec) -> Result<Box<dyn Heuristic<OptBinPac
     if let Some(grasp) = grasp(spec) {
         return Ok(grasp);
     }
-    match &spec.kind {
-        HeuristicKind::AdaptiveLargeNeighborhoodSearch {
-            removal_fraction,
-            cooling_rate,
-        } => Ok(Box::new(
-            AdaptiveLargeNeighborhoodSearch::<OptBinPacking>::new(
-                spec.stop.to_opt(),
-                *removal_fraction,
-                *cooling_rate,
-            ),
-        )),
-        _ => match spec.neighbor.as_str() {
-            "Relocate" => build_generic::<OptBinPacking, BinPackingRelocateNeighbor>(spec),
-            "Swap" => build_generic::<OptBinPacking, BinPackingSwapNeighbor>(spec),
-            _ => Err(neighbor_error(spec, "BinPacking", "'Relocate' or 'Swap'")),
-        },
+    if let Some(built) = ruin_and_recreate(spec, "BinPacking", || None, None) {
+        return built;
+    }
+    match spec.neighbor.as_str() {
+        "Relocate" => build_generic::<OptBinPacking, BinPackingRelocateNeighbor>(spec),
+        "Swap" => build_generic::<OptBinPacking, BinPackingSwapNeighbor>(spec),
+        _ => Err(neighbor_error(spec, "BinPacking", "'Relocate' or 'Swap'")),
     }
 }
 
@@ -1049,20 +1153,13 @@ fn build_python(
     let inner: Box<dyn Heuristic<PyProblem>> = match build_nested(spec, &recur, &crossover)? {
         Some(built) => built,
         None => match spec.kind {
-            HeuristicKind::AdaptiveLargeNeighborhoodSearch {
-                removal_fraction,
-                cooling_rate,
-            } => {
+            HeuristicKind::AdaptiveLargeNeighborhoodSearch { .. }
+            | HeuristicKind::IteratedGreedy { .. } => {
                 prob.check_ruinable(spec.kind.name())?;
-                let alns = AdaptiveLargeNeighborhoodSearch::<PyProblem>::new(
-                    spec.stop.to_opt(),
-                    removal_fraction,
-                    cooling_rate,
-                );
-                match PyRepair::new(prob) {
-                    Some(repair) => Box::new(alns.with_local_repair(Box::new(repair))),
-                    None => Box::new(alns),
-                }
+                let repair =
+                    || PyRepair::new(prob).map(|r| Box::new(r) as Box<dyn LocalRepair<PyProblem>>);
+                ruin_and_recreate(spec, "a Python problem", repair, None)
+                    .expect("the spec is one ruin_and_recreate builds")?
             }
             HeuristicKind::GreedyRandomizedConstruction { alpha } => {
                 prob.check_ruinable(spec.kind.name())?;
