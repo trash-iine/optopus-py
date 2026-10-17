@@ -148,7 +148,11 @@ entries below are breaking; see **Changed** and **Removed**.
 - Wheels are built with the release settings optopus measured, fat LTO and a single codegen
   unit, which the binding had never applied. `TabuSearch` runs about 1.9x faster on a
   2000-vertex MaxCut; the other heuristics measured gain little.
-- Updated the vendored optopus to `8de6180`, and later to `594f473`.
+- Updated the vendored optopus to `8de6180`, then to `594f473`, and later to `1314a94`.
+- `BinPacking`'s `"Relocate"` neighborhood also moves an item that shares its bin into a new bin
+  of its own, so a tight packing still has a move. `SimulatedAnnealing` and
+  `LateAcceptanceHillClimbing` used to stop early once the packing got that tight. Runs on
+  `BinPacking` give different results for the same seed. Changed in optopus (`313e1e1`).
 - `AdaptiveLargeNeighborhoodSearch`'s greedy repair puts back the element whose cheapest place
   costs least first, re-pricing the rest after each insertion, as the original paper's basic
   greedy does; it used to insert them in a random order. Runs on `Vrp`, `Tsp` and Python
