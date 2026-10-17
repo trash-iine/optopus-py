@@ -12,6 +12,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+use crate::error::{check_readable, input_error};
 use crate::graph::{Graph as PyGraph, resolve_seed};
 use crate::validate::check_at_least;
 
@@ -444,9 +445,7 @@ impl PlantedMaxCut {
     /// Raises:
     ///     ValueError: Describing the first check that fails.
     fn verify(&self) -> PyResult<()> {
-        self.inner
-            .verify()
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+        self.inner.verify().map_err(input_error)
     }
 
     fn __repr__(&self) -> String {
@@ -669,7 +668,7 @@ impl Tsp {
         check_distance_matrix(&matrix)?;
         OptTsp::from_distance_matrix(name.to_string(), matrix)
             .map(|inner| Self { inner })
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(input_error)
     }
 
     /// Load a TSP instance from a TSPLIB-format file.
@@ -681,12 +680,15 @@ impl Tsp {
     ///     Tsp: The loaded problem instance.
     ///
     /// Raises:
-    ///     ValueError: If the file cannot be read or does not parse.
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse.
     #[staticmethod]
     fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
         OptTsp::load_file(path)
             .map(|inner| Self { inner })
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(input_error)
     }
 
     /// Number of cities.
@@ -804,11 +806,14 @@ impl FlowShop {
     ///     FlowShop: The loaded problem instance.
     ///
     /// Raises:
-    ///     ValueError: If the file cannot be read or does not parse.
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse.
     #[staticmethod]
     fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
         OptFlowShop::load_file(path)
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(input_error)
             .and_then(Self::checked)
     }
 
@@ -931,11 +936,14 @@ impl Qap {
     ///     Qap: The loaded problem instance.
     ///
     /// Raises:
-    ///     ValueError: If the file cannot be read or does not parse.
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse.
     #[staticmethod]
     fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
         OptQap::load_file(path)
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(input_error)
             .and_then(Self::checked)
     }
 
@@ -1045,11 +1053,13 @@ impl BinPacking {
     ///     BinPacking: The loaded problem instance.
     ///
     /// Raises:
-    ///     ValueError: If the file cannot be read or does not parse, or an item does not fit.
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse, or an item does not fit.
     #[staticmethod]
     fn load_file(path: &str) -> PyResult<Self> {
-        let inner =
-            OptBinPacking::load_file(path).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        check_readable(path)?;
+        let inner = OptBinPacking::load_file(path).map_err(input_error)?;
         Self::checked(inner.capacity, &inner.sizes)?;
         Ok(Self { inner })
     }
@@ -1093,10 +1103,7 @@ impl BinPacking {
         py: Python<'py>,
         bins: Vec<usize>,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let solution = self
-            .inner
-            .solution_from_bins(bins)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let solution = self.inner.solution_from_bins(bins).map_err(input_error)?;
         let dict = PyDict::new(py);
         dict.set_item("objective", solution.objective)?;
         dict.set_item("num_bins", solution.num_bins())?;
@@ -1213,7 +1220,7 @@ impl GraphColoring {
         let solution = self
             .inner
             .solution_from_colors(colors)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            .map_err(input_error)?;
         let dict = PyDict::new(py);
         dict.set_item("objective", solution.objective)?;
         dict.set_item("colors_used", solution.colors_used)?;
@@ -1765,13 +1772,15 @@ impl Vrp {
     ///     Vrp: The loaded problem instance.
     ///
     /// Raises:
-    ///     ValueError: If the file cannot be read, does not parse, or describes an invalid
-    ///         instance.
+    ///     OSError: If the file cannot be opened, such as ``FileNotFoundError`` when it does
+    ///         not exist.
+    ///     ValueError: If the file does not parse or describes an invalid instance.
     #[staticmethod]
     fn load_file(path: &str) -> PyResult<Self> {
+        check_readable(path)?;
         OptVrp::load_file(path)
             .map(|inner| Self { inner })
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(input_error)
     }
 
     /// Build a CVRP instance from an explicit distance matrix.
@@ -1805,7 +1814,7 @@ impl Vrp {
         check_distance_matrix(&matrix)?;
         OptVrp::from_distance_matrix(name, matrix, demands, capacity, num_vehicles)
             .map(|inner| Self { inner })
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(input_error)
     }
 
     /// Number of customers, excluding the depot.
@@ -1947,7 +1956,7 @@ impl Vrp {
         let solution = self
             .inner
             .solution_from_routes(routes)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            .map_err(input_error)?;
         let dict = PyDict::new(py);
         dict.set_item("objective", solution.objective)?;
         dict.set_item("distance", solution.total_distance())?;

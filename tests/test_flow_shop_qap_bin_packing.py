@@ -214,9 +214,6 @@ def test_bin_packing_load_file(tmp_path):
         (lambda: optopus.BinPacking.from_sizes(10, [0]), "fit in a bin"),
         (lambda: bin_packing().evaluate_bins([0] * 8), "over the capacity"),
         (lambda: bin_packing().evaluate_bins([0, 1]), "8 items"),
-        (lambda: optopus.FlowShop.load_file("no-such-instance.txt"), "no-such-instance"),
-        (lambda: optopus.Qap.load_file("no-such-instance.dat"), "no-such-instance"),
-        (lambda: optopus.BinPacking.load_file("no-such-instance.txt"), "no-such-instance"),
     ],
 )
 def test_invalid_input_raises_value_error(build, match):
@@ -249,6 +246,21 @@ def test_bin_packing_load_file_rejects_an_item_too_large(tmp_path):
 def test_run_errors(heuristic, problem, match):
     with pytest.raises(ValueError, match=match):
         heuristic.run(problem(), seed=1)
+
+
+@pytest.mark.parametrize(
+    "heuristic",
+    [
+        optopus.SimulatedAnnealing("Relocate", 1.0, 0.99, stop(5)),
+        optopus.LateAcceptanceHillClimbing("Relocate", 5, stop(5)),
+    ],
+)
+def test_a_run_that_cannot_go_on_raises_runtime_error(heuristic):
+    # Two items that each fill more than half a bin: neither moves into the other's bin, and
+    # neither shares a bin a relocation could open a new one from, so no move exists.
+    tight = optopus.BinPacking.from_sizes(10, [6, 6])
+    with pytest.raises(RuntimeError, match="neighborhood is empty"):
+        heuristic.run(tight, runs=3, seed=1)
 
 
 @pytest.mark.parametrize(

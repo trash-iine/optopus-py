@@ -1,5 +1,5 @@
 ---
-source_sha256: e6986920ac5b
+source_sha256: a5d83764defb
 ---
 
 # Python で書いた問題
@@ -64,8 +64,8 @@ Rust に残り、問題に依存する処理はすべてあなたのオブジェ
 禁止が解けるまで探索は何もできなくなります。
 
 `random_neighbor` が `None` を返すのは、その近傍に解からの移動がないことを意味します。
-`SimulatedAnnealing`、`BangBangSimulatedAnnealing`、`LateAcceptanceHillClimbing` はそこで実行を
-終え、`PopulationAnnealing` と `ParallelTempering` はその提案を飛ばして次に進み、`RandomWalk` は
+`SimulatedAnnealing`、`BangBangSimulatedAnnealing`、`LateAcceptanceHillClimbing` はそこで止まって
+`run` が `RuntimeError` を送出し、`PopulationAnnealing` と `ParallelTempering` はその提案を飛ばして次に進み、`RandomWalk` は
 そのステップを棄却として数えてやり直します。`None` を返すのは本当に移動がないときだけにしてください。
 すべての品物が 1 つの箱に入っているときの箱の間の交換のように、ときどきだけ空になる近傍は、常に
 移動を持つ近傍とまとめたほうが適しています。

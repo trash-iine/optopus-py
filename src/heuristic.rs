@@ -57,6 +57,8 @@ impl LocalSearch {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -137,6 +139,8 @@ impl SimulatedAnnealing {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -207,6 +211,8 @@ impl TabuSearch {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -278,6 +284,8 @@ impl LateAcceptanceHillClimbing {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -337,6 +345,10 @@ impl RandomWalk {
     ///
     /// Returns:
     ///     RunReport: Aggregated statistics over all runs.
+    ///
+    /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
@@ -408,6 +420,10 @@ impl BangBangSimulatedAnnealing {
     }
 
     /// Run the heuristic on a problem and return an aggregated report.
+    ///
+    /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
@@ -460,6 +476,10 @@ impl BeamSearch {
     }
 
     /// Run the heuristic on a problem and return an aggregated report.
+    ///
+    /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
         &self,
@@ -550,6 +570,8 @@ impl VariableNeighborhoodSearch {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If a step's ``neighbor`` is not valid for ``problem``, a step is a
     ///         problem-specific heuristic for a different problem, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
@@ -626,6 +648,8 @@ impl WalkSat {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``Sat`` instance, or ``runs`` is 0.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
@@ -751,6 +775,8 @@ impl PopulationAnnealing {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -890,6 +916,8 @@ impl ParallelTempering {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``neighbor`` is not valid for ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -1100,6 +1128,8 @@ impl BreakoutLocalSearch {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If the constructor's form runs on anything but ``MaxCut``, a part does
     ///         not fit ``problem``, or ``runs`` is 0.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -1175,6 +1205,8 @@ impl LinKernighanHelsgaun {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``Tsp`` instance, or ``runs`` is 0.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
@@ -1258,6 +1290,8 @@ impl AdaptiveLargeNeighborhoodSearch {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``Vrp``, a ``Tsp``, or a Python problem with
     ///         the ruin methods, or ``runs`` is 0.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -1348,6 +1382,8 @@ impl IteratedGreedy {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``FlowShop``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -1432,6 +1468,8 @@ impl GreedyRandomizedConstruction {
     ///     RunReport: Aggregated statistics over all runs, one construction each.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``problem`` is not one the construction applies to, or ``runs`` is
     ///         0.
     ///     TypeError: If ``problem`` is not a problem instance.
@@ -1552,6 +1590,8 @@ impl HybridGeneticSearch {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``problem`` is not a ``Vrp`` instance, or ``runs`` is 0.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
     fn run(
@@ -1625,6 +1665,8 @@ impl Sequential {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -1699,6 +1741,8 @@ impl Iterated {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -1774,6 +1818,8 @@ impl Restart {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -1892,6 +1938,8 @@ impl BranchAndBound {
     ///     and ``dual_bound`` set.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If ``problem`` is not one ``BranchAndBound`` runs on, ``relaxation``
     ///         does not apply to it, ``heuristic`` does not fit it, a callable relaxation
     ///         returns NaN, or ``runs`` is 0.
@@ -2053,6 +2101,8 @@ impl GeneticAlgorithm {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
@@ -2186,6 +2236,8 @@ impl ReinforcementLearningSearch {
     ///     RunReport: Aggregated statistics over all runs.
     ///
     /// Raises:
+    ///     RuntimeError: If a run stops because the search cannot go on, such as on an empty
+    ///         neighborhood.
     ///     ValueError: If a step does not fit ``problem``, or ``runs`` is 0.
     ///     TypeError: If ``problem`` is not a problem instance, or a step is not a heuristic.
     #[pyo3(signature = (problem, runs=1, seed=None, on_improvement=None))]
