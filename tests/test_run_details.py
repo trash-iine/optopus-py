@@ -51,3 +51,38 @@ def test_reinforcement_learning_reports_the_weights_it_learned():
 def test_other_runs_report_none(heuristic):
     run = heuristic.run(max_cut(), seed=1).runs[0]
     assert (run.betas, run.exchange_acceptance, run.policy_weights) == (None, None, None)
+
+
+class Flip:
+    def neighbors(self, problem, x):
+        return range(len(x))
+
+    def apply(self, problem, x, i):
+        return (*x[:i], not x[i], *x[i + 1 :])
+
+    def random_neighbor(self, problem, x, rng):
+        return rng.randrange(len(x))
+
+
+class OneMax:
+    minimize = False
+    neighborhoods = {"Flip": Flip()}  # noqa: RUF012
+
+    def new_solution(self, rng):
+        return tuple(rng.random() < 0.5 for _ in range(8))
+
+    def objective(self, x):
+        return float(sum(x))
+
+
+@pytest.mark.parametrize(
+    ("heuristic", "field"),
+    [
+        (optopus.ParallelTempering(3, stop(20)), "betas"),
+        (optopus.ReinforcementLearningSearch("Flip", stop(20)), "policy_weights"),
+    ],
+)
+def test_a_python_problem_reports_them_too(heuristic, field):
+    # Every heuristic on a Python problem runs inside a guard that drives the loop itself.
+    run = heuristic.run(OneMax(), seed=1).runs[0]
+    assert getattr(run, field) is not None
