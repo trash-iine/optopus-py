@@ -1,5 +1,5 @@
 ---
-source_sha256: 5ad136137c72
+source_sha256: 7e72a8ee642b
 ---
 
 # 汎用ヒューリスティック
@@ -256,6 +256,9 @@ print(pt.run(mc, runs=3, seed=42).best_objective)  # 93.0
 なりません。そうでないと良い配置がはしごを下っていきません。範囲を広げるときは、レプリカも一緒に
 増やしてください。2 要素の移動では、`PopulationAnnealing` と同じく `sweep_length` を設定してください。
 
+各実行は、はしごを `RunResult.betas` に、受理した交換の割合を `RunResult.exchange_acceptance` に報告します。
+割合が 0 に近いのは、隣のレプリカが離れすぎているしるしです。
+
 ## ReinforcementLearningSearch
 
 探索しながら、どの移動を選ぶかを学習します。各反復で、候補の移動それぞれを 21 個の特徴量で表します。
@@ -280,5 +283,6 @@ rl = optopus.ReinforcementLearningSearch(
 print(rl.run(mc, runs=3, seed=42).best_objective)  # 93.0
 ```
 
-方策は実行ごとにゼロから始まります。近傍が大きい場合は `max_candidates` を数百に設定してください。
-遅くなる原因は、毎反復すべての移動を評価することです。
+方策は実行ごとにゼロから始まります。実行が最後に持っていた重みは `RunResult.policy_weights` にあり、
+これを `policy_weights` に渡すと、学んだところから次の探索を始められます。近傍が大きい場合は
+`max_candidates` を数百に設定してください。遅くなる原因は、毎反復すべての移動を評価することです。

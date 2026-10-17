@@ -14,6 +14,7 @@
 //! node. The generic and composed heuristics, ALNS and the GRASP construction also run on
 //! problems written in Python.
 mod branch_and_bound;
+mod details;
 mod error;
 mod graph;
 mod heuristic;
