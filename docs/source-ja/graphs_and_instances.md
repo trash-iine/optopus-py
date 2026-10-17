@@ -1,5 +1,5 @@
 ---
-source_sha256: 8537fca8d95b
+source_sha256: aee1f33ee74f
 ---
 
 # グラフとテスト用インスタンス
@@ -23,6 +23,7 @@ source_sha256: 8537fca8d95b
 | `Graph.watts_strogatz(n, k, beta, seed=None)` | Watts-Strogatz のスモールワールド: 各頂点を近い `k` 頂点とつないだ環で、各辺を確率 `beta` でつなぎ替える。辺は `n k / 2` 本、`k` は偶数で `n` 未満 |
 | `Graph.grid_torus_2d(l)` | 周期境界の正方格子: 頂点 `l²`、辺 `2 l²`、4 正則、`l >= 3`。頂点 `m + l · n` が `(m, n)` にある |
 | `Graph.grid_torus_3d(l)` | 周期境界の立方格子: 頂点 `l³`、辺 `3 l³`、6 正則、`l >= 3`。頂点 `m + l · n + l² · k` が `(m, n, k)` にある |
+| `Graph.load_file(path)` | 辺リストのファイル。`N M` の後に辺ごとに `i j w`、頂点番号は 1 から、`w` は省略でき省略時は 1.0 (G-set の形式) |
 
 | メソッド | 返すもの |
 |---|---|
@@ -30,6 +31,12 @@ source_sha256: 8537fca8d95b
 | `num_vertices()` | 辺を 1 本以上持つ頂点の数 |
 | `num_edges()` | 辺の数 |
 | `edges()` | すべての辺を 1 回ずつ、`(u, v, weight)` で |
+| `degree(v)` | `v` に接する辺の数 |
+| `neighbors(v)` | `v` に隣接する頂点。`(neighbor, weight)` で番号の小さい順 |
+| `has_edge(u, v)` | `u` と `v` を結ぶ辺があるか |
+| `weight(u, v)` | `u` と `v` の間の辺の重み。辺がなければ 0.0 |
+| `induced_subgraph(keep)` | `keep` の頂点からなる部分グラフ。頂点番号はそのまま |
+| `write_to_file(path)` | なし。`load_file` が読む形式でグラフを書き出す。孤立頂点も重みも完全な精度で残る |
 
 ```python
 import optopus
