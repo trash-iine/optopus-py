@@ -32,6 +32,7 @@
 //! - `GeneticAlgorithm(crossover="SubProblem")` needs
 //!   `extract_sub_problem(a, b)`, a Python problem over what the parents
 //!   disagree on, and `lift_solution(a, b, sub_solution)`, the full child.
+//! - `BranchAndBound` needs the branching methods, see [`BRANCH_METHODS`].
 //!
 //! Solutions and moves are opaque to the Rust side. `rng` is a
 //! `random.Random` seeded from the run's seed, so a seeded run reproduces.
@@ -41,15 +42,16 @@
 //! `run` once the heuristic has returned.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
+use optopus::building_blocks::representation::{IntVar, IntVars};
 use optopus::building_blocks::search::{TabuKey, TabuMemory};
 use optopus::error::OptError;
 use optopus::prelude::{
     EnabledTabu, Evaluable, Evaluate, Heuristic, MoveToNeighbor, ProblemTrait, SearchState,
     StopCondition,
 };
-use optopus::trait_defs::{Crossover, Distance, SubProblemExtractable};
+use optopus::trait_defs::{Branchable, Crossover, Distance, IntAssignment, SubProblemExtractable};
 use optopus::trait_defs::{LocalRepair, Ruinable};
 use pyo3::call::PyCallArgs;
 use pyo3::exceptions::{PyTypeError, PyValueError};
@@ -103,6 +105,24 @@ pub const RUIN_METHODS: [&str; 10] = [
     "insert",
 ];
 
+/// The methods `BranchAndBound` needs on a Python problem, whose solutions
+/// then assign an integer to each variable.
+///
+/// - `variable_bounds()`, the inclusive `(lower, upper)` range of each variable,
+/// - `variable_values(solution)`, the value of each variable in `solution`,
+/// - `solution_from_values(values)`, the solution assigning `values`,
+/// - `restricted(bounds)`, the same problem with each variable's range
+///   narrowed to `bounds`, declaring the same neighborhoods in the same order.
+///
+/// The objective must not depend on the ranges, since a node's solutions are
+/// compared with the whole problem's.
+pub const BRANCH_METHODS: [&str; 4] = [
+    "variable_bounds",
+    "variable_values",
+    "solution_from_values",
+    "restricted",
+];
+
 /// What every solution of one problem needs to read, shared rather than copied.
 struct Shared {
     obj: Py<PyAny>,
@@ -147,6 +167,9 @@ pub struct PyProblem {
     /// Whether moves read their `tabu_keys` when priced. Only a tabu search
     /// needs them, so the other heuristics skip the extra Python call.
     record_tabu: AtomicBool,
+    /// The range of each variable, read by [`check_branchable`](Self::check_branchable) or
+    /// given to a node of a branch-and-bound search.
+    domains: OnceLock<IntVars>,
 }
 
 impl PyProblem {
@@ -215,6 +238,7 @@ impl PyProblem {
             has_repair_around: obj.hasattr("repair_around")?,
             rng: Mutex::new(None),
             record_tabu: AtomicBool::new(false),
+            domains: OnceLock::new(),
         })
     }
 
@@ -297,6 +321,39 @@ impl PyProblem {
         }
     }
 
+    /// Fails unless the problem has every method in [`BRANCH_METHODS`] and its
+    /// `variable_bounds` are valid ranges, which it keeps for the search.
+    pub fn check_branchable(&self) -> Result<(), String> {
+        let missing: Vec<_> = Python::attach(|py| {
+            let obj = self.shared.obj.bind(py);
+            BRANCH_METHODS
+                .iter()
+                .filter(|m| !obj.hasattr(**m).unwrap_or(false))
+                .map(|m| format!("'{m}'"))
+                .collect()
+        });
+        if !missing.is_empty() {
+            return Err(format!(
+                "BranchAndBound needs these methods on the problem: {}",
+                missing.join(", ")
+            ));
+        }
+        if self.domains.get().is_some() {
+            return Ok(());
+        }
+        let bounds: Vec<(i64, i64)> = Python::attach(|py| {
+            self.shared
+                .obj
+                .bind(py)
+                .call_method0("variable_bounds")?
+                .extract()
+        })
+        .map_err(|e| format!("variable_bounds() must return a list of (lower, upper) ints: {e}"))?;
+        let vars = int_vars(&bounds)?;
+        let _ = self.domains.set(vars);
+        Ok(())
+    }
+
     /// The sub-problem `obj` describes, checked to declare this problem's
     /// neighborhoods in the same order, since a heuristic picks its move by
     /// position.
@@ -315,6 +372,11 @@ impl PyProblem {
         }
         sub.record_tabu
             .store(self.record_tabu.load(Ordering::Relaxed), Ordering::Relaxed);
+        // A branch-and-bound node is searched from the solution it is warm-started with, so
+        // `new_solution` never seeds its rng: it draws from the problem's.
+        if let Some(rng) = self.rng.lock().unwrap().as_ref() {
+            *sub.rng.lock().unwrap() = Some(rng.clone_ref(obj.py()));
+        }
         Ok(sub)
     }
 
@@ -340,6 +402,7 @@ impl PyProblem {
             has_repair_around: self.has_repair_around,
             rng: Mutex::new(None),
             record_tabu: AtomicBool::new(self.record_tabu.load(Ordering::Relaxed)),
+            domains: OnceLock::new(),
         })
     }
 
@@ -379,6 +442,7 @@ impl PyProblem {
             value: Python::attach(|py| py.None()),
             objective: f64::NAN,
             shared: self.shared.clone(),
+            values: Arc::default(),
         }
     }
 
@@ -429,6 +493,7 @@ impl PyProblem {
             objective: self.objective(py, &value)?,
             value: value.unbind(),
             shared: self.shared.clone(),
+            values: Arc::default(),
         })
     }
 }
@@ -438,6 +503,9 @@ pub struct PySolution {
     pub value: Py<PyAny>,
     pub objective: f64,
     shared: Arc<Shared>,
+    /// The value of each variable, read from `variable_values` the first time a
+    /// branch-and-bound search asks, and shared by the clones.
+    values: Arc<OnceLock<Vec<i64>>>,
 }
 
 impl Clone for PySolution {
@@ -448,6 +516,7 @@ impl Clone for PySolution {
             value: Python::attach(|py| self.value.clone_ref(py)),
             objective: self.objective,
             shared: self.shared.clone(),
+            values: Arc::clone(&self.values),
         }
     }
 }
@@ -712,6 +781,105 @@ impl PyCrossover {
         } else {
             Err("GeneticAlgorithm needs a 'crossover' method on the problem".to_string())
         }
+    }
+}
+
+impl PySolution {
+    /// The value of each variable, from the problem's `variable_values`, or
+    /// an empty list once a callback has raised.
+    fn values(&self) -> &[i64] {
+        self.values.get_or_init(|| {
+            self.shared
+                .call(|py| {
+                    self.shared
+                        .obj
+                        .bind(py)
+                        .call_method1(intern!(py, "variable_values"), (self.value.bind(py),))?
+                        .extract()
+                })
+                .unwrap_or_default()
+        })
+    }
+}
+
+/// The ranges `bounds` gives, or why they are not ranges.
+fn int_vars(bounds: &[(i64, i64)]) -> Result<IntVars, String> {
+    bounds
+        .iter()
+        .enumerate()
+        .map(|(i, &(lower, upper))| {
+            if lower > upper {
+                return Err(format!(
+                    "variable {i} has lower bound {lower} above upper bound {upper}"
+                ));
+            }
+            if i128::from(upper) - i128::from(lower) >= i128::from(u64::MAX) {
+                return Err(format!("variable {i} ranges over every i64"));
+            }
+            Ok(IntVar::new(lower, upper))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(IntVars::new)
+}
+
+impl IntAssignment for PyProblem {
+    fn domains(&self) -> &IntVars {
+        self.domains
+            .get()
+            .expect("check_branchable reads the ranges before a search branches")
+    }
+
+    fn get(sol: &PySolution, i: usize) -> i64 {
+        sol.values().get(i).copied().unwrap_or(0)
+    }
+
+    fn assign(&self, sol: &mut PySolution, i: usize, value: i64) {
+        let mut values = sol.values().to_vec();
+        if let Some(v) = values.get_mut(i) {
+            *v = value;
+        }
+        *sol = self.solution_with_values(values);
+    }
+}
+
+impl PyProblem {
+    /// The problem's `solution_from_values`, or a placeholder once a callback
+    /// has raised.
+    fn solution_with_values(&self, values: Vec<i64>) -> PySolution {
+        self.call(|py| {
+            let value = self
+                .shared
+                .obj
+                .bind(py)
+                .call_method1(intern!(py, "solution_from_values"), (values.clone(),))?;
+            let sol = self.solution(py, value)?;
+            let _ = sol.values.set(values);
+            Ok(sol)
+        })
+        .unwrap_or_else(|| self.placeholder())
+    }
+}
+
+impl Branchable for PyProblem {
+    fn restricted(&self, vars: IntVars) -> Self {
+        let bounds: Vec<(i64, i64)> = vars.iter().map(|v| (v.lower(), v.upper())).collect();
+        let node = self.call(|py| {
+            let obj = self
+                .shared
+                .obj
+                .bind(py)
+                .call_method1(intern!(py, "restricted"), (bounds,))?;
+            self.sub_problem(&obj)
+        });
+        let node = node.unwrap_or_else(|| self.stand_in());
+        let _ = node.domains.set(vars);
+        node
+    }
+
+    /// optopus calls this with values inside the ranges and expects a solution
+    /// back, so a callback that raises gives a placeholder and stops the run.
+    fn solution_from_values(&self, values: Vec<i64>) -> Result<PySolution, OptError> {
+        Ok(self.solution_with_values(values))
     }
 }
 

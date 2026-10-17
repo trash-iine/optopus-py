@@ -1,11 +1,12 @@
 ---
-source_sha256: 544935f8753b
+source_sha256: 9b824eea1f4c
 ---
 
 # 厳密解法
 
 他のヒューリスティックはどれも見つけた最良解を返すだけで、より良い解が存在するかどうかは判定でき
-ません。`BranchAndBound` は `MaxCut`、`Qubo`、`Sat`、`VertexCover`、`Formula` でそれができます。
+ません。`BranchAndBound` は `MaxCut`、`Qubo`、`Sat`、`VertexCover`、`Formula` と、分岐用のメソッドを持つ
+{ref}`Python で書いた問題 <on-a-problem-written-in-python>` でそれができます。
 問題を、いくつかの変数の範囲を狭めたノードに分割し、各ノードを別のヒューリスティックで探索し、限界
 (*緩和*) がそのノードの中にこれまでの最良解を上回るものがないことを示した時点でノードを捨てます。
 ノードがなくなれば、最良解は最適です。
@@ -123,3 +124,70 @@ print(run.best_objective, run.solution, run.proven_optimal)  # 9.0 [0, 1, 1, 0] 
 `proven_optimal=True` を報告します。新しい限界は、列挙できるほど小さなインスタンスで列挙と照らし
 合わせて確認してください。例外を送出する関数は実行を止め、`run` がその例外を送出します。NaN を返す
 関数は `ValueError` になります。
+
+(on-a-problem-written-in-python)=
+## Python で書いた問題で使う
+
+[Python で書いた問題](python_problems.md)は、解が各変数に整数を割り当て、その範囲を狭められるようになれば
+分岐できます。それには次の 4 つのメソッドを使います。
+
+| 問題のメンバー | 返すもの |
+|---|---|
+| `variable_bounds()` | 各変数の範囲。両端を含む `(lower, upper)` |
+| `variable_values(solution)` | `solution` での各変数の値 |
+| `solution_from_values(values)` | `values` を割り当てた解 |
+| `restricted(bounds)` | 各変数の範囲を `bounds` に狭めた同じ問題。同じ近傍を同じ順で宣言する |
+
+ノードは `restricted` が返す問題なので、近傍はその問題自身の範囲を守る必要があり、`heuristic` はその
+近傍でノードを探索します。optopus はあなたの目的関数の限界を知らないので、緩和は Python で書いた関数に
+します。目的関数は範囲に依存してはいけません。ノードは `new_solution` を呼ばず、その移動は元の問題の
+`rng` から引きます。
+
+```python
+weights = [4, 3, 2, 1]
+
+
+class Flip:
+    def neighbors(self, problem, x):
+        return [i for i, (lower, upper) in enumerate(problem.bounds) if lower < upper]
+
+    def apply(self, problem, x, i):
+        return (*x[:i], 1 - x[i], *x[i + 1 :])
+
+
+class Knapsack:
+    minimize = False
+
+    def __init__(self, bounds=((0, 1),) * 4):
+        self.bounds = list(bounds)
+        self.neighborhoods = {"Flip": Flip()}
+
+    def new_solution(self, rng):
+        return tuple(rng.randint(lower, upper) for lower, upper in self.bounds)
+
+    def objective(self, x):
+        over = max(sum(w * xi for w, xi in zip(weights, x)) - budget, 0)
+        return sum(v * xi for v, xi in zip(values, x)) - 7.0 * over
+
+    def variable_bounds(self):
+        return self.bounds
+
+    def variable_values(self, x):
+        return list(x)
+
+    def solution_from_values(self, values):
+        return tuple(values)
+
+    def restricted(self, bounds):
+        return Knapsack(bounds)
+
+
+bnb = optopus.BranchAndBound(
+    heuristic=optopus.LocalSearch("Flip", stop=optopus.StopCondition(max_iteration=100)),
+    relaxation=fractional_fill,
+)
+run = bnb.run(Knapsack(), seed=42).runs[0]
+print(run.best_objective, run.solution, run.proven_optimal)  # 9.0 (0, 1, 1, 0) True
+```
+
+4 つのメソッドのどれかがない問題や、`relaxation` に名前を指定した場合は `ValueError` になります。

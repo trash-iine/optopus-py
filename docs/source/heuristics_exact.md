@@ -1,7 +1,8 @@
 # Exact search
 
 Every other heuristic returns the best solution it found, and none can say whether a better one
-exists. `BranchAndBound` can, on `MaxCut`, `Qubo`, `Sat`, `VertexCover` and `Formula`. It splits
+exists. `BranchAndBound` can, on `MaxCut`, `Qubo`, `Sat`, `VertexCover`, `Formula` and
+[problems written in Python](#on-a-problem-written-in-python) with the branching methods. It splits
 the problem into nodes, each with some variables' ranges narrowed, searches each node with
 another heuristic, and drops a node once a bound, the *relaxation*, shows that nothing in it
 beats the best solution so far. When no node is left, the best solution is optimal.
@@ -119,3 +120,69 @@ A function that is not a bound prunes the optimum without an error, and the run 
 `proven_optimal=True` for a solution that is not optimal. Check a new bound against enumeration
 on instances small enough to enumerate. A function that raises stops the run, and `run` raises
 the exception; one that returns NaN raises `ValueError`.
+
+## On a problem written in Python
+
+A [problem written in Python](python_problems.md) branches once its solutions assign an integer
+to each variable and it can narrow those ranges, through four methods:
+
+| Problem member | Returns |
+|---|---|
+| `variable_bounds()` | the inclusive `(lower, upper)` range of each variable |
+| `variable_values(solution)` | the value of each variable in `solution` |
+| `solution_from_values(values)` | the solution assigning `values` |
+| `restricted(bounds)` | the same problem with each variable's range narrowed to `bounds`, declaring the same neighborhoods in the same order |
+
+A node is the problem `restricted` returns, so the neighborhoods have to keep to the problem's
+own ranges, and `heuristic` searches the node with them. The relaxation is a function written in
+Python, since optopus knows no bound for your objective, and the objective must not depend on
+the ranges. A node never calls `new_solution`; its moves draw from the problem's `rng`.
+
+```python
+weights = [4, 3, 2, 1]
+
+
+class Flip:
+    def neighbors(self, problem, x):
+        return [i for i, (lower, upper) in enumerate(problem.bounds) if lower < upper]
+
+    def apply(self, problem, x, i):
+        return (*x[:i], 1 - x[i], *x[i + 1 :])
+
+
+class Knapsack:
+    minimize = False
+
+    def __init__(self, bounds=((0, 1),) * 4):
+        self.bounds = list(bounds)
+        self.neighborhoods = {"Flip": Flip()}
+
+    def new_solution(self, rng):
+        return tuple(rng.randint(lower, upper) for lower, upper in self.bounds)
+
+    def objective(self, x):
+        over = max(sum(w * xi for w, xi in zip(weights, x)) - budget, 0)
+        return sum(v * xi for v, xi in zip(values, x)) - 7.0 * over
+
+    def variable_bounds(self):
+        return self.bounds
+
+    def variable_values(self, x):
+        return list(x)
+
+    def solution_from_values(self, values):
+        return tuple(values)
+
+    def restricted(self, bounds):
+        return Knapsack(bounds)
+
+
+bnb = optopus.BranchAndBound(
+    heuristic=optopus.LocalSearch("Flip", stop=optopus.StopCondition(max_iteration=100)),
+    relaxation=fractional_fill,
+)
+run = bnb.run(Knapsack(), seed=42).runs[0]
+print(run.best_objective, run.solution, run.proven_optimal)  # 9.0 (0, 1, 1, 0) True
+```
+
+A problem without one of the four methods, or `relaxation` left at a name, raises `ValueError`.

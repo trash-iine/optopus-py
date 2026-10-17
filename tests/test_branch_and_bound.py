@@ -269,7 +269,7 @@ def triangle_tsp():
             ValueError,
             "BranchAndBound is only available for MaxCut",
         ),
-        (Ones, flip_search, None, ValueError, "BranchAndBound is only available for MaxCut"),
+        (Ones, flip_search, None, ValueError, "BranchAndBound needs these methods on the problem"),
         (knapsack, change_search, raises(ZeroDivisionError("boom")), ZeroDivisionError, "boom"),
         (knapsack, change_search, lambda ranges: math.nan, ValueError, "NaN"),
         (knapsack, change_search, lambda ranges: "high", TypeError, None),

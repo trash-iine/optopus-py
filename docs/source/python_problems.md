@@ -77,6 +77,7 @@ that always has a move.
 | `GeneticAlgorithm`, `BreakoutLocalSearch.from_parts` | optional `distance(a, b)`, a non-negative int. Without it, `a == b` counts as 0 and anything else as 1 |
 | `AdaptiveLargeNeighborhoodSearch` | the ruin methods |
 | `GeneticAlgorithm(crossover="SubProblem")` | `extract_sub_problem(a, b)` and `lift_solution(a, b, sub_solution)` |
+| `BranchAndBound` | `variable_bounds()`, `variable_values(solution)`, `solution_from_values(values)` and `restricted(bounds)`, see [Exact search](heuristics_exact.md#on-a-problem-written-in-python) |
 
 `GeneticAlgorithm` uses the problem's `crossover` when `crossover` is left unset, and
 `sub_heuristic` stays unset with it.

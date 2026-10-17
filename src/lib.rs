@@ -10,9 +10,10 @@
 //! BreakoutLocalSearch, LinKernighanHelsgaun, AdaptiveLargeNeighborhoodSearch,
 //! HybridGeneticSearch, IteratedGreedy, GreedyRandomizedConstruction) as Python classes, plus
 //! the MaxCutKernel reduction and the PlantedMaxCut instance generators. BranchAndBound
-//! searches the binary problems and Formula exactly, with another heuristic searching each
-//! node. The generic and composed heuristics, ALNS and the GRASP construction also run on
-//! problems written in Python.
+//! searches the binary problems, Formula and problems written in Python exactly, with another
+//! heuristic searching each node and an EigenvalueRelaxation among its bounds. The generic and
+//! composed heuristics, ALNS, iterated greedy and the GRASP construction also run on problems
+//! written in Python.
 mod branch_and_bound;
 mod details;
 mod error;
