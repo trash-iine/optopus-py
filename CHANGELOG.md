@@ -12,6 +12,12 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `load_file` for `MaxCut`, `VertexCover` and `GraphColoring` (G-set style edge lists), `Qubo`
+  (sparse matrix files), `Sat` (DIMACS CNF) and `JobShopScheduling` (Taillard / OR-Library),
+  so every built-in problem reads an instance file. `MaxCut`, `VertexCover` and `GraphColoring`
+  return their graph with `graph()`.
+- `Graph.load_file` and `write_to_file`, which round-trip a graph exactly, and the queries
+  `degree`, `neighbors`, `has_edge`, `weight` and `induced_subgraph`.
 - `initial_solution=` on every heuristic's `run` starts each run from a solution you give
   instead of a random one, in the form `RunResult.solution` has for the problem, so the best
   solution of one call continues in the next. It works on every built-in problem, `Formula`
