@@ -12,6 +12,10 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `GeneticAlgorithm(crossover="SubProblem", sub_heuristic=...)` runs on a problem written in
+  Python that defines `extract_sub_problem(a, b)`, a Python problem over what the parents
+  disagree on, and `lift_solution(a, b, sub_solution)`. The sub-problem declares the
+  problem's neighborhoods, and an exception in it is raised from `run` (ADR 0011).
 - `Formula(..., permutation=True)` makes the variables a permutation of `0..n_vars`, so an
   ordering such as a linear arrangement is a `Formula` without "all different" constraints.
   The search keeps every solution a permutation through the `"Swap"` and `"Reverse"` moves and

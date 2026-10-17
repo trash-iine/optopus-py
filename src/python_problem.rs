@@ -29,6 +29,9 @@
 //!   to `0` for `a == b` and `1` otherwise.
 //! - `AdaptiveLargeNeighborhoodSearch` needs the ruin methods, see
 //!   [`RUIN_METHODS`].
+//! - `GeneticAlgorithm(crossover="SubProblem")` needs
+//!   `extract_sub_problem(a, b)`, a Python problem over what the parents
+//!   disagree on, and `lift_solution(a, b, sub_solution)`, the full child.
 //!
 //! Solutions and moves are opaque to the Rust side. `rng` is a
 //! `random.Random` seeded from the run's seed, so a seeded run reproduces.
@@ -46,7 +49,7 @@ use optopus::prelude::{
     EnabledTabu, Evaluable, Evaluate, Heuristic, MoveToNeighbor, ProblemTrait, SearchState,
     StopCondition,
 };
-use optopus::trait_defs::{Crossover, Distance};
+use optopus::trait_defs::{Crossover, Distance, SubProblemExtractable};
 use optopus::trait_defs::{LocalRepair, Ruinable};
 use pyo3::call::PyCallArgs;
 use pyo3::exceptions::{PyTypeError, PyValueError};
@@ -105,8 +108,10 @@ struct Shared {
     obj: Py<PyAny>,
     minimize: bool,
     has_distance: bool,
-    /// The first Python exception raised during the current run.
-    error: Mutex<Option<PyErr>>,
+    /// The first Python exception raised during the current run. A sub-problem
+    /// a crossover cuts out shares its problem's, so an exception raised while
+    /// the sub-problem is searched stops the run that holds both.
+    error: Arc<Mutex<Option<PyErr>>>,
 }
 
 impl Shared {
@@ -147,6 +152,11 @@ pub struct PyProblem {
 impl PyProblem {
     /// Checks `obj` against the protocol and reads its neighborhoods.
     pub fn from_py(obj: &Bound<'_, PyAny>) -> PyResult<Self> {
+        Self::reporting_to(obj, Arc::default())
+    }
+
+    /// As [`from_py`](Self::from_py), recording exceptions in `error`.
+    fn reporting_to(obj: &Bound<'_, PyAny>, error: Arc<Mutex<Option<PyErr>>>) -> PyResult<Self> {
         for method in ["new_solution", "objective"] {
             if !obj.hasattr(method)? {
                 return Err(PyTypeError::new_err(format!(
@@ -197,7 +207,7 @@ impl PyProblem {
                 obj: obj.clone().unbind(),
                 minimize,
                 has_distance: obj.hasattr("distance")?,
-                error: Mutex::new(None),
+                error,
             }),
             neighborhoods,
             has_crossover: obj.hasattr("crossover")?,
@@ -264,6 +274,73 @@ impl PyProblem {
                 nb.name
             ))
         }
+    }
+
+    /// Fails unless the problem can cut out and lift back a sub-problem, for
+    /// `GeneticAlgorithm`'s `"SubProblem"` crossover.
+    pub fn check_sub_problem(&self) -> Result<(), String> {
+        let missing: Vec<_> = Python::attach(|py| {
+            let obj = self.shared.obj.bind(py);
+            ["extract_sub_problem", "lift_solution"]
+                .into_iter()
+                .filter(|m| !obj.hasattr(*m).unwrap_or(false))
+                .map(|m| format!("'{m}'"))
+                .collect()
+        });
+        if missing.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "crossover 'SubProblem' needs these methods on the problem: {}",
+                missing.join(", ")
+            ))
+        }
+    }
+
+    /// The sub-problem `obj` describes, checked to declare this problem's
+    /// neighborhoods in the same order, since a heuristic picks its move by
+    /// position.
+    fn sub_problem(&self, obj: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let sub = Self::reporting_to(obj, Arc::clone(&self.shared.error))?;
+        let names = |p: &Self| -> Vec<String> {
+            p.neighborhoods.iter().map(|nb| nb.name.clone()).collect()
+        };
+        if names(&sub) != names(self) {
+            return Err(PyValueError::new_err(format!(
+                "extract_sub_problem must return a problem with the neighborhoods {:?} in that \
+                 order, got {:?}",
+                names(self),
+                names(&sub)
+            )));
+        }
+        sub.record_tabu
+            .store(self.record_tabu.load(Ordering::Relaxed), Ordering::Relaxed);
+        Ok(sub)
+    }
+
+    /// A problem that stands in for a sub-problem `extract_sub_problem` failed
+    /// to return. It shares this problem's failed state, so the search on it
+    /// stops before its first step.
+    fn stand_in(&self) -> Self {
+        Python::attach(|py| Self {
+            shared: Arc::clone(&self.shared),
+            neighborhoods: self
+                .neighborhoods
+                .iter()
+                .map(|nb| Neighborhood {
+                    name: nb.name.clone(),
+                    obj: nb.obj.clone_ref(py),
+                    has_delta: nb.has_delta,
+                    has_random_neighbor: nb.has_random_neighbor,
+                    has_tabu_keys: nb.has_tabu_keys,
+                })
+                .collect(),
+            has_crossover: self.has_crossover,
+            has_partial_objective: self.has_partial_objective,
+            has_repair_around: self.has_repair_around,
+            rng: Mutex::new(None),
+            record_tabu: AtomicBool::new(self.record_tabu.load(Ordering::Relaxed)),
+        })
     }
 
     /// Takes the exception the last run stopped on, if any.
@@ -635,6 +712,39 @@ impl PyCrossover {
         } else {
             Err("GeneticAlgorithm needs a 'crossover' method on the problem".to_string())
         }
+    }
+}
+
+impl SubProblemExtractable for PyProblem {
+    fn extract_sub_problem(&self, sol1: &PySolution, sol2: &PySolution) -> Self {
+        let sub = self.call(|py| {
+            let obj = self.shared.obj.bind(py).call_method1(
+                intern!(py, "extract_sub_problem"),
+                (sol1.value.bind(py), sol2.value.bind(py)),
+            )?;
+            self.sub_problem(&obj)
+        });
+        sub.unwrap_or_else(|| self.stand_in())
+    }
+
+    fn lift_solution(
+        &self,
+        sol1: &PySolution,
+        sol2: &PySolution,
+        sub_solution: &PySolution,
+    ) -> PySolution {
+        let lifted = self.call(|py| {
+            let value = self.shared.obj.bind(py).call_method1(
+                intern!(py, "lift_solution"),
+                (
+                    sol1.value.bind(py),
+                    sol2.value.bind(py),
+                    sub_solution.value.bind(py),
+                ),
+            )?;
+            self.solution(py, value)
+        });
+        lifted.unwrap_or_else(|| self.placeholder())
     }
 }
 

@@ -76,9 +76,28 @@ that always has a move.
 | `GeneticAlgorithm` | `crossover(a, b, rng)`, the child of two solutions |
 | `GeneticAlgorithm`, `BreakoutLocalSearch.from_parts` | optional `distance(a, b)`, a non-negative int. Without it, `a == b` counts as 0 and anything else as 1 |
 | `AdaptiveLargeNeighborhoodSearch` | the ruin methods |
+| `GeneticAlgorithm(crossover="SubProblem")` | `extract_sub_problem(a, b)` and `lift_solution(a, b, sub_solution)` |
 
-A Python problem has exactly one crossover, so `GeneticAlgorithm` leaves `crossover` and
-`sub_heuristic` unset.
+`GeneticAlgorithm` uses the problem's `crossover` when `crossover` is left unset, and
+`sub_heuristic` stays unset with it.
+
+### The sub-problem crossover
+
+`crossover="SubProblem"` with a `sub_heuristic` crosses two parents by solving a smaller
+problem: the decisions the parents disagree on, with the ones they agree on fixed. Two methods
+on the problem describe it, and the search on the sub-problem is the `sub_heuristic`'s.
+
+| Problem member | Returns |
+|---|---|
+| `extract_sub_problem(a, b)` | a problem written in Python over what `a` and `b` disagree on, with what they agree on folded into its objective |
+| `lift_solution(a, b, sub_solution)` | the full solution: what the parents agree on, and the rest from `sub_solution` |
+
+The sub-problem follows the same protocol, and it declares the neighborhoods of the problem
+under the same names and in the same order, since the `sub_heuristic` names its move by the
+original problem's. A sub-problem with other neighborhoods raises `ValueError`, and an exception
+raised by the sub-problem's methods is raised from `run` as one raised by the problem's own
+would be. This is the crossover optopus's binary problems use: fixing the agreed variables
+leaves a small instance that a short search solves well.
 
 ### Ruin methods
 
