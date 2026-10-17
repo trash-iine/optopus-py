@@ -1,5 +1,5 @@
 ---
-source_sha256: 377fbeb03c28
+source_sha256: c04ba17d00af
 ---
 
 # 問題専用ヒューリスティック
@@ -14,7 +14,7 @@ source_sha256: 377fbeb03c28
 | [`BreakoutLocalSearch`](#breakoutlocalsearch) | `MaxCut`。`from_parts` ならどの問題でも作れる |
 | [`LinKernighanHelsgaun`](#linkernighanhelsgaun) | `Tsp` |
 | [`AdaptiveLargeNeighborhoodSearch`](#adaptivelargeneighborhoodsearch) | `Vrp`、`Tsp`、`FlowShop`、`BinPacking`、ruin 系メソッドを持つ Python の問題 |
-| [`IteratedGreedy`](#iteratedgreedy) | `FlowShop` |
+| [`IteratedGreedy`](#iteratedgreedy) | `FlowShop`、`Tsp`、`Vrp`、`BinPacking`、ruin メソッドを持つ Python の問題 |
 | [`GreedyRandomizedConstruction`](#greedyrandomizedconstruction) | `Vrp`、`Tsp`、`FlowShop`、`BinPacking`、ruin 系メソッドを持つ Python の問題 |
 | [`HybridGeneticSearch`](#hybridgeneticsearch) | `Vrp` |
 
@@ -126,13 +126,19 @@ ruin and recreate です。各反復で、3 つの破壊演算子の 1 つで解
 | Greedy | 最も安い場所のコストが最小の要素を、その場所に |
 | Regret-2 | 最良の入れ物を逃すと最も多くを失う要素 |
 
-`Vrp`、`Tsp`、`FlowShop` では、修復のたびに、戻したばかりの要素の周りでの降下が続きます。
+`Vrp`、`Tsp`、`FlowShop` と、`repair_around` を持つ Python の問題では、修復のたびに、戻したばかりの
+要素の周りでの降下が続きます。`local_repair=False` にすると降下を省きます。
 
 | 引数 | 既定値 | 意味 |
 |---|---|---|
 | `stop` | | `StopCondition`。1 反復は 1 回の ruin and recreate |
 | `removal_fraction` | `0.15` | 反復ごとに取り出す、`n` 個の要素に対する割合。`(0, 1]` |
 | `cooling_rate` | `0.9995` | 反復ごとに受理の温度に掛ける係数。`(0, 1]` |
+| `scores` | `(4.0, 2.0, 1.0)` | 演算子の組が、新しい最良解、現在の解の改善、受理された悪化のそれぞれで得る得点。比だけが意味を持つ |
+| `segment_length` | `100` | 演算子の重みを更新する間隔の反復数。`>= 1` |
+| `reaction` | `0.1` | 区間の平均得点を重みにどれだけ混ぜるか。`[0, 1]` |
+| `max_removal` | `50` | 1 反復で取り出す要素の上限。`>= 1` |
+| `local_repair` | `True` | 修復のたびに降下を続けるか |
 
 ```python
 bins = optopus.BinPacking.from_sizes(10, [6, 4, 5, 5, 7, 3, 2, 8, 3, 7])
@@ -143,7 +149,7 @@ best = alns.run(bins, runs=3, seed=42).runs[0]
 print(bins.evaluate_bins(best.solution)["num_bins"], bins.lower_bound())  # 5 5 — 最適
 ```
 
-- 取り出すのは `round(removal_fraction · n)` 個で、最低 1 個、最大で `n − 1` 個かつ 50 個です。小さな
+- 取り出すのは `round(removal_fraction · n)` 個で、最低 1 個、最大で `n − 1` 個かつ `max_removal` 個です。小さな
   インスタンスでは既定値だと 1 回に 1 要素しか取り出さず、ruin and recreate ではそれでは改善でき
   ません。上の例のように値を上げて、複数の要素が一緒に動くようにしてください。大きなインスタンスでは、
   修復は取り出した要素ごとにすべての場所を評価するので、割合を小さくすると 1 反復が安くなり、同じ
@@ -156,16 +162,22 @@ print(bins.evaluate_bins(best.solution)["num_bins"], bins.lower_bound())  # 5 5 
 
 ## IteratedGreedy
 
-順列フローショップ向けの iterated greedy です。各反復で `removal_count` 個のジョブをランダムに取り出し、
-それぞれをメイクスパンの増加が最も小さい位置に戻し、挿入近傍で降下します。結果が悪くなければ現在の
-列と置き換え、そうでなければ一定の温度のもとで確率 `exp(−Δ / temperature)` で置き換えます。
-Taillard のインスタンスでは `AdaptiveLargeNeighborhoodSearch` に勝ります。
+順列フローショップ向けに提案された iterated greedy です。各反復で `removal_count` 個の要素をランダムに
+取り出し、それぞれを目的関数の増加が最も小さい位置に戻し、その周りで降下します。結果が悪くなければ
+現在の解と置き換え、そうでなければ一定の温度のもとで確率 `exp(−Δ / temperature)` で置き換えます。
+Taillard のフローショップのインスタンスでは `AdaptiveLargeNeighborhoodSearch` に勝ります。
+
+`AdaptiveLargeNeighborhoodSearch` が動くすべての問題で、同じ降下とともに動きます。`FlowShop` では挿入
+近傍、`Tsp` と `Vrp` では戻した要素の周りの降下、Python の問題では `repair_around` で、`BinPacking` には
+降下がありません。フローショップ以外では、温度を目的関数の単位で `temperature` に渡してください。
 
 | 引数 | 既定値 | 意味 |
 |---|---|---|
 | `stop` | | `StopCondition`。1 反復は 1 回の破壊と再構築、およびその降下 |
 | `removal_count` | `4` | 反復ごとに取り出すジョブの数。`>= 1` |
-| `temperature_factor` | `0.4` | 温度は処理時間の平均の 1/10 にこの値を掛けたもの。正で有限 |
+| `temperature_factor` | `0.4` | `FlowShop` での温度は、処理時間の平均の 1/10 にこの値を掛けたもの。正で有限 |
+| `temperature` | `None` | 温度そのもの。目的関数の単位。`FlowShop` 以外では必須で、`FlowShop` では上の温度の代わりになる |
+| `local_repair` | `True` | 再構築のたびに降下を続けるか |
 
 ```python
 # 3 機械 × 5 ジョブ: times[machine][job]。
@@ -232,6 +244,12 @@ Vidal による配送計画問題向けのハイブリッド遺伝的探索で�
 | `granularity` | `20` | 局所探索の各移動が考慮する最近傍の数。`>= 1` |
 | `target_feasible` | `0.2` | ペナルティが目指す実行可能な子の割合。`(0, 1)` |
 | `restart_generations` | `20000` | 改善のないままこの世代数が過ぎると集団をやり直す。`None` ならやり直さない |
+| `n_elite` | `4` | 生存選択がコストだけで残す個体の数。`>= 1` |
+| `n_closest` | `5` | 多様性を平均する近い個体の数。`>= 1` |
+| `penalty_adaptation` | `(100, 1.2, 0.85, 0.05)` | `(period, increase, decrease, tolerance)`。子 `period` 個ごとに、実行可能な割合が目標より `tolerance` 以上低ければペナルティに `increase` を、それだけ高ければ `decrease` を掛ける |
+| `repair_probability` | `0.5` | 実行不能な子を強めたペナルティでも修復する確率。`[0, 1]` |
+| `initial_population` | `(4, 4)` | `(factor, nearest_neighbor_every)`。初期個体は `factor · min_population_size` 個で、`nearest_neighbor_every` 個に 1 個を最近傍法で作る |
+| `descent_passes` | `64` | 1 個の子に局所探索が使える反復の回数。`>= 1` |
 
 ```python
 vrp = optopus.Vrp.from_coordinates(

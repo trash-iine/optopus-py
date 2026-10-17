@@ -1,5 +1,5 @@
 ---
-source_sha256: 5b4d5ca1d51e
+source_sha256: 544935f8753b
 ---
 
 # 厳密解法
@@ -64,6 +64,11 @@ print(run.best_objective, run.proven_optimal)  # 93.0 True
 上の 30 頂点のグラフでは、`"Binary"` が同じ最適値を証明するのに `"Eigenvalue"` の約 2,500 倍の反復を
 要します。組み込みの限界は数十変数程度のインスタンスに向いています。問題が対応していない名前は、
 `run` を呼んだときに `ValueError` になります。
+
+`relaxation=optopus.EigenvalueRelaxation(max_iterations=100, lanczos_steps=30,
+certify_limit=3000)` は、上限を指定した `"Eigenvalue"` です。各限界に使う劣勾配法と Lanczos 法の
+ステップ数、および正の重みの和に切り替える前に証明する最大のノードの頂点数を決めます。ステップを
+増やすと限界は厳しくなり、ノードあたりのコストは増えます。
 
 (a-bound-of-your-own)=
 ## 自作の限界

@@ -10,7 +10,7 @@ on any other problem raises `ValueError` when `run` is called.
 | [`BreakoutLocalSearch`](#breakoutlocalsearch) | `MaxCut`; `from_parts` builds one for any problem |
 | [`LinKernighanHelsgaun`](#linkernighanhelsgaun) | `Tsp` |
 | [`AdaptiveLargeNeighborhoodSearch`](#adaptivelargeneighborhoodsearch) | `Vrp`, `Tsp`, `FlowShop`, `BinPacking`, a Python problem with the ruin methods |
-| [`IteratedGreedy`](#iteratedgreedy) | `FlowShop` |
+| [`IteratedGreedy`](#iteratedgreedy) | `FlowShop`, `Tsp`, `Vrp`, `BinPacking`, a Python problem with the ruin methods |
 | [`GreedyRandomizedConstruction`](#greedyrandomizedconstruction) | `Vrp`, `Tsp`, `FlowShop`, `BinPacking`, a Python problem with the ruin methods |
 | [`HybridGeneticSearch`](#hybridgeneticsearch) | `Vrp` |
 
@@ -125,13 +125,19 @@ simulated-annealing rule. Operator pairs that have been paying off are drawn mor
 | Greedy | the element whose cheapest place costs least, at that place |
 | Regret-2 | the element that loses most if it misses its best container |
 
-On `Vrp`, `Tsp` and `FlowShop` a descent around the elements just put back follows every repair.
+On `Vrp`, `Tsp` and `FlowShop`, and on a Python problem with `repair_around`, a descent around
+the elements just put back follows every repair; `local_repair=False` leaves it out.
 
 | Argument | Default | Meaning |
 |---|---|---|
 | `stop` | | `StopCondition`; one iteration is one ruin and recreate |
 | `removal_fraction` | `0.15` | share of the `n` elements taken out per iteration, in `(0, 1]` |
 | `cooling_rate` | `0.9995` | factor applied to the acceptance temperature every iteration, in `(0, 1]` |
+| `scores` | `(4.0, 2.0, 1.0)` | what an operator pair earns for a new best, for beating the current solution, and for an accepted worse one; only the ratios matter |
+| `segment_length` | `100` | iterations between two updates of the operator weights, `>= 1` |
+| `reaction` | `0.1` | how much of a segment's average score enters the weights, in `[0, 1]` |
+| `max_removal` | `50` | ceiling on the elements taken out per iteration, `>= 1` |
+| `local_repair` | `True` | whether the descent follows every repair |
 
 ```python
 bins = optopus.BinPacking.from_sizes(10, [6, 4, 5, 5, 7, 3, 2, 8, 3, 7])
@@ -142,7 +148,8 @@ best = alns.run(bins, runs=3, seed=42).runs[0]
 print(bins.evaluate_bins(best.solution)["num_bins"], bins.lower_bound())  # 5 5 — optimal
 ```
 
-- It removes `round(removal_fraction · n)` elements, at least 1, at most `n − 1` and at most 50.
+- It removes `round(removal_fraction · n)` elements, at least 1, at most `n − 1` and at most
+  `max_removal`.
   On a small instance the default removes one element at a time, which a ruin and recreate
   cannot improve with; raise it so that several elements move together, as above. On a large
   one a smaller fraction makes each iteration cheaper, since repair prices every place for every
@@ -157,17 +164,24 @@ print(bins.evaluate_bins(best.solution)["num_bins"], bins.lower_bound())  # 5 5 
 
 ## IteratedGreedy
 
-Iterated greedy for the permutation flow shop. Every iteration takes `removal_count` jobs out at
-random, puts each back where the makespan grows least, and descends by insertion. The result
-replaces the current sequence when it is no worse, and otherwise with probability
-`exp(−Δ / temperature)` at a constant temperature. On Taillard's instances it beats
-`AdaptiveLargeNeighborhoodSearch`.
+Iterated greedy, proposed for the permutation flow shop. Every iteration takes `removal_count`
+elements out at random, puts each back where the objective grows least, and descends around
+them. The result replaces the current solution when it is no worse, and otherwise with
+probability `exp(−Δ / temperature)` at a constant temperature. On Taillard's flow shop instances
+it beats `AdaptiveLargeNeighborhoodSearch`.
+
+It runs on every problem `AdaptiveLargeNeighborhoodSearch` does, with the same descent: by
+insertion on `FlowShop`, the one around the reinserted elements on `Tsp` and `Vrp`,
+`repair_around` on a Python problem, and none on `BinPacking`. Off the flow shop, give the
+temperature in the units of the objective with `temperature`.
 
 | Argument | Default | Meaning |
 |---|---|---|
 | `stop` | | `StopCondition`; one iteration is one destruction and reconstruction with its descent |
 | `removal_count` | `4` | jobs taken out per iteration, `>= 1` |
-| `temperature_factor` | `0.4` | the temperature is this times a tenth of the mean processing time; positive and finite |
+| `temperature_factor` | `0.4` | on `FlowShop`, the temperature is this times a tenth of the mean processing time; positive and finite |
+| `temperature` | `None` | the temperature itself, in the units of the objective; required off `FlowShop`, where it replaces the one above |
+| `local_repair` | `True` | whether the descent follows every reconstruction |
 
 ```python
 # 3 machines × 5 jobs: times[machine][job].
@@ -235,6 +249,12 @@ survivors are chosen by cost and diversity.
 | `granularity` | `20` | nearest neighbors each local-search move considers, `>= 1` |
 | `target_feasible` | `0.2` | the share of feasible children the penalty aims for, in `(0, 1)` |
 | `restart_generations` | `20000` | restart the population after this many generations without improvement; `None` never restarts |
+| `n_elite` | `4` | individuals survivor selection keeps for their cost alone, `>= 1` |
+| `n_closest` | `5` | nearest individuals a diversity is averaged over, `>= 1` |
+| `penalty_adaptation` | `(100, 1.2, 0.85, 0.05)` | `(period, increase, decrease, tolerance)`: every `period` children the penalty is multiplied by `increase` when the feasible share is more than `tolerance` below the target, by `decrease` when it is that far above |
+| `repair_probability` | `0.5` | probability an infeasible child is also repaired under a boosted penalty, in `[0, 1]` |
+| `initial_population` | `(4, 4)` | `(factor, nearest_neighbor_every)`: `factor · min_population_size` initial individuals, one in every `nearest_neighbor_every` built by nearest neighbor |
+| `descent_passes` | `64` | passes the local search may spend on one child, `>= 1` |
 
 ```python
 vrp = optopus.Vrp.from_coordinates(

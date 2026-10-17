@@ -166,6 +166,8 @@ what it proved in `RunResult.proven_optimal` and `RunResult.dual_bound`. See
 ```{eval-rst}
 .. autoclass:: optopus.BranchAndBound
    :members:
+
+.. autoclass:: optopus.EigenvalueRelaxation
 ```
 
 ### Problem-specific
