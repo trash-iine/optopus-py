@@ -169,6 +169,8 @@ them. Every attribute is read-only.
 | `seed` | the seed this run used; `None` when `run` got no seed |
 | `trajectory` | every improvement of the best solution, as `(elapsed_secs, iteration, objective)`; see below |
 | `proven_optimal`, `dual_bound` | what `BranchAndBound` proved, see [Exact search](heuristics_exact.md); `None` for every other heuristic |
+| `betas`, `exchange_acceptance` | `ParallelTempering`'s temperature ladder and the share of exchanges it accepted; `None` for every other heuristic |
+| `policy_weights` | the weights `ReinforcementLearningSearch` ended with; `None` for every other heuristic |
 
 ```python
 run = report.runs[0]

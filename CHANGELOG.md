@@ -12,6 +12,11 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `RunResult.betas` and `exchange_acceptance` report a `ParallelTempering` run's temperature
+  ladder and the share of replica exchanges it accepted, for tuning the ladder, and
+  `RunResult.policy_weights` the weights a `ReinforcementLearningSearch` run ended with, which
+  `policy_weights=` takes back to continue from what it learned. All three are `None` for other
+  heuristics.
 - `AdaptiveLargeNeighborhoodSearch` takes `scores`, `segment_length`, `reaction` and
   `max_removal`, the operator rewards and weight adaptation of Ropke and Pisinger and the ceiling
   on one iteration's removals, and `local_repair=False` to run without the descent after each
