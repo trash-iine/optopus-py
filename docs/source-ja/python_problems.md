@@ -1,5 +1,5 @@
 ---
-source_sha256: a5d83764defb
+source_sha256: f2f2b15c2958
 ---
 
 # Python で書いた問題
@@ -80,9 +80,26 @@ Rust に残り、問題に依存する処理はすべてあなたのオブジェ
 | `GeneticAlgorithm` | `crossover(a, b, rng)`。2 つの解の子 |
 | `GeneticAlgorithm`、`BreakoutLocalSearch.from_parts` | 省略可の `distance(a, b)`。非負の int。なければ `a == b` を 0、それ以外を 1 として数える |
 | `AdaptiveLargeNeighborhoodSearch` | ruin 系メソッド |
+| `GeneticAlgorithm(crossover="SubProblem")` | `extract_sub_problem(a, b)` と `lift_solution(a, b, sub_solution)` |
 
-Python の問題が持つ交叉はちょうど 1 つなので、`GeneticAlgorithm` の `crossover` と
-`sub_heuristic` は指定しません。
+`GeneticAlgorithm` は `crossover` を指定しなければ問題の `crossover` を使い、そのとき `sub_heuristic` も
+指定しません。
+
+### 部分問題による交叉
+
+`crossover="SubProblem"` と `sub_heuristic` を指定すると、2 つの親の交叉を、より小さな問題を解くことで
+行います。親の決定が食い違う部分だけからなり、一致する部分は固定した問題です。問題の 2 つのメソッドが
+それを記述し、部分問題の探索は `sub_heuristic` が行います。
+
+| 問題のメンバー | 返すもの |
+|---|---|
+| `extract_sub_problem(a, b)` | `a` と `b` が食い違う部分についての、Python で書いた問題。一致する部分は目的関数に畳み込む |
+| `lift_solution(a, b, sub_solution)` | 全体の解。親が一致する部分と、残りは `sub_solution` から |
+
+部分問題も同じプロトコルに従い、元の問題の近傍を同じ名前・同じ順で宣言します。`sub_heuristic` は元の
+問題の近傍の名前で移動を指定するためです。近傍が異なる部分問題は `ValueError` になり、部分問題の
+メソッドが送出した例外は、元の問題のメソッドの例外と同じく `run` から送出されます。これは optopus の
+2 値の問題が使う交叉です。一致した変数を固定すると小さなインスタンスが残り、短い探索でよく解けます。
 
 (ruin-methods)=
 ### ruin 系メソッド
