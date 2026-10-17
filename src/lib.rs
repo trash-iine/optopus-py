@@ -17,6 +17,7 @@ mod branch_and_bound;
 mod error;
 mod graph;
 mod heuristic;
+mod initial;
 mod problem;
 mod progress;
 mod python_problem;
