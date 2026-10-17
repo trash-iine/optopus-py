@@ -1,7 +1,9 @@
-//! Turns the `initial_solution` a `run` call takes into the problem's own solution type.
+//! Turns a solution given from Python into the problem's own solution type.
 //!
-//! Each function reads the form `RunResult.solution` has for its problem, so the best solution
-//! of one run starts the next, and lets optopus check that the solution fits the instance.
+//! Each function reads the form `RunResult.solution` has for its problem and lets optopus check
+//! that the solution fits the instance. `run` uses them for its `initial_solution`, and the
+//! problems' scoring methods to score a solution through the same checks. `arg` names the
+//! argument in the error messages.
 
 use optopus::error::OptError;
 use optopus::problem::{
@@ -16,17 +18,15 @@ use pyo3::prelude::*;
 use pyo3::types::PyBool;
 
 /// The error for a solution optopus rejects for this instance.
-fn misfit(err: OptError) -> PyErr {
-    PyValueError::new_err(format!(
-        "'initial_solution' does not fit the problem: {err}"
-    ))
+fn misfit(arg: &str) -> impl FnOnce(OptError) -> PyErr + '_ {
+    move |err| PyValueError::new_err(format!("'{arg}' does not fit the problem: {err}"))
 }
 
 /// A 0/1 assignment, given as bools or as the ints 0 and 1.
-fn bits(value: &Bound<'_, PyAny>) -> PyResult<Vec<bool>> {
+fn bits(value: &Bound<'_, PyAny>, arg: &str) -> PyResult<Vec<bool>> {
     value
         .try_iter()
-        .map_err(|_| PyTypeError::new_err("'initial_solution' must be a sequence of 0/1 values"))?
+        .map_err(|_| PyTypeError::new_err(format!("'{arg}' must be a sequence of 0/1 values")))?
         .enumerate()
         .map(|(i, item)| {
             let item = item?;
@@ -37,7 +37,7 @@ fn bits(value: &Bound<'_, PyAny>) -> PyResult<Vec<bool>> {
                 Ok(0) => Ok(false),
                 Ok(1) => Ok(true),
                 _ => Err(PyValueError::new_err(format!(
-                    "'initial_solution' entry {i} must be 0, 1, True or False"
+                    "'{arg}' entry {i} must be 0, 1, True or False"
                 ))),
             }
         })
@@ -45,37 +45,50 @@ fn bits(value: &Bound<'_, PyAny>) -> PyResult<Vec<bool>> {
 }
 
 /// A binary problem's assignment, one value per variable.
-fn binary<P: BinaryProblem>(prob: &P, value: &Bound<'_, PyAny>) -> PyResult<P::Solution> {
-    prob.solution_from_assignment(&bits(value)?).map_err(misfit)
+fn binary<P: BinaryProblem>(
+    prob: &P,
+    value: &Bound<'_, PyAny>,
+    arg: &str,
+) -> PyResult<P::Solution> {
+    prob.solution_from_assignment(&bits(value, arg)?)
+        .map_err(misfit(arg))
 }
 
-pub fn max_cut(prob: &MaxCut, value: &Bound<'_, PyAny>) -> PyResult<MaxCutSolution> {
-    binary(prob, value)
+pub fn max_cut(prob: &MaxCut, value: &Bound<'_, PyAny>, arg: &str) -> PyResult<MaxCutSolution> {
+    binary(prob, value, arg)
 }
 
-pub fn qubo(prob: &Qubo, value: &Bound<'_, PyAny>) -> PyResult<QuboSolution> {
-    binary(prob, value)
+pub fn qubo(prob: &Qubo, value: &Bound<'_, PyAny>, arg: &str) -> PyResult<QuboSolution> {
+    binary(prob, value, arg)
 }
 
-pub fn sat(prob: &Sat, value: &Bound<'_, PyAny>) -> PyResult<SatSolution> {
-    binary(prob, value)
+pub fn sat(prob: &Sat, value: &Bound<'_, PyAny>, arg: &str) -> PyResult<SatSolution> {
+    binary(prob, value, arg)
 }
 
-pub fn vertex_cover(prob: &VertexCover, value: &Bound<'_, PyAny>) -> PyResult<VertexCoverSolution> {
-    binary(prob, value)
+pub fn vertex_cover(
+    prob: &VertexCover,
+    value: &Bound<'_, PyAny>,
+    arg: &str,
+) -> PyResult<VertexCoverSolution> {
+    binary(prob, value, arg)
 }
 
 /// A tour, a permutation of the cities.
-pub fn tsp(prob: &Tsp, value: &Bound<'_, PyAny>) -> PyResult<TspSolution> {
+pub fn tsp(prob: &Tsp, value: &Bound<'_, PyAny>, arg: &str) -> PyResult<TspSolution> {
     let tour: Vec<usize> = value.extract()?;
-    let objective = prob.calculate_tour_length(&tour).map_err(misfit)?;
+    let objective = prob.calculate_tour_length(&tour).map_err(misfit(arg))?;
     Ok(TspSolution { tour, objective })
 }
 
 /// An operation sequence, each job appearing once per operation it has.
-pub fn job_shop(prob: &JobShopScheduling, value: &Bound<'_, PyAny>) -> PyResult<JobShopSolution> {
+pub fn job_shop(
+    prob: &JobShopScheduling,
+    value: &Bound<'_, PyAny>,
+    arg: &str,
+) -> PyResult<JobShopSolution> {
     let operations: Vec<usize> = value.extract()?;
-    let (objective, completion_times) = prob.decode(&operations).map_err(misfit)?;
+    let (objective, completion_times) = prob.decode(&operations).map_err(misfit(arg))?;
     Ok(JobShopSolution {
         operations,
         objective,
@@ -84,36 +97,52 @@ pub fn job_shop(prob: &JobShopScheduling, value: &Bound<'_, PyAny>) -> PyResult<
 }
 
 /// One route per vehicle, empty routes included.
-pub fn vrp(prob: &Vrp, value: &Bound<'_, PyAny>) -> PyResult<VrpSolution> {
-    prob.solution_from_routes(value.extract()?).map_err(misfit)
+pub fn vrp(prob: &Vrp, value: &Bound<'_, PyAny>, arg: &str) -> PyResult<VrpSolution> {
+    prob.solution_from_routes(value.extract()?)
+        .map_err(misfit(arg))
 }
 
 /// The color of each vertex.
 pub fn graph_coloring(
     prob: &GraphColoring,
     value: &Bound<'_, PyAny>,
+    arg: &str,
 ) -> PyResult<GraphColoringSolution> {
-    prob.solution_from_colors(value.extract()?).map_err(misfit)
+    prob.solution_from_colors(value.extract()?)
+        .map_err(misfit(arg))
 }
 
 /// The order the jobs run in.
-pub fn flow_shop(prob: &FlowShop, value: &Bound<'_, PyAny>) -> PyResult<FlowShopSolution> {
+pub fn flow_shop(
+    prob: &FlowShop,
+    value: &Bound<'_, PyAny>,
+    arg: &str,
+) -> PyResult<FlowShopSolution> {
     prob.solution_from_sequence(value.extract()?)
-        .map_err(misfit)
+        .map_err(misfit(arg))
 }
 
 /// The location of each facility.
-pub fn qap(prob: &Qap, value: &Bound<'_, PyAny>) -> PyResult<QapSolution> {
+pub fn qap(prob: &Qap, value: &Bound<'_, PyAny>, arg: &str) -> PyResult<QapSolution> {
     prob.solution_from_assignment(value.extract()?)
-        .map_err(misfit)
+        .map_err(misfit(arg))
 }
 
 /// The bin of each item.
-pub fn bin_packing(prob: &BinPacking, value: &Bound<'_, PyAny>) -> PyResult<BinPackingSolution> {
-    prob.solution_from_bins(value.extract()?).map_err(misfit)
+pub fn bin_packing(
+    prob: &BinPacking,
+    value: &Bound<'_, PyAny>,
+    arg: &str,
+) -> PyResult<BinPackingSolution> {
+    prob.solution_from_bins(value.extract()?)
+        .map_err(misfit(arg))
 }
 
 /// The value of each variable.
-pub fn formula(prob: &FormulaProblem, value: &Bound<'_, PyAny>) -> PyResult<FormulaSolution> {
-    prob.solution_from(value.extract()?).map_err(misfit)
+pub fn formula(
+    prob: &FormulaProblem,
+    value: &Bound<'_, PyAny>,
+    arg: &str,
+) -> PyResult<FormulaSolution> {
+    prob.solution_from(value.extract()?).map_err(misfit(arg))
 }
