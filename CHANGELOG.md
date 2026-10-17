@@ -12,6 +12,9 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Added
 
+- `BranchAndBound` runs on a problem written in Python that defines `variable_bounds()`,
+  `variable_values(solution)`, `solution_from_values(values)` and `restricted(bounds)`, with a
+  relaxation written in Python, and proves its optimum as on the built-in problems (ADR 0012).
 - `GeneticAlgorithm(crossover="SubProblem", sub_heuristic=...)` runs on a problem written in
   Python that defines `extract_sub_problem(a, b)`, a Python problem over what the parents
   disagree on, and `lift_solution(a, b, sub_solution)`. The sub-problem declares the
