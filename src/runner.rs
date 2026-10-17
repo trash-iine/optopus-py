@@ -1312,7 +1312,7 @@ pub fn solve(
                     let inner = &p.inner;
                     let initial = initial_solution
                         .as_ref()
-                        .map(|value| $encode(inner, value.bind(py)))
+                        .map(|value| $encode(inner, value.bind(py), "initial_solution"))
                         .transpose()?;
                     return finish(py.detach(|| {
                         run_all(
@@ -1361,7 +1361,7 @@ pub fn solve(
         let (inner, maximize) = (&f.inner, f.maximize);
         let initial = initial_solution
             .as_ref()
-            .map(|value| initial::formula(inner, value.bind(py)))
+            .map(|value| initial::formula(inner, value.bind(py), "initial_solution"))
             .transpose()?;
         // A Formula reports a higher-is-better score whichever way it optimizes (its `Reported`
         // impl), so the runner tracks it as a maximization.
