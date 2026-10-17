@@ -61,8 +61,8 @@ rejected and makes no move, and `LocalSearch` stops as at a local optimum. A ten
 the neighborhood leaves the search idle until prohibitions expire.
 
 `random_neighbor` returning `None` means the solution has no move in that neighborhood.
-`SimulatedAnnealing`, `BangBangSimulatedAnnealing` and `LateAcceptanceHillClimbing` end the run
-there, `PopulationAnnealing` and `ParallelTempering` skip the proposal and carry on with the next,
+`SimulatedAnnealing`, `BangBangSimulatedAnnealing` and `LateAcceptanceHillClimbing` stop there
+and `run` raises `RuntimeError`, `PopulationAnnealing` and `ParallelTempering` skip the proposal and carry on with the next,
 and `RandomWalk` counts the step as rejected and tries again. Return `None` only when there truly is no move; a neighborhood that is empty only
 sometimes, such as a swap between bins when every item shares one, is better merged with one
 that always has a move.

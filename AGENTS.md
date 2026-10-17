@@ -58,6 +58,8 @@ single source for setup and usage; on conflict, those and `pyproject.toml` / `Ca
   breaking ones under Changed/Removed with what users must do differently.
 - Rust: rustfmt + clippy with `-D warnings`. Docstrings in Google style with Python types
   (`int | None`). Reject inputs the upstream crate would panic on with `ValueError` / `TypeError`.
+  Convert an `OptError` with `src/error.rs` (ADR 0010): `ValueError` / `OSError` for input,
+  `RuntimeError` for a failed run.
 - Python: Ruff with a moderate rule set and `line-length = 100` (ADR 0003). Suppress only with a
   commented `# noqa: <RULE>`.
 - Tests: tiny instances with known optima, `pytest.mark.parametrize` for variants and error paths,

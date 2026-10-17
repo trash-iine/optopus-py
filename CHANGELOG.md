@@ -138,6 +138,10 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Changed
 
+- **`load_file` raises `OSError` for a file it cannot open**, `FileNotFoundError` when the file
+  does not exist, with the path in `filename`, as Python's own `open` does. It used to raise
+  `ValueError`. Catch `OSError` (or `FileNotFoundError`) where you caught `ValueError` for a missing
+  file; a file that does not parse still raises `ValueError`.
 - `Vrp.evaluate_routes` raises `ValueError` unless it gets one route per vehicle, empty routes
   included, instead of scoring a plan the fleet cannot run. Pad a plan with `[]` up to
   `num_vehicles()`. This follows optopus, now vendored at `41ef2c4`, whose `Vrp` also covers a
@@ -204,6 +208,10 @@ entries below are breaking; see **Changed** and **Removed**.
 
 ### Fixed
 
+- A run that a heuristic could not continue ended silently: `run` returned the numbers of the
+  search so far as if it had finished, and the later runs went ahead. It now raises
+  `RuntimeError` with optopus's message, such as `SimulatedAnnealing` or
+  `LateAcceptanceHillClimbing` on a solution whose neighborhood is empty, and no later run starts.
 - The docs said one `PopulationAnnealing` iteration is a whole temperature step. It is one
   sweep of every replica, so a step counts `sweeps_per_step` iterations and a short run with the
   defaults stays hot.

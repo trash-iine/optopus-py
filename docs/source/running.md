@@ -35,6 +35,8 @@ print(report)
 - A heuristic instance holds only its configuration. Reuse it across problems and calls.
 - A heuristic that does not fit the problem, such as a `neighbor` the problem does not have or
   `WalkSat` on a `MaxCut`, raises `ValueError` when `run` is called, not when it is built.
+- A run that cannot go on raises `RuntimeError`, and no later run starts. `SimulatedAnnealing`
+  on a solution with no move in its neighborhood is one.
 
 Two calls with the same seed give the same results:
 
