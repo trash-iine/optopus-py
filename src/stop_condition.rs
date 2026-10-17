@@ -20,8 +20,14 @@ use pyo3::prelude::*;
 #[pyclass(module = "optopus", from_py_object)]
 #[derive(Clone)]
 pub struct StopCondition {
+    /// The iteration limit, ``None`` when unset.
+    #[pyo3(get)]
     pub max_iteration: Option<u64>,
+    /// The wall-clock limit in seconds, ``None`` when unset.
+    #[pyo3(get)]
     pub max_duration_secs: Option<f64>,
+    /// The limit on consecutive iterations without a new best, ``None`` when unset.
+    #[pyo3(get)]
     pub max_failed_update: Option<u64>,
 }
 

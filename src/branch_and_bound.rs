@@ -11,17 +11,25 @@ use std::cell::RefCell;
 use optopus::building_blocks::representation::IntVars;
 use optopus::error::OptError;
 use optopus::prelude::{BranchAndBound, Evaluable, Heuristic, SearchState, StopCondition};
+use optopus::problem::EigenvalueRelaxation as OptEigenvalueRelaxation;
 use optopus::trait_defs::{BranchSpace, Relaxation};
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
+
+use crate::validate::check_at_least;
 
 /// The relaxation a `BranchAndBound` prunes by, as the caller named it.
 pub enum RelaxationSpec {
     /// The problem's default: `Binary` on the binary problems, `Interval` on `Formula`.
     Default,
     Binary,
-    Eigenvalue,
+    /// The certified eigenvalue bound on Max Cut, with its limits.
+    Eigenvalue {
+        max_iterations: usize,
+        lanczos_steps: usize,
+        certify_limit: usize,
+    },
     Interval,
     /// A Python callable taking the node's ranges and returning a bound.
     Python(Py<PyAny>),
@@ -33,14 +41,25 @@ impl RelaxationSpec {
         let Some(obj) = obj else {
             return Ok(Self::Default);
         };
+        if let Ok(eigen) = obj.extract::<PyRef<'_, EigenvalueRelaxation>>() {
+            return Ok(Self::Eigenvalue {
+                max_iterations: eigen.max_iterations,
+                lanczos_steps: eigen.lanczos_steps,
+                certify_limit: eigen.certify_limit,
+            });
+        }
         if let Ok(name) = obj.extract::<String>() {
             return match name.as_str() {
                 "Binary" => Ok(Self::Binary),
-                "Eigenvalue" => Ok(Self::Eigenvalue),
+                "Eigenvalue" => Ok(Self::Eigenvalue {
+                    max_iterations: OptEigenvalueRelaxation::MAX_ITERATIONS,
+                    lanczos_steps: OptEigenvalueRelaxation::LANCZOS_STEPS,
+                    certify_limit: OptEigenvalueRelaxation::CERTIFY_LIMIT,
+                }),
                 "Interval" => Ok(Self::Interval),
                 other => Err(PyValueError::new_err(format!(
-                    "invalid relaxation '{other}' (use 'Binary', 'Eigenvalue', 'Interval' or a \
-                     callable)"
+                    "invalid relaxation '{other}' (use 'Binary', 'Eigenvalue', 'Interval', an \
+                     EigenvalueRelaxation or a callable)"
                 ))),
             };
         }
@@ -48,7 +67,7 @@ impl RelaxationSpec {
             return Ok(Self::Python(obj.clone().unbind()));
         }
         Err(PyTypeError::new_err(
-            "'relaxation' must be None, a relaxation name or a callable",
+            "'relaxation' must be None, a relaxation name, an EigenvalueRelaxation or a callable",
         ))
     }
 
@@ -56,11 +75,65 @@ impl RelaxationSpec {
     pub fn unsupported(&self, problem: &str) -> String {
         let (name, only) = match self {
             Self::Binary => ("Binary", "MaxCut, Qubo, Sat and VertexCover"),
-            Self::Eigenvalue => ("Eigenvalue", "MaxCut"),
+            Self::Eigenvalue { .. } => ("Eigenvalue", "MaxCut"),
             Self::Interval => ("Interval", "Formula"),
             Self::Default | Self::Python(_) => unreachable!("applies to every problem"),
         };
         format!("relaxation '{name}' is only available for {only}, not {problem}")
+    }
+}
+
+/// The certified eigenvalue bound for ``BranchAndBound`` on ``MaxCut``, with its limits set.
+///
+/// ``relaxation="Eigenvalue"`` is this relaxation with the defaults. The bound comes from the
+/// largest eigenvalue of the node's graph Laplacian, shifted by a vector tuned by subgradient
+/// steps, and is certified by a Cholesky factorization; a node whose folded graph is too large
+/// to certify falls back to the sum of its positive weights.
+///
+/// Args:
+///     max_iterations (int): Subgradient steps per bound, ``>= 1``. More steps tighten the
+///         bound at a higher cost per node. Defaults to 100.
+///     lanczos_steps (int): Lanczos steps per eigenvalue estimate, ``>= 1``. Defaults to 30.
+///     certify_limit (int): The largest folded graph, in vertices, the bound is certified on.
+///         Defaults to 3000.
+///
+/// Raises:
+///     ValueError: If ``max_iterations`` or ``lanczos_steps`` is 0.
+///
+/// Example:
+///     >>> BranchAndBound(LocalSearch("Flip", stop), relaxation=EigenvalueRelaxation(max_iterations=200))
+#[pyclass(module = "optopus", frozen)]
+pub struct EigenvalueRelaxation {
+    max_iterations: usize,
+    lanczos_steps: usize,
+    certify_limit: usize,
+}
+
+#[pymethods]
+impl EigenvalueRelaxation {
+    #[new]
+    #[pyo3(signature = (
+        max_iterations=OptEigenvalueRelaxation::MAX_ITERATIONS,
+        lanczos_steps=OptEigenvalueRelaxation::LANCZOS_STEPS,
+        certify_limit=OptEigenvalueRelaxation::CERTIFY_LIMIT,
+    ),
+    text_signature = "(max_iterations=100, lanczos_steps=30, certify_limit=3000)"
+    )]
+    fn new(max_iterations: usize, lanczos_steps: usize, certify_limit: usize) -> PyResult<Self> {
+        check_at_least("max_iterations", max_iterations, 1)?;
+        check_at_least("lanczos_steps", lanczos_steps, 1)?;
+        Ok(Self {
+            max_iterations,
+            lanczos_steps,
+            certify_limit,
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "EigenvalueRelaxation(max_iterations={}, lanczos_steps={}, certify_limit={})",
+            self.max_iterations, self.lanczos_steps, self.certify_limit
+        )
     }
 }
 

@@ -1,5 +1,5 @@
 ---
-source_sha256: 9824b733dc88
+source_sha256: 5a9686f37e26
 ---
 
 # API リファレンス
@@ -178,6 +178,8 @@ Python の問題を含め、どの種類の問題でも動きます。近傍は 
 ```{eval-rst}
 .. autoclass:: optopus.BranchAndBound
    :members:
+
+.. autoclass:: optopus.EigenvalueRelaxation
 ```
 
 (problem-specific)=
