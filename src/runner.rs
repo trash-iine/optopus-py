@@ -37,11 +37,12 @@ use optopus::search_state::TrajectoryPoint;
 use optopus::trait_defs::{
     BranchSpace, Crossover, Distance, FixVariables, Ruinable, SubProblemExtractable,
 };
-use pyo3::exceptions::{PyTypeError, PyValueError};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
 use crate::branch_and_bound::{self as bnb, PyRelaxation, RelaxationSpec};
+use crate::error;
 use crate::heuristic as py_heuristic;
 use crate::problem::{
     BinPacking, FlowShop, Formula, GraphColoring, JobShopScheduling, MaxCut, Qap, Qubo, Sat, Tsp,
@@ -1109,7 +1110,7 @@ fn run_all<P>(
     seed: Option<u64>,
     on_improvement: Option<&Arc<Py<PyAny>>>,
     decode: impl Fn(&P::Solution, Python<'_>) -> Py<PyAny>,
-) -> Result<RunReport, String>
+) -> PyResult<RunReport>
 where
     P: ProblemTrait + 'static,
     P::Solution: Reported,
@@ -1117,7 +1118,7 @@ where
     let mut results = Vec::with_capacity(runs);
     for run_index in 0..runs {
         let run_seed = seed.map(|m| derive_seed(m, run_index));
-        let mut heuristic = build(spec)?;
+        let mut heuristic = build(spec).map_err(PyValueError::new_err)?;
 
         let start = Instant::now();
         let mut state = match run_seed {
@@ -1129,12 +1130,17 @@ where
         let watch = on_improvement.map(|callback| {
             progress::Watch::start(Arc::clone(callback), run_index, start, minimize)
         });
-        let _ = heuristic.run(&mut state);
+        let ran = heuristic.run(&mut state);
         if let Some(watch) = watch
             && !watch.finish()
         {
-            return Err("the on_improvement callback raised an exception".to_string());
+            return Err(PyRuntimeError::new_err(
+                "the on_improvement callback raised an exception",
+            ));
         }
+        // A heuristic stops with an error when the search cannot go on, an empty neighborhood
+        // for one. The run's numbers would read as a finished search, so no report is made.
+        ran.map_err(error::run_error)?;
         let total_time = start.elapsed();
         // Only a top-level search proves anything about the run's best solution; a nested one
         // searched a part of the run.
@@ -1277,14 +1283,14 @@ pub fn solve(
     bnb::take_error();
 
     let py = problem.py();
-    let finish = |report: Result<RunReport, String>| {
+    let finish = |report: PyResult<RunReport>| {
         if let Some(err) = bnb::take_error() {
             return Err(err);
         }
         if let Some(err) = progress::take_error() {
             return Err(err);
         }
-        report.map_err(PyValueError::new_err)
+        report
     };
 
     // A built-in problem never calls into Python during a run (a relaxation written in Python

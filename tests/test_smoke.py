@@ -379,9 +379,22 @@ def test_vrp_load_file(tmp_path):
     assert vrp.evaluate_routes([[1, 2], [3, 4], []])["distance"] == VRP_OPTIMUM
 
 
-def test_vrp_load_file_reports_a_missing_file():
-    with pytest.raises(ValueError):
-        optopus.Vrp.load_file("no-such-instance.vrp")
+@pytest.mark.parametrize(
+    ("load", "name"),
+    [
+        (optopus.Tsp.load_file, "no-such-instance.tsp"),
+        (optopus.FlowShop.load_file, "no-such-instance.txt"),
+        (optopus.Qap.load_file, "no-such-instance.dat"),
+        (optopus.BinPacking.load_file, "no-such-instance.txt"),
+        (optopus.Vrp.load_file, "no-such-instance.vrp"),
+        (optopus.Vrp.load_file, "no-such-instance.toml"),
+    ],
+)
+def test_load_file_raises_file_not_found_with_the_path(tmp_path, load, name):
+    path = tmp_path / name
+    with pytest.raises(FileNotFoundError) as info:
+        load(str(path))
+    assert info.value.filename == str(path)
 
 
 # A truck (capacity 4) and two faster vans (capacity 2) over four customers of demand 2, each
