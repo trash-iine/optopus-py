@@ -2,8 +2,12 @@
 //! the temperature ladder and how often its replicas swapped, or the policy weights it trained.
 //!
 //! `run_all` only sees a `Box<dyn Heuristic<P>>`, as with `BranchAndBound`'s outcome, so
-//! [`Recording`] reads them off the heuristic when its run returns and leaves them in a
+//! [`Recording`] reads them off the heuristic when its run ends and leaves them in a
 //! thread-local the runner takes after the run. A run stays on the thread that started it.
+//!
+//! A run ends where `is_done` first answers true, which is also where a wrapper that drives
+//! the loop itself ends it: the `Guarded` around every heuristic on a Python problem calls
+//! `run_once` and `is_done`, never `run`.
 
 use std::cell::RefCell;
 
@@ -52,7 +56,11 @@ impl<P: ProblemTrait, H: Heuristic<P>> Heuristic<P> for Recording<H> {
     }
 
     fn is_done<'a>(&self, state: &SearchState<'a, P>) -> bool {
-        self.inner.is_done(state)
+        let done = self.inner.is_done(state);
+        if done {
+            self.record();
+        }
+        done
     }
 
     fn run_once<'a>(&mut self, state: &mut SearchState<'a, P>) -> Result<(), OptError> {
@@ -61,8 +69,14 @@ impl<P: ProblemTrait, H: Heuristic<P>> Heuristic<P> for Recording<H> {
 
     fn run<'a>(&mut self, state: &mut SearchState<'a, P>) -> Result<(), OptError> {
         let result = self.inner.run(state);
+        self.record();
+        result
+    }
+}
+
+impl<H> Recording<H> {
+    fn record(&self) {
         let details = (self.read)(&self.inner);
         DETAILS.with(|d| *d.borrow_mut() = Some(details));
-        result
     }
 }
