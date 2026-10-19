@@ -104,6 +104,7 @@ def test_seeded_runs_from_a_given_solution_repeat():
         ("MaxCut", [0, 2, 1], ValueError, "entry 1 must be 0, 1"),
         ("MaxCut", 5, TypeError, "sequence of 0/1"),
         ("Tsp", [0, 0, 1, 2], ValueError, "does not fit"),
+        ("Tsp", [0, 1, 2, 9], ValueError, "out of range"),
         ("JobShopScheduling", [0, 1, 2], ValueError, "does not fit"),
         ("Vrp", [[1, 2, 3]], ValueError, "does not fit"),
         ("GraphColoring", [0, 1], ValueError, "does not fit"),

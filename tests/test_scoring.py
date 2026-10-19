@@ -122,6 +122,7 @@ def test_vrp_nearest_neighbors_scores_like_the_full_matrix():
         (lambda: optopus.MaxCut.from_edges(TRIANGLE).cut_size([1, 0]), "does not fit"),
         (lambda: optopus.Qubo.from_entries([(0, 1, 1)]).energy([1, 2]), "entry 1 must be"),
         (lambda: optopus.Tsp.from_coordinates(RECTANGLE).tour_length([0, 0, 1, 2]), "not fit"),
+        (lambda: optopus.Tsp.from_coordinates(RECTANGLE).tour_length([0, 1, 2, 9]), "range"),
         (lambda: optopus.Tsp.from_coordinates(RECTANGLE).distance(0, 4), "outside"),
         (
             lambda: optopus.Tsp.from_coordinates(RECTANGLE, edge_weight_type="EUC"),
