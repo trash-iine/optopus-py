@@ -287,6 +287,9 @@ entries below are breaking; see **Changed** and **Removed**.
   `JobShopScheduling.from_jobs`, `Vrp.from_coordinates`, `Vrp.from_distance_matrix` and
   `PlantedMaxCut.wishart` show their string defaults (`name=''`, `name='vrp'`,
   `couplers='Gaussian'`) instead of `Ellipsis`.
+- A `Tsp` tour naming a city past the last, such as `[0, 1, 2, 9]` on four cities, raises
+  `ValueError` from `tour_length` and as an `initial_solution` instead of failing with a
+  `PanicException` from the core. Fixed in optopus (`632bf11`).
 - `Vrp.from_coordinates` raises `ValueError` for a non-finite coordinate instead of failing
   with a `PanicException` from the core.
 - `Sat.from_clauses` raises `ValueError` for a literal of 0 or one naming a variable above
